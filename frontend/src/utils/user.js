@@ -1,0 +1,47 @@
+const USER_COLORS = [
+  '#6366f1', // Indigo
+  '#10b981', // Emerald
+  '#ec4899', // Pink
+  '#f59e0b', // Amber
+  '#3b82f6', // Blue
+  '#8b5cf6', // Purple
+  '#06b6d4', // Cyan
+  '#14b8a6'  // Teal
+];
+
+const STORAGE_KEY = 'codecollab_guest_user';
+
+export function getOrCreateUser() {
+  try {
+    const saved = sessionStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed?.id && parsed?.name && parsed?.color) {
+        return parsed;
+      }
+    }
+  } catch {
+    // Fall back to new user generation
+  }
+
+  const randomNum = Math.floor(1000 + Math.random() * 9000);
+  const color = USER_COLORS[Math.floor(Math.random() * USER_COLORS.length)];
+  const id = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : `guest-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+
+  const user = {
+    id,
+    name: `Guest ${randomNum}`,
+    color,
+    initials: `G${randomNum.toString().slice(-2)}`
+  };
+
+  try {
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(user));
+  } catch {
+    // Non-blocking in incognito / restricted environments
+  }
+
+  return user;
+}
