@@ -419,6 +419,7 @@ export default function Sidebar({
                     type="button"
                     className="item-action-btn"
                     title="New File in Folder"
+                    aria-label="New File in Folder"
                     onClick={() => startCreation('file', node.path)}
                   >
                     <FilePlus size={13} />
@@ -427,6 +428,7 @@ export default function Sidebar({
                     type="button"
                     className="item-action-btn"
                     title="New Subfolder"
+                    aria-label="New Subfolder"
                     onClick={() => startCreation('folder', node.path)}
                   >
                     <FolderPlus size={13} />
@@ -435,6 +437,7 @@ export default function Sidebar({
                     type="button"
                     className="item-action-btn"
                     title="Rename Folder"
+                    aria-label="Rename Folder"
                     onClick={(e) => startRename(node, e)}
                   >
                     <Edit2 size={13} />
@@ -443,6 +446,7 @@ export default function Sidebar({
                     type="button"
                     className="item-action-btn delete-action-btn"
                     title="Delete Folder"
+                    aria-label="Delete Folder"
                     onClick={() => setDeleteTarget({ path: node.path, isFolder: true })}
                   >
                     <Trash2 size={13} />
@@ -544,6 +548,7 @@ export default function Sidebar({
                 type="button"
                 className="item-action-btn"
                 title="Rename File"
+                aria-label="Rename File"
                 onClick={(e) => startRename(node, e)}
               >
                 <Edit2 size={13} />
@@ -552,6 +557,7 @@ export default function Sidebar({
                 type="button"
                 className="item-action-btn delete-action-btn"
                 title="Delete File"
+                aria-label="Delete File"
                 onClick={() => setDeleteTarget({ path: node.path, isFolder: false })}
               >
                 <Trash2 size={13} />
@@ -588,6 +594,7 @@ export default function Sidebar({
                   type="button"
                   className="action-icon-btn"
                   title="New File (Root)"
+                  aria-label="New File in Root"
                   onClick={() => startCreation('file', '')}
                 >
                   <FilePlus size={15} />
@@ -596,6 +603,7 @@ export default function Sidebar({
                   type="button"
                   className="action-icon-btn"
                   title="New Folder (Root)"
+                  aria-label="New Folder in Root"
                   onClick={() => startCreation('folder', '')}
                 >
                   <FolderPlus size={15} />
@@ -607,6 +615,7 @@ export default function Sidebar({
               type="button"
               className="action-icon-btn"
               title="Collapse All Folders"
+              aria-label="Collapse All Folders"
               onClick={handleCollapseAll}
             >
               <Minimize2 size={14} />
@@ -617,6 +626,7 @@ export default function Sidebar({
               type="button"
               className="action-icon-btn mobile-close-btn"
               title="Close Explorer"
+              aria-label="Close Explorer"
               onClick={onClose}
             >
               <X size={15} />

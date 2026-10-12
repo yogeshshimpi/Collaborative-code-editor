@@ -402,6 +402,10 @@ export async function getUserProjects(userId) {
 }
 
 export async function getProjectById(id, userId = null) {
+  if (!id) return null;
+  const cleanId = String(id).trim();
+  const lowerId = cleanId.toLowerCase();
+
   if (dbConnected && pool) {
     const query = `
       SELECT 
@@ -421,15 +425,78 @@ export async function getProjectById(id, userId = null) {
       FROM projects p
       LEFT JOIN users u ON u.id = p.owner_id
       LEFT JOIN project_members pm ON pm.project_id = p.id AND pm.user_id = $2
-      WHERE p.id::text = $1 OR p.room_id = $1
+      WHERE p.id::text = $1 
+         OR p.room_id = $1 
+         OR LOWER(p.room_id) = $3
+         OR LOWER(p.name) = $3
+         OR REGEXP_REPLACE(LOWER(p.name), '[^a-z0-9]+', '-', 'g') = $3
+         OR REGEXP_REPLACE(LOWER(p.room_id), '[^a-z0-9]+', '-', 'g') = $3
+      ORDER BY 
+        CASE 
+          WHEN p.owner_id = $2 THEN 0 
+          WHEN pm.role IS NOT NULL THEN 1 
+          ELSE 2 
+        END,
+        CASE 
+          WHEN p.id::text = $1 THEN 0 
+          WHEN p.room_id = $1 THEN 1 
+          WHEN LOWER(p.room_id) = $3 THEN 2 
+          WHEN LOWER(p.name) = $3 THEN 3 
+          ELSE 4 
+        END,
+        p.updated_at DESC
       LIMIT 1;
     `;
-    const res = await pool.query(query, [id, userId]);
+    const res = await pool.query(query, [cleanId, userId, lowerId]);
     return res.rows[0] || null;
   }
 
-  const p = inMemoryProjects.get(id) || Array.from(inMemoryProjects.values()).find((proj) => proj.room_id === id || proj.id === id);
-  if (!p) return null;
+  const toSlug = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const slugId = toSlug(cleanId);
+
+  // Filter candidates matching by id, room_id, name, or slug
+  const candidates = Array.from(inMemoryProjects.values()).filter((proj) => {
+    if (!proj) return false;
+    if (proj.id === cleanId || proj.room_id === cleanId) return true;
+    if (proj.room_id && proj.room_id.toLowerCase() === lowerId) return true;
+    if (proj.name && proj.name.toLowerCase() === lowerId) return true;
+    if (toSlug(proj.name) === slugId || toSlug(proj.room_id) === slugId) return true;
+    return false;
+  });
+
+  if (candidates.length === 0) return null;
+
+  // Score candidate prioritizing user ownership/membership and exact match
+  candidates.sort((a, b) => {
+    let scoreA = 0;
+    let scoreB = 0;
+
+    if (userId) {
+      if (a.owner_id === userId) scoreA += 100;
+      else {
+        const memsA = inMemoryMembers.get(a.id) || [];
+        if (memsA.some((m) => m.user_id === userId)) scoreA += 50;
+      }
+      if (b.owner_id === userId) scoreB += 100;
+      else {
+        const memsB = inMemoryMembers.get(b.id) || [];
+        if (memsB.some((m) => m.user_id === userId)) scoreB += 50;
+      }
+    }
+
+    if (a.id === cleanId || a.room_id === cleanId) scoreA += 30;
+    else if (a.room_id && a.room_id.toLowerCase() === lowerId) scoreA += 20;
+    else if (a.name && a.name.toLowerCase() === lowerId) scoreA += 10;
+
+    if (b.id === cleanId || b.room_id === cleanId) scoreB += 30;
+    else if (b.room_id && b.room_id.toLowerCase() === lowerId) scoreB += 20;
+    else if (b.name && b.name.toLowerCase() === lowerId) scoreB += 10;
+
+    if (scoreA !== scoreB) return scoreB - scoreA;
+    return (new Date(b.updated_at || 0)) - (new Date(a.updated_at || 0));
+  });
+
+  const p = candidates[0];
 
   let role = null;
   if (userId) {
@@ -830,25 +897,130 @@ export async function respondToInvitation(invitationId, userEmailOrUserId, userI
   return { success: true, action: newStatus, projectId: inv.project_id };
 }
 
-export async function updateProjectName(id, name, ownerId) {
-  if (dbConnected && pool) {
-    const query = `
-      UPDATE projects
-      SET name = $1, updated_at = CURRENT_TIMESTAMP
-      WHERE (id::text = $2 OR room_id = $2) AND owner_id = $3
-      RETURNING id, room_id, name, owner_id, created_at, updated_at;
-    `;
-    const res = await pool.query(query, [name.trim(), id, ownerId]);
-    return res.rows[0] || null;
+export async function updateProject(idOrRoomId, { name, roomId }, ownerId) {
+  if (!idOrRoomId) return null;
+  const project = await getProjectById(idOrRoomId, ownerId);
+  if (!project || project.owner_id !== ownerId) {
+    return null;
   }
 
-  const p = inMemoryProjects.get(id);
-  if (p && p.owner_id === ownerId) {
-    p.name = name.trim();
-    p.updated_at = new Date();
-    return p;
+  const cleanName = typeof name === 'string' && name.trim() ? name.trim().slice(0, 100) : project.name;
+  let targetRoomId = project.room_id;
+  if (typeof roomId === 'string' && roomId.trim() && roomId.trim() !== project.room_id) {
+    targetRoomId = roomId.trim().slice(0, 64);
   }
-  return null;
+
+  const oldRoomId = project.room_id;
+  const roomIdChanged = targetRoomId !== oldRoomId;
+
+  if (dbConnected && pool) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Check if new room_id conflicts with another project
+      if (roomIdChanged) {
+        const checkConflict = await client.query(
+          'SELECT id FROM projects WHERE room_id = $1 AND id != $2 LIMIT 1;',
+          [targetRoomId, project.id]
+        );
+        if (checkConflict.rows.length > 0) {
+          throw new Error(`Room ID "${targetRoomId}" is already in use by another project.`);
+        }
+      }
+
+      // Update project record
+      const updateRes = await client.query(
+        `UPDATE projects
+         SET name = $1, room_id = $2, updated_at = CURRENT_TIMESTAMP
+         WHERE id = $3 AND owner_id = $4
+         RETURNING id, room_id, name, owner_id, created_at, updated_at;`,
+        [cleanName, targetRoomId, project.id, ownerId]
+      );
+
+      // If room_id changed, migrate existing files, versions, and folders
+      if (roomIdChanged) {
+        await client.query(
+          `UPDATE room_files SET room_id = $1 WHERE room_id = $2;`,
+          [targetRoomId, oldRoomId]
+        );
+        await client.query(
+          `UPDATE file_versions SET room_id = $1 WHERE room_id = $2;`,
+          [targetRoomId, oldRoomId]
+        );
+        await client.query(
+          `UPDATE room_folders SET room_id = $1 WHERE room_id = $2;`,
+          [targetRoomId, oldRoomId]
+        );
+      }
+
+      await client.query('COMMIT');
+      return {
+        ...updateRes.rows[0],
+        old_room_id: oldRoomId,
+        role: 'owner'
+      };
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  // Fallback in-memory
+  const p = inMemoryProjects.get(project.id) || inMemoryProjects.get(oldRoomId) || project;
+  p.name = cleanName;
+  p.updated_at = new Date();
+
+  if (roomIdChanged) {
+    // Check collision in memory
+    for (const other of inMemoryProjects.values()) {
+      if (other.id !== p.id && other.room_id === targetRoomId) {
+        throw new Error(`Room ID "${targetRoomId}" is already in use by another project.`);
+      }
+    }
+
+    // Migrate in-memory files
+    for (const [key, content] of Array.from(inMemoryStore.entries())) {
+      if (key.startsWith(`${oldRoomId}:`)) {
+        const fileName = key.slice(oldRoomId.length + 1);
+        inMemoryStore.set(`${targetRoomId}:${fileName}`, content);
+        inMemoryStore.delete(key);
+      }
+    }
+
+    // Migrate in-memory folders
+    if (inMemoryFolders.has(oldRoomId)) {
+      const folders = inMemoryFolders.get(oldRoomId);
+      inMemoryFolders.set(targetRoomId, folders);
+      inMemoryFolders.delete(oldRoomId);
+    }
+
+    // Migrate in-memory versions
+    for (const [key, versions] of Array.from(inMemoryVersions.entries())) {
+      if (key.startsWith(`${oldRoomId}:`)) {
+        const fileName = key.slice(oldRoomId.length + 1);
+        inMemoryVersions.set(`${targetRoomId}:${fileName}`, versions);
+        inMemoryVersions.delete(key);
+      }
+    }
+
+    inMemoryProjects.delete(oldRoomId);
+    p.room_id = targetRoomId;
+    inMemoryProjects.set(targetRoomId, p);
+    inMemoryProjects.set(p.id, p);
+  }
+
+  return {
+    ...p,
+    old_room_id: oldRoomId,
+    role: 'owner'
+  };
+}
+
+export async function updateProjectName(id, name, ownerId) {
+  return updateProject(id, { name }, ownerId);
 }
 
 export async function deleteProject(id, ownerId) {

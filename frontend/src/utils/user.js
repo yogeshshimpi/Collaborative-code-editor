@@ -1,9 +1,9 @@
 const USER_COLORS = [
-  '#6366f1', // Indigo
-  '#10b981', // Emerald
+  '#6d5dfc', // Violet Accent
+  '#25c990', // Success Emerald
   '#ec4899', // Pink
-  '#f59e0b', // Amber
-  '#3b82f6', // Blue
+  '#f4b860', // Warning Amber
+  '#54a6ff', // Info Blue
   '#8b5cf6', // Purple
   '#06b6d4', // Cyan
   '#14b8a6'  // Teal

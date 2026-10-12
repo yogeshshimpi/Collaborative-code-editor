@@ -1,45 +1,50 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
 :root {
-  /* Layered surfaces (Deep navy/charcoal, not pure black) */
-  --bg-app: #0d1117;
-  --bg-sidebar: #111520;
-  --bg-surface: #151a26;
-  --bg-elevated: #1b2130;
-  --bg-active: #222a3d;
-  --bg-editor: #161b26;
-  --bg-statusbar: #0a0d14;
+  /* Theme redesign: Linear, VS Code & Vercel inspired dark developer-tool theme */
+  --bg-app: #090d16;
+  --bg-sidebar: #0d1320;
+  --bg-surface: #121a29;
+  --bg-elevated: #182235;
+  --bg-hover: #202d43;
 
-  /* Subtle 1px borders */
-  --border-subtle: #202738;
-  --border-strong: #2e384f;
-  --border-focus: #6366f1;
+  /* Aliases for surfaces and workspace areas */
+  --bg-active: #202d43;
+  --bg-editor: #0c121e;
+  --bg-statusbar: #070a12;
+  --bg-surface-hover: var(--bg-hover);
 
-  /* High contrast readable typography */
-  --text-primary: #f8fafc;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
+  /* Precise developer borders */
+  --border-subtle: #26344d;
+  --border-strong: #3a4d6d;
+  --border-focus: var(--accent-primary);
 
-  /* Indigo/violet accent */
-  --accent-primary: #6366f1;
-  --accent-hover: #4f46e5;
-  --accent-subtle: rgba(99, 102, 241, 0.12);
+  /* High contrast readable developer typography */
+  --text-primary: #f2f6ff;
+  --text-secondary: #b4c2d9;
+  --text-muted: #7d8da8;
 
-  /* Semantic status colors */
-  --success: #10b981;
-  --warning: #f59e0b;
-  --danger: #ef4444;
+  /* Premium violet/indigo accent */
+  --accent-primary: #6d5dfc;
+  --accent-hover: #8175ff;
+  --accent-subtle: rgba(109, 93, 252, 0.16);
+
+  /* Developer semantic status colors */
+  --success: #25c990;
+  --warning: #f4b860;
+  --danger: #f06070;
+  --info: #54a6ff;
 
   /* Backward-compatibility aliases */
   --color-success: var(--success);
   --color-warning: var(--warning);
   --color-error: var(--danger);
-  --bg-surface-hover: var(--bg-elevated);
+  --color-info: var(--info);
 
-  /* Soft refined shadows */
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
-  --shadow-md: 0 4px 14px -2px rgba(0, 0, 0, 0.5);
-  --shadow-lg: 0 16px 36px -4px rgba(0, 0, 0, 0.65), 0 4px 12px -2px rgba(0, 0, 0, 0.45);
+  /* Soft refined developer shadows */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 4px 14px -2px rgba(0, 0, 0, 0.6);
+  --shadow-lg: 0 16px 36px -4px rgba(0, 0, 0, 0.75), 0 4px 12px -2px rgba(0, 0, 0, 0.5);
 
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace;
@@ -49,6 +54,21 @@
   --safe-right: env(safe-area-inset-right, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left: env(safe-area-inset-left, 0px);
+
+  /* Responsive Button & Control Sizing Tokens */
+  --control-height-desktop: 30px;
+  --control-height-tablet: 36px;
+  --control-height-mobile: 44px;
+  --touch-target-min: 44px;
+  --button-font-size-desktop: 12.5px;
+  --button-font-size-tablet: 13px;
+  --button-font-size-mobile: 13.5px;
+  --navbar-height-desktop: 44px;
+  --navbar-height-tablet: 46px;
+  --navbar-height-mobile: 50px;
+  --navbar-height: var(--navbar-height-desktop);
+  --focus-ring: 2px solid var(--accent-primary);
+  --focus-ring-offset: 2px;
 }
 
 * {
@@ -99,14 +119,24 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #252c40;
+  background: var(--border-subtle);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #37415d;
+  background: var(--border-strong);
 }
 
 button {
   font-family: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[role="button"]:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }

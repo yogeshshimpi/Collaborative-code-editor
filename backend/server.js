@@ -29,6 +29,7 @@ import {
   removeProjectMember,
   getUserPendingInvitations,
   respondToInvitation,
+  updateProject,
   updateProjectName,
   deleteProject,
   createFileVersion,
@@ -379,23 +380,40 @@ app.get('/api/projects/:id', requireAuth, async (req, res) => {
   }
 });
 
-// Rename project (Owner only)
+// Rename project or room (Owner only)
 app.put('/api/projects/:id', requireAuth, async (req, res) => {
   try {
-    const { name } = req.body;
-    if (!name || typeof name !== 'string' || !name.trim()) {
-      return res.status(400).json({ error: 'Project name is required.' });
+    const { name, roomId } = req.body || {};
+    if ((!name || typeof name !== 'string' || !name.trim()) && (!roomId || typeof roomId !== 'string' || !roomId.trim())) {
+      return res.status(400).json({ error: 'Project name or room ID is required.' });
     }
 
-    const updated = await updateProjectName(req.params.id, name.trim(), req.user.id);
+    const updated = await updateProject(req.params.id, { name, roomId }, req.user.id);
     if (!updated) {
       return res.status(404).json({ error: 'Project not found or not owned by you.' });
+    }
+
+    // Broadcast project-renamed to Socket.IO clients in old and new rooms
+    const oldRoom = updated.old_room_id || req.params.id;
+    io.to(oldRoom).emit('project-renamed', {
+      projectId: updated.id,
+      oldRoomId: oldRoom,
+      newRoomId: updated.room_id,
+      newName: updated.name
+    });
+    if (updated.room_id && updated.room_id !== oldRoom) {
+      io.to(updated.room_id).emit('project-renamed', {
+        projectId: updated.id,
+        oldRoomId: oldRoom,
+        newRoomId: updated.room_id,
+        newName: updated.name
+      });
     }
 
     res.json({ project: updated });
   } catch (err) {
     console.error('[Projects Error] Failed to rename project:', err);
-    res.status(500).json({ error: 'Failed to rename project.' });
+    res.status(err.status || 400).json({ error: err.message || 'Failed to rename project.' });
   }
 });
 
@@ -598,15 +616,16 @@ app.get(['/api/projects/:roomId/files/:fileName/versions', /^\/api\/projects\/([
       return res.status(400).json({ error: 'Invalid file path.' });
     }
 
-    const projectRole = await getProjectRole(roomId, req.user.id);
     const project = await getProjectById(roomId, req.user.id);
+    const projectRole = await getProjectRole(roomId, req.user.id);
     if (project && !projectRole) {
       return res.status(403).json({ error: 'You do not have access to view this project.' });
     }
+    const targetRoom = project?.room_id || roomId;
 
-    const versions = await getFileVersions(roomId, fileName);
+    const versions = await getFileVersions(targetRoom, fileName);
     res.json({
-      roomId,
+      roomId: targetRoom,
       fileName,
       versions,
       userRole: projectRole || 'editor'
@@ -629,13 +648,14 @@ app.get(['/api/projects/:roomId/files/:fileName/versions/:versionId', /^\/api\/p
       return res.status(400).json({ error: 'Invalid file path.' });
     }
 
-    const projectRole = await getProjectRole(roomId, req.user.id);
     const project = await getProjectById(roomId, req.user.id);
+    const projectRole = await getProjectRole(roomId, req.user.id);
     if (project && !projectRole) {
       return res.status(403).json({ error: 'You do not have access to view this project.' });
     }
+    const targetRoom = project?.room_id || roomId;
 
-    const version = await getFileVersionById(versionId, roomId);
+    const version = await getFileVersionById(versionId, targetRoom);
     if (!version || version.file_name !== fileName) {
       return res.status(404).json({ error: 'Version not found for this file.' });
     }
@@ -659,23 +679,24 @@ app.post(['/api/projects/:roomId/files/:fileName/versions', /^\/api\/projects\/(
       return res.status(400).json({ error: 'Invalid file path.' });
     }
 
-    const projectRole = await getProjectRole(roomId, req.user.id);
     const project = await getProjectById(roomId, req.user.id);
+    const projectRole = await getProjectRole(roomId, req.user.id);
     if (project && !projectRole) {
       return res.status(403).json({ error: 'You do not have access to this project.' });
     }
     if (projectRole === 'viewer') {
       return res.status(403).json({ error: 'Permission denied: Viewers cannot create manual versions.' });
     }
+    const targetRoom = project?.room_id || roomId;
 
     let fileContent = typeof content === 'string' ? content : null;
     if (fileContent === null) {
-      const roomFiles = await getRoomFiles(roomId);
+      const roomFiles = await getRoomFiles(targetRoom);
       fileContent = roomFiles[fileName] || '';
     }
 
     const newVersion = await createFileVersion({
-      roomId,
+      roomId: targetRoom,
       fileName,
       content: fileContent,
       authorId: req.user.id,
@@ -705,34 +726,41 @@ app.post(['/api/projects/:roomId/files/:fileName/versions/:versionId/restore', /
       return res.status(400).json({ error: 'Invalid file path.' });
     }
 
-    const projectRole = await getProjectRole(roomId, req.user.id);
     const project = await getProjectById(roomId, req.user.id);
+    const projectRole = await getProjectRole(roomId, req.user.id);
     if (project && !projectRole) {
       return res.status(403).json({ error: 'You do not have access to this project.' });
     }
     if (projectRole === 'viewer') {
       return res.status(403).json({ error: 'Permission denied: Viewers cannot restore versions.' });
     }
+    const targetRoom = project?.room_id || roomId;
 
-    const targetVersion = await getFileVersionById(versionId, roomId);
+    const targetVersion = await getFileVersionById(versionId, targetRoom);
     if (!targetVersion || targetVersion.file_name !== fileName) {
       return res.status(404).json({ error: 'Version not found for this file.' });
     }
 
     const restored = await restoreFileVersion({
       versionId,
-      roomId,
+      roomId: targetRoom,
       restoredByUserId: req.user.id
     });
 
     // Broadcast restored code change to all collaborators in the room
-    io.to(roomId).emit('code-change', {
+    io.to(targetRoom).emit('code-change', {
       fileName: restored.fileName,
       content: restored.content
     });
+    if (targetRoom !== roomId) {
+      io.to(roomId).emit('code-change', {
+        fileName: restored.fileName,
+        content: restored.content
+      });
+    }
 
     // Notify room of saved status
-    io.to(roomId).emit('save-status', {
+    io.to(targetRoom).emit('save-status', {
       status: 'saved',
       fileName: restored.fileName,
       savedAt: new Date().toISOString()
@@ -758,15 +786,16 @@ app.post(['/api/projects/:roomId/files/:fileName/versions/:versionId/restore', /
 app.get('/api/projects/:roomId/tree', requireAuth, async (req, res) => {
   try {
     const { roomId } = req.params;
-    const projectRole = await getProjectRole(roomId, req.user.id);
     const project = await getProjectById(roomId, req.user.id);
+    const projectRole = await getProjectRole(roomId, req.user.id);
     if (project && !projectRole) {
       return res.status(403).json({ error: 'You do not have access to this project.' });
     }
+    const targetRoom = project?.room_id || roomId;
 
-    const workspace = await getRoomWorkspace(roomId);
+    const workspace = await getRoomWorkspace(targetRoom);
     res.json({
-      roomId,
+      roomId: targetRoom,
       files: workspace.files,
       folders: workspace.folders,
       userRole: projectRole || 'editor'
@@ -781,15 +810,16 @@ app.get('/api/projects/:roomId/tree', requireAuth, async (req, res) => {
 app.get('/api/projects/:roomId/files', requireAuth, async (req, res) => {
   try {
     const { roomId } = req.params;
-    const projectRole = await getProjectRole(roomId, req.user.id);
     const project = await getProjectById(roomId, req.user.id);
+    const projectRole = await getProjectRole(roomId, req.user.id);
     if (project && !projectRole) {
       return res.status(403).json({ error: 'You do not have access to this project.' });
     }
+    const targetRoom = project?.room_id || roomId;
 
-    const workspace = await getRoomWorkspace(roomId);
+    const workspace = await getRoomWorkspace(targetRoom);
     res.json({
-      roomId,
+      roomId: targetRoom,
       files: workspace.files,
       folders: workspace.folders,
       userRole: projectRole || 'editor'
@@ -1150,11 +1180,12 @@ io.on('connection', (socket) => {
 
     // Determine project access and user role
     let userRole = 'editor';
+    let matchedProject = null;
     if (authUser) {
       try {
-        const projectRole = await getProjectRole(roomId, authUser.id);
-        if (projectRole) {
-          userRole = projectRole;
+        matchedProject = await getProjectById(roomId, authUser.id);
+        if (matchedProject?.role) {
+          userRole = matchedProject.role;
         }
       } catch (err) {
         console.warn(`[Role Check Error] Could not retrieve role for ${authUser.id}:`, err.message);
@@ -1165,26 +1196,45 @@ io.on('connection', (socket) => {
 
     socket.data.currentUser = sanitizedUser;
 
-    // Send user their role in this workspace
+    // Send user their role and project info in this workspace
     socket.emit('user-role', { role: userRole });
+    if (matchedProject) {
+      socket.emit('project-info', {
+        id: matchedProject.id,
+        name: matchedProject.name,
+        roomId: matchedProject.room_id,
+        role: userRole
+      });
+      // Also join canonical room if rawRoomId was project name or UUID
+      if (matchedProject.room_id && matchedProject.room_id !== roomId) {
+        socket.join(matchedProject.room_id);
+      }
+    }
+
+    // Target room for presence & workspace (prefer project's canonical room_id)
+    const targetRoom = matchedProject?.room_id || roomId;
 
     // Track user presence in this room
-    if (!roomUsers.has(roomId)) {
-      roomUsers.set(roomId, new Map());
+    if (!roomUsers.has(targetRoom)) {
+      roomUsers.set(targetRoom, new Map());
     }
-    const usersInRoom = roomUsers.get(roomId);
+    const usersInRoom = roomUsers.get(targetRoom);
     usersInRoom.set(socket.id, sanitizedUser);
 
     // Retrieve persisted room workspace (files and folders) from PostgreSQL
-    const workspace = await getRoomWorkspace(roomId);
+    const workspace = await getRoomWorkspace(targetRoom);
     socket.emit('room-sync', workspace);
 
     // Broadcast updated presence list & count to everyone in the room
     const currentUsers = Array.from(usersInRoom.values());
-    io.to(roomId).emit('room-users', { users: currentUsers });
-    io.to(roomId).emit('room-participants', { count: currentUsers.length });
+    io.to(targetRoom).emit('room-users', { users: currentUsers });
+    io.to(targetRoom).emit('room-participants', { count: currentUsers.length });
+    if (targetRoom !== roomId) {
+      io.to(roomId).emit('room-users', { users: currentUsers });
+      io.to(roomId).emit('room-participants', { count: currentUsers.length });
+    }
 
-    console.log(`[Room: ${roomId}] ${sanitizedUser.name} (${socket.id}) joined as ${userRole}. Total online: ${currentUsers.length}`);
+    console.log(`[Room: ${targetRoom}] ${sanitizedUser.name} (${socket.id}) joined as ${userRole}. Total online: ${currentUsers.length}`);
   });
 
   // Handle real-time code changes

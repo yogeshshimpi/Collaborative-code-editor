@@ -14,7 +14,9 @@ export function useSocket({
   onFolderCreated,
   onFolderRenamed,
   onFolderDeleted,
-  onFileError
+  onFileError,
+  onProjectInfo,
+  onProjectRenamed
 }) {
   const [connectionStatus, setConnectionStatus] = useState('connecting'); // 'connecting' | 'connected' | 'disconnected'
   const [participantCount, setParticipantCount] = useState(1);
@@ -35,6 +37,8 @@ export function useSocket({
   const onFolderRenamedRef = useRef(onFolderRenamed);
   const onFolderDeletedRef = useRef(onFolderDeleted);
   const onFileErrorRef = useRef(onFileError);
+  const onProjectInfoRef = useRef(onProjectInfo);
+  const onProjectRenamedRef = useRef(onProjectRenamed);
   const userRef = useRef(user);
 
   useEffect(() => {
@@ -82,6 +86,14 @@ export function useSocket({
   }, [onFileError]);
 
   useEffect(() => {
+    onProjectInfoRef.current = onProjectInfo;
+  }, [onProjectInfo]);
+
+  useEffect(() => {
+    onProjectRenamedRef.current = onProjectRenamed;
+  }, [onProjectRenamed]);
+
+  useEffect(() => {
     userRef.current = user;
   }, [user]);
 
@@ -117,6 +129,20 @@ export function useSocket({
     socket.on('user-role', (data) => {
       if (data?.role) {
         setRole(data.role);
+      }
+    });
+
+    // Receive resolved project info
+    socket.on('project-info', (data) => {
+      if (data && onProjectInfoRef.current) {
+        onProjectInfoRef.current(data);
+      }
+    });
+
+    // Receive project renamed notification
+    socket.on('project-renamed', (data) => {
+      if (data && onProjectRenamedRef.current) {
+        onProjectRenamedRef.current(data);
       }
     });
 

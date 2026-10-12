@@ -23,9 +23,10 @@ export default function Navbar({
   projectName = 'Untitled Project',
   roomId = 'demo-room',
   onChangeRoom,
+  onRenameProject,
   connectionStatus = 'connecting',
   participantCount = 1,
-  currentUser = { name: 'Guest', color: '#6366f1', initials: 'G' },
+  currentUser = { name: 'Guest', color: '#6d5dfc', initials: 'G' },
   activeUsers = [],
   userRole = 'editor',
   onRun,
@@ -42,8 +43,19 @@ export default function Navbar({
 }) {
   const [isEditingRoom, setIsEditingRoom] = useState(false);
   const [roomInput, setRoomInput] = useState(roomId);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [titleInput, setTitleInput] = useState(projectName);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const userMenuRef = useRef(null);
+
+  // Sync inputs when props change externally
+  useEffect(() => {
+    setRoomInput(roomId);
+  }, [roomId]);
+
+  useEffect(() => {
+    setTitleInput(projectName);
+  }, [projectName]);
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -61,11 +73,27 @@ export default function Navbar({
   }, [isUserMenuOpen]);
 
   const handleRoomSubmit = (e) => {
-    e.preventDefault();
-    if (roomInput.trim() && onChangeRoom) {
-      onChangeRoom(roomInput.trim());
+    e?.preventDefault?.();
+    const clean = roomInput.trim();
+    if (clean && clean !== roomId) {
+      if (onRenameProject) {
+        onRenameProject({ newRoomId: clean });
+      } else if (onChangeRoom) {
+        onChangeRoom(clean);
+      }
     }
     setIsEditingRoom(false);
+  };
+
+  const handleTitleSubmit = (e) => {
+    e?.preventDefault?.();
+    const clean = titleInput.trim();
+    if (clean && clean !== projectName) {
+      if (onRenameProject) {
+        onRenameProject({ newName: clean });
+      }
+    }
+    setIsEditingTitle(false);
   };
 
   const getConnectionConfig = () => {
@@ -165,7 +193,38 @@ export default function Navbar({
         <div className="divider-vertical divider-tablet" />
 
         <div className="project-title-container">
-          <span className="project-title">{projectName}</span>
+          {isEditingTitle ? (
+            <form onSubmit={handleTitleSubmit} className="project-title-edit-form">
+              <input
+                type="text"
+                className="project-title-input"
+                value={titleInput}
+                onChange={(e) => setTitleInput(e.target.value)}
+                autoFocus
+                onBlur={handleTitleSubmit}
+                placeholder="Project name"
+              />
+              <button type="submit" className="room-submit-btn" title="Confirm Name" aria-label="Confirm Name">
+                <Check size={12} />
+              </button>
+            </form>
+          ) : (
+            <div
+              className={`project-title-wrapper ${userRole !== 'viewer' ? 'editable' : ''}`}
+              onClick={() => {
+                if (userRole !== 'viewer') {
+                  setTitleInput(projectName);
+                  setIsEditingTitle(true);
+                }
+              }}
+              title={userRole !== 'viewer' ? 'Click to rename project' : projectName}
+              role={userRole !== 'viewer' ? 'button' : undefined}
+              tabIndex={userRole !== 'viewer' ? 0 : undefined}
+            >
+              <span className="project-title">{projectName}</span>
+              {userRole !== 'viewer' && <Edit2 size={11} className="title-edit-icon" />}
+            </div>
+          )}
         </div>
 
         {/* User Role Badge in Header */}
@@ -296,6 +355,7 @@ export default function Navbar({
             className="user-avatar-trigger"
             onClick={() => setIsUserMenuOpen((prev) => !prev)}
             title={currentUser.name}
+            aria-label="User account menu"
             aria-expanded={isUserMenuOpen}
             aria-haspopup="true"
           >

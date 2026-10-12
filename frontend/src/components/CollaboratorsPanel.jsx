@@ -5,7 +5,7 @@ export default function CollaboratorsPanel({
   isOpen,
   onClose,
   roomId = 'demo-room',
-  currentUser = { id: 'local', name: 'Guest', color: '#6366f1' },
+  currentUser = { id: 'local', name: 'Guest', color: '#6d5dfc' },
   activeUsers = [],
   currentActiveFile = 'main.js'
 }) {
@@ -40,6 +40,7 @@ export default function CollaboratorsPanel({
           type="button"
           className="action-icon-btn"
           onClick={onClose}
+          aria-label="Close Collaborators Panel"
           title="Close Collaborators Panel"
         >
           <X size={14} />
@@ -56,7 +57,7 @@ export default function CollaboratorsPanel({
             <div key={user.socketId || user.id} className="collaborator-card">
               <div
                 className="collaborator-avatar"
-                style={{ backgroundColor: user.color || '#6366f1' }}
+                style={{ backgroundColor: user.color || '#6d5dfc' }}
               >
                 <span>{initials}</span>
                 <span className="presence-dot online" />

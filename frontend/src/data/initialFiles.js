@@ -58,11 +58,11 @@ console.log('Session Summary:', currentSession);
     language: 'css',
     content: `/* CodeCollab Modern Dark Theme Styles */
 :root {
-  --bg-primary: #0f1117;
-  --bg-card: #161922;
-  --accent: #6366f1;
-  --text-main: #f8fafc;
-  --text-muted: #94a3b8;
+  --bg-primary: #090d16;
+  --bg-card: #121a29;
+  --accent: #6d5dfc;
+  --text-main: #f2f6ff;
+  --text-muted: #b4c2d9;
 }
 
 body {
@@ -81,7 +81,7 @@ body {
   background: var(--bg-card);
   padding: 2.5rem;
   border-radius: 12px;
-  border: 1px solid #282f44;
+  border: 1px solid #26344d;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
   max-width: 480px;
   text-align: center;
@@ -93,7 +93,7 @@ body {
   font-size: 0.75rem;
   font-weight: 600;
   color: var(--accent);
-  background: rgba(99, 102, 241, 0.15);
+  background: rgba(109, 93, 252, 0.16);
   border-radius: 9999px;
   margin-bottom: 1rem;
 }

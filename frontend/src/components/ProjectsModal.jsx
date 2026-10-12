@@ -238,6 +238,7 @@ export default function ProjectsModal({
                             className="btn-icon-action confirm"
                             onClick={() => handleSaveRename(project.id)}
                             title="Save Name"
+                            aria-label="Save Name"
                           >
                             <Check size={14} />
                           </button>
@@ -246,6 +247,7 @@ export default function ProjectsModal({
                             className="btn-icon-action cancel"
                             onClick={() => setEditingId(null)}
                             title="Cancel"
+                            aria-label="Cancel"
                           >
                             <X size={14} />
                           </button>
@@ -285,6 +287,7 @@ export default function ProjectsModal({
                             onClose();
                           }}
                           title="Open project room"
+                          aria-label="Open project room"
                         >
                           <ExternalLink size={13} />
                           <span>Open</span>
@@ -297,6 +300,7 @@ export default function ProjectsModal({
                           className="btn-icon-action"
                           onClick={() => handleStartRename(project)}
                           title="Rename project"
+                          aria-label="Rename project"
                         >
                           <Edit2 size={13} />
                         </button>
@@ -309,6 +313,7 @@ export default function ProjectsModal({
                             className="btn-delete-confirm"
                             onClick={() => handleDelete(project.id, project.name)}
                             title="Confirm delete"
+                            aria-label="Confirm delete"
                           >
                             Delete
                           </button>
@@ -317,6 +322,7 @@ export default function ProjectsModal({
                             className="btn-icon-action cancel"
                             onClick={() => setDeletingId(null)}
                             title="Cancel"
+                            aria-label="Cancel"
                           >
                             <X size={12} />
                           </button>
@@ -327,6 +333,7 @@ export default function ProjectsModal({
                           className="btn-icon-action danger"
                           onClick={() => setDeletingId(project.id)}
                           title="Delete project"
+                          aria-label="Delete project"
                         >
                           <Trash2 size={13} />
                         </button>

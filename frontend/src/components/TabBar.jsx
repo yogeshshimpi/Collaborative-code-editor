@@ -69,6 +69,7 @@ export default function TabBar({
                   type="button"
                   className="tab-close-btn"
                   title={`Close ${fileName}`}
+                  aria-label={`Close ${fileName}`}
                   onClick={(e) => {
                     e.stopPropagation();
                     onCloseTab(fileName);
@@ -90,6 +91,7 @@ export default function TabBar({
             className="tab-action-btn"
             onClick={onOpenHistory}
             title={activeTab ? `View version history for ${activeTab}` : 'View version history'}
+            aria-label="View Version History"
             disabled={!activeTab}
           >
             <History size={13} />

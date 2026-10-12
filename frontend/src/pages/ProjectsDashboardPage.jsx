@@ -160,7 +160,7 @@ export default function ProjectsDashboardPage() {
           <div className="dashboard-user-badge">
             <div
               className="user-avatar"
-              style={{ backgroundColor: user?.color || '#6366f1' }}
+              style={{ backgroundColor: user?.color || '#6d5dfc' }}
             >
               <span>{user?.initials || 'U'}</span>
             </div>
@@ -252,6 +252,8 @@ export default function ProjectsDashboardPage() {
                 type="button"
                 className="search-clear-btn"
                 onClick={() => setSearchQuery('')}
+                title="Clear search"
+                aria-label="Clear search"
               >
                 <X size={14} />
               </button>
@@ -444,6 +446,7 @@ export default function ProjectsDashboardPage() {
                             setEditingName(project.name);
                           }}
                           title="Rename project"
+                          aria-label="Rename project"
                         >
                           <Edit2 size={13} />
                         </button>
@@ -456,6 +459,7 @@ export default function ProjectsDashboardPage() {
                               type="button"
                               className="btn-delete-confirm-sm"
                               onClick={() => handleDelete(project.id, project.name)}
+                              aria-label="Confirm delete project"
                             >
                               Delete
                             </button>
@@ -463,6 +467,8 @@ export default function ProjectsDashboardPage() {
                               type="button"
                               className="btn-card-action"
                               onClick={() => setDeletingId(null)}
+                              title="Cancel delete"
+                              aria-label="Cancel delete"
                             >
                               <X size={12} />
                             </button>
@@ -473,6 +479,7 @@ export default function ProjectsDashboardPage() {
                             className="btn-card-action danger"
                             onClick={() => setDeletingId(project.id)}
                             title="Delete project"
+                            aria-label="Delete project"
                           >
                             <Trash2 size={13} />
                           </button>
@@ -500,6 +507,8 @@ export default function ProjectsDashboardPage() {
                           type="button"
                           className="btn-icon-action confirm"
                           onClick={() => handleSaveRename(project.id)}
+                          title="Save new name"
+                          aria-label="Save new name"
                         >
                           <Check size={13} />
                         </button>
@@ -507,6 +516,8 @@ export default function ProjectsDashboardPage() {
                           type="button"
                           className="btn-icon-action cancel"
                           onClick={() => setEditingId(null)}
+                          title="Cancel rename"
+                          aria-label="Cancel rename"
                         >
                           <X size={13} />
                         </button>

@@ -4,7 +4,7 @@ import { Loader2 } from 'lucide-react';
 
 // Convert hex color to semi-transparent rgba for clean selection highlight
 function hexToRgba(color, alpha = 0.22) {
-  if (!color || typeof color !== 'string') return `rgba(99, 102, 241, ${alpha})`;
+  if (!color || typeof color !== 'string') return `rgba(109, 93, 252, ${alpha})`;
   if (color.startsWith('rgb')) {
     return color.replace('rgb(', 'rgba(').replace(')', `, ${alpha})`);
   }
@@ -12,7 +12,7 @@ function hexToRgba(color, alpha = 0.22) {
   if (hex.length === 3) {
     hex = hex.split('').map((c) => c + c).join('');
   }
-  if (hex.length !== 6) return `rgba(99, 102, 241, ${alpha})`;
+  if (hex.length !== 6) return `rgba(109, 93, 252, ${alpha})`;
   const r = parseInt(hex.substring(0, 2), 16);
   const g = parseInt(hex.substring(2, 4), 16);
   const b = parseInt(hex.substring(4, 6), 16);
@@ -103,7 +103,7 @@ export default function EditorArea({
     for (const [socketId, data] of cursorEntries) {
       const { cursor, selection, userName, userColor } = data;
       const safeId = String(socketId).replace(/[^a-zA-Z0-9_-]/g, '_');
-      const color = userColor || '#6366f1';
+      const color = userColor || '#6d5dfc';
       const name = userName || 'Collaborator';
       const escapedName = String(name).replace(/\\/g, '\\\\').replace(/"/g, '\\"').slice(0, 20);
 

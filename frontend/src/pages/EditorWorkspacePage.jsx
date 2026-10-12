@@ -1,6 +1,6 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Eye } from 'lucide-react';
+import { Eye, FolderCode, ArrowLeft } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import Sidebar from '../components/Sidebar';
 import TabBar from '../components/TabBar';
@@ -11,18 +11,117 @@ import CollaboratorsModal from '../components/CollaboratorsModal';
 import VersionHistoryModal from '../components/VersionHistoryModal';
 import Toast from '../components/Toast';
 import { useAuth } from '../context/useAuth';
+import { api } from '../services/api';
 import { INITIAL_FILES, getLanguageFromFile } from '../data/initialFiles';
 import { useSocket } from '../hooks/useSocket';
 
 export default function EditorWorkspacePage() {
   const { roomId: urlRoomId } = useParams();
   const navigate = useNavigate();
-  const { user, projects, logout } = useAuth();
+  const { user, projects, renameProject, logout } = useAuth();
 
   const roomId = (urlRoomId && decodeURIComponent(urlRoomId).trim()) || 'demo-room';
 
+  // Helper for slug comparison
+  const toSlug = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const cleanParam = roomId.trim();
+  const lowerParam = cleanParam.toLowerCase();
+  const slugParam = toSlug(cleanParam);
+
+  // Match project from context projects array
+  const matchedInContext = projects.find((p) => {
+    if (!p) return false;
+    if (p.room_id === cleanParam || p.id === cleanParam) return true;
+    if (p.room_id && p.room_id.toLowerCase() === lowerParam) return true;
+    if (p.name && p.name.toLowerCase() === lowerParam) return true;
+    if (toSlug(p.name) === slugParam || toSlug(p.room_id) === slugParam) return true;
+    return false;
+  });
+
+  const [currentProject, setCurrentProject] = useState(matchedInContext || null);
+  const [isProjectLoading, setIsProjectLoading] = useState(!matchedInContext && roomId !== 'demo-room');
+  const [projectNotFound, setProjectNotFound] = useState(false);
+  const [toast, setToast] = useState(null);
+
+  // Show notification
+  const showToast = useCallback((message, type = 'info') => {
+    setToast({ message, type });
+    setTimeout(() => {
+      setToast(null);
+    }, 3200);
+  }, []);
+
+  // Direct project API loader to guarantee freshness on direct route load & refresh
+  useEffect(() => {
+    let isMounted = true;
+    setProjectNotFound(false);
+
+    if (matchedInContext) {
+      setCurrentProject(matchedInContext);
+      setIsProjectLoading(false);
+    }
+
+    if (roomId === 'demo-room') {
+      setIsProjectLoading(false);
+      return;
+    }
+
+    api.getProject(roomId)
+      .then((res) => {
+        if (isMounted && res?.project) {
+          setCurrentProject(res.project);
+          setIsProjectLoading(false);
+          setProjectNotFound(false);
+        }
+      })
+      .catch((err) => {
+        if (isMounted) {
+          setIsProjectLoading(false);
+          if (!matchedInContext && (err.status === 404 || err.message?.toLowerCase().includes('not found'))) {
+            setProjectNotFound(true);
+          }
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [roomId, matchedInContext]);
+
+  // Handle remote project info from socket
+  const handleProjectInfo = useCallback((info) => {
+    if (info) {
+      setCurrentProject((prev) => ({
+        ...(prev || {}),
+        ...info
+      }));
+    }
+  }, []);
+
+  // Handle project renamed notification from socket
+  const handleProjectRenamed = useCallback(({ projectId, newRoomId, newName }) => {
+    setCurrentProject((prev) => {
+      if (!prev || prev.id === projectId) {
+        return {
+          ...(prev || {}),
+          id: projectId,
+          name: newName,
+          room_id: newRoomId
+        };
+      }
+      return prev;
+    });
+
+    const targetSlug = newRoomId || newName;
+    navigate(`/projects/${encodeURIComponent(targetSlug)}`, { replace: true });
+    showToast(`Project renamed to "${newName}"`, 'info');
+  }, [navigate, showToast]);
+
+  const activeRoomId = currentProject?.room_id || matchedInContext?.room_id || roomId;
+  const projectName = currentProject?.name || matchedInContext?.name || roomId;
+
   // Active user is the authenticated user
-  const currentUser = user || { name: 'User', color: '#6366f1', initials: 'U' };
+  const currentUser = user || { name: 'User', color: '#6d5dfc', initials: 'U' };
 
   // File storage state - holds independent content per file
   const [filesState, setFilesState] = useState(INITIAL_FILES);
@@ -42,21 +141,11 @@ export default function EditorWorkspacePage() {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   // Mobile sidebar drawer state (open/close)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  // Toast feedback message
-  const [toast, setToast] = useState(null);
   // Updated only from server acknowledgements
   const [saveStatus, setSaveStatus] = useState('idle');
 
   // Flag to avoid infinite loops: prevent remote updates from being emitted back
   const isRemoteChangeRef = useRef(false);
-
-  // Show notification
-  const showToast = useCallback((message, type = 'info') => {
-    setToast({ message, type });
-    setTimeout(() => {
-      setToast(null);
-    }, 3200);
-  }, []);
 
   // Handle permission error from server (e.g. viewer trying to emit code changes)
   const handlePermissionError = useCallback((err) => {
@@ -286,7 +375,7 @@ export default function EditorWorkspacePage() {
     emitDeleteFolder,
     emitMoveItem
   } = useSocket({
-    roomId,
+    roomId: activeRoomId,
     user: currentUser,
     onRemoteCodeChange: handleRemoteCodeChange,
     onRoomSync: handleRoomSync,
@@ -298,7 +387,9 @@ export default function EditorWorkspacePage() {
     onFolderCreated: handleFolderCreated,
     onFolderRenamed: handleFolderRenamed,
     onFolderDeleted: handleFolderDeleted,
-    onFileError: handleFileError
+    onFileError: handleFileError,
+    onProjectInfo: handleProjectInfo,
+    onProjectRenamed: handleProjectRenamed
   });
 
   // Throttled cursor and selection activity broadcaster (~35ms throttle for smooth real-time rendering)
@@ -331,19 +422,44 @@ export default function EditorWorkspacePage() {
     [activeFile, emitCursorChange]
   );
 
-  // Determine displayed project name and effective role
-  const matchedProject = projects.find((p) => p.room_id === roomId || p.id === roomId);
-  const projectName = matchedProject ? matchedProject.name : roomId;
-  const effectiveRole = role || matchedProject?.role || 'editor';
+  // Effective role in project workspace
+  const effectiveRole = role || currentProject?.role || matchedInContext?.role || 'editor';
   const isViewer = effectiveRole === 'viewer';
 
   // Switch active room by navigating to the new route
   const handleChangeRoom = (newRoom) => {
     const trimmed = newRoom ? newRoom.trim() : '';
-    if (!trimmed || trimmed === roomId) return;
+    if (!trimmed || trimmed === activeRoomId) return;
     emitCursorClear();
     navigate(`/projects/${encodeURIComponent(trimmed)}`);
     showToast(`Switched to room "${trimmed}"`, 'info');
+  };
+
+  // Rename project or room (owner/editor)
+  const handleRenameProject = async ({ newName, newRoomId }) => {
+    if (isViewer) {
+      showToast('You have view-only access. Renaming is restricted to project owners.', 'error');
+      return;
+    }
+
+    try {
+      const targetId = currentProject?.id || matchedInContext?.id;
+      if (targetId) {
+        const updated = await renameProject(targetId, {
+          name: newName || projectName,
+          roomId: newRoomId || activeRoomId
+        });
+        setCurrentProject(updated);
+        const targetSlug = updated.room_id || updated.name;
+        navigate(`/projects/${encodeURIComponent(targetSlug)}`, { replace: true });
+        showToast(`Project updated to "${updated.name}" (#${updated.room_id})`, 'success');
+      } else {
+        // Ad-hoc room switch
+        handleChangeRoom(newRoomId || newName);
+      }
+    } catch (err) {
+      showToast(err.message || 'Failed to rename project.', 'error');
+    }
   };
 
   // Switch active file from sidebar or tabs
@@ -480,13 +596,47 @@ export default function EditorWorkspacePage() {
   const currentLanguage = activeFile ? getLanguageFromFile(activeFile) : 'plaintext';
   const fileList = Object.values(filesState);
 
+  if (projectNotFound && !isProjectLoading && roomId !== 'demo-room') {
+    return (
+      <div className="workspace-not-found-container">
+        <div className="workspace-not-found-card">
+          <div className="not-found-icon">
+            <FolderCode size={36} />
+          </div>
+          <h2>Project Not Found</h2>
+          <p>
+            We couldn't locate a project matching <code>{roomId}</code>. It may have been renamed, deleted, or you may need an invitation.
+          </p>
+          <div className="not-found-actions">
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => navigate('/projects')}
+            >
+              <ArrowLeft size={16} />
+              <span>Back to Projects Dashboard</span>
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => navigate('/projects/demo-room')}
+            >
+              <span>Open Demo Sandbox</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="app-container">
       {/* Top Navbar */}
       <Navbar
         projectName={projectName}
-        roomId={roomId}
+        roomId={activeRoomId}
         onChangeRoom={handleChangeRoom}
+        onRenameProject={handleRenameProject}
         connectionStatus={connectionStatus}
         participantCount={participantCount}
         currentUser={currentUser}
@@ -573,7 +723,7 @@ export default function EditorWorkspacePage() {
         <CollaboratorsPanel
           isOpen={isRightPanelOpen}
           onClose={() => setIsRightPanelOpen(false)}
-          roomId={roomId}
+          roomId={activeRoomId}
           currentUser={currentUser}
           activeUsers={activeUsers}
           currentActiveFile={activeFile}
@@ -586,7 +736,7 @@ export default function EditorWorkspacePage() {
         cursor={cursor}
         encoding="UTF-8"
         connectionStatus={connectionStatus}
-        roomId={roomId}
+        roomId={activeRoomId}
         saveStatus={saveStatus}
         userRole={effectiveRole}
       />
@@ -595,7 +745,7 @@ export default function EditorWorkspacePage() {
       <CollaboratorsModal
         isOpen={isCollaboratorsOpen}
         onClose={() => setIsCollaboratorsOpen(false)}
-        projectId={matchedProject?.id || roomId}
+        projectId={currentProject?.id || matchedInContext?.id || activeRoomId}
         projectName={projectName}
         userRole={effectiveRole}
         currentUserId={currentUser?.id}
@@ -606,7 +756,7 @@ export default function EditorWorkspacePage() {
       <VersionHistoryModal
         isOpen={isHistoryOpen}
         onClose={() => setIsHistoryOpen(false)}
-        roomId={roomId}
+        roomId={activeRoomId}
         fileName={activeFile || 'main.js'}
         userRole={effectiveRole}
         onRestore={handleVersionRestored}

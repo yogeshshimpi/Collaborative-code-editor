@@ -47,21 +47,21 @@ export function AuthProvider({ children }) {
         if (isMounted) {
           if (res?.user) {
             setUser(formatAuthUser(res.user));
-            // Pre-load projects and invitations for authenticated session
-            api.getProjects()
-              .then((pRes) => {
-                if (isMounted && Array.isArray(pRes?.projects)) {
-                  setProjects(pRes.projects);
-                }
-              })
-              .catch(() => {});
-            api.getMyInvitations()
-              .then((iRes) => {
-                if (isMounted && Array.isArray(iRes?.invitations)) {
-                  setInvitations(iRes.invitations);
-                }
-              })
-              .catch(() => {});
+            // Pre-load projects and invitations before finishing loading so direct route refreshes have full project context
+            try {
+              const [pRes, iRes] = await Promise.allSettled([
+                api.getProjects(),
+                api.getMyInvitations()
+              ]);
+              if (isMounted && pRes.status === 'fulfilled' && Array.isArray(pRes.value?.projects)) {
+                setProjects(pRes.value.projects);
+              }
+              if (isMounted && iRes.status === 'fulfilled' && Array.isArray(iRes.value?.invitations)) {
+                setInvitations(iRes.value.invitations);
+              }
+            } catch (pErr) {
+              console.warn('[AuthContext] Project pre-fetch warning:', pErr);
+            }
           } else {
             setUser(null);
             setProjects([]);
@@ -134,12 +134,19 @@ export function AuthProvider({ children }) {
     throw new Error('Failed to create project.');
   };
 
-  // Rename project
-  const renameProject = async (id, newName) => {
-    const res = await api.renameProject(id, newName);
+  // Rename project (supports new name and/or new room ID)
+  const renameProject = async (id, newNameOrData) => {
+    const res = await api.renameProject(id, newNameOrData);
     if (res?.project) {
       setProjects((prev) =>
-        prev.map((p) => (p.id === id || p.room_id === id ? res.project : p))
+        prev.map((p) =>
+          p.id === id ||
+          p.room_id === id ||
+          p.id === res.project.id ||
+          (res.project.old_room_id && p.room_id === res.project.old_room_id)
+            ? res.project
+            : p
+        )
       );
       return res.project;
     }

@@ -251,7 +251,7 @@ export default function CollaboratorsModal({
                   {/* Owner Row */}
                   {owner && (
                     <div className="member-row owner-row">
-                      <div className="member-avatar" style={{ backgroundColor: '#6366f1' }}>
+                      <div className="member-avatar" style={{ backgroundColor: owner.color || '#6d5dfc' }}>
                         <span>{owner.name?.slice(0, 2).toUpperCase() || 'OW'}</span>
                       </div>
                       <div className="member-info">
@@ -274,7 +274,7 @@ export default function CollaboratorsModal({
 
                     return (
                       <div key={member.id || member.user_id} className="member-row">
-                        <div className="member-avatar" style={{ backgroundColor: '#10b981' }}>
+                        <div className="member-avatar" style={{ backgroundColor: member.color || '#25c990' }}>
                           <span>{member.name?.slice(0, 2).toUpperCase() || 'U'}</span>
                         </div>
                         <div className="member-info">
@@ -310,6 +310,7 @@ export default function CollaboratorsModal({
                                   type="button"
                                   className="btn-delete-confirm-sm"
                                   onClick={() => handleRemoveMember(member.user_id, member.name)}
+                                  aria-label={isSelf ? 'Confirm leave project' : 'Confirm remove member'}
                                 >
                                   {isSelf ? 'Leave' : 'Remove'}
                                 </button>
@@ -317,6 +318,8 @@ export default function CollaboratorsModal({
                                   type="button"
                                   className="btn-card-action"
                                   onClick={() => setDeletingUserId(null)}
+                                  title="Cancel"
+                                  aria-label="Cancel"
                                 >
                                   <X size={12} />
                                 </button>
@@ -327,6 +330,7 @@ export default function CollaboratorsModal({
                                 className="btn-card-action danger"
                                 onClick={() => setDeletingUserId(member.user_id)}
                                 title={isSelf ? 'Leave project' : 'Remove member'}
+                                aria-label={isSelf ? 'Leave project' : 'Remove member'}
                               >
                                 <Trash2 size={13} />
                               </button>
@@ -369,6 +373,7 @@ export default function CollaboratorsModal({
                           className="btn-revoke-invite"
                           onClick={() => handleRevokeInvite(inv.id, inv.invited_email)}
                           title="Revoke invitation"
+                          aria-label="Revoke invitation"
                         >
                           Revoke
                         </button>

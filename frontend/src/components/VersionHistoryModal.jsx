@@ -244,6 +244,7 @@ export default function VersionHistoryModal({
             className="action-icon-btn"
             onClick={onClose}
             title="Close Version History"
+            aria-label="Close Version History"
           >
             <X size={16} />
           </button>
@@ -299,6 +300,7 @@ export default function VersionHistoryModal({
                     className="btn btn-secondary btn-sm btn-snapshot"
                     disabled={isCreatingSnapshot}
                     title="Save current file content as a named snapshot checkpoint"
+                    aria-label="Save snapshot checkpoint"
                   >
                     {isCreatingSnapshot ? (
                       <Loader2 size={13} className="spinner" />
@@ -403,6 +405,7 @@ export default function VersionHistoryModal({
                       className="btn btn-secondary btn-xs btn-back-timeline"
                       onClick={() => setMobileTab('timeline')}
                       title="Back to timeline list"
+                      aria-label="Back to timeline list"
                     >
                       <Clock size={12} />
                       <span>Timeline</span>
@@ -429,6 +432,7 @@ export default function VersionHistoryModal({
                         className="btn btn-primary btn-sm btn-restore-trigger"
                         onClick={() => setShowConfirmRestore(true)}
                         title="Restore this version into the active project"
+                        aria-label="Restore this version"
                       >
                         <RotateCcw size={13} />
                         <span>Restore This Version</span>
