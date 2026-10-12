@@ -6,6 +6,7 @@ export function useSocket({ roomId, user, onRemoteCodeChange, onRoomSync, onSave
   const [participantCount, setParticipantCount] = useState(1);
   const [activeUsers, setActiveUsers] = useState([]);
   const [role, setRole] = useState('editor');
+  const [remoteCursors, setRemoteCursors] = useState({});
   const socketRef = useRef(null);
 
   // Store callbacks and user in refs to keep listener references stable
@@ -52,6 +53,7 @@ export function useSocket({ roomId, user, onRemoteCodeChange, onRoomSync, onSave
 
     socket.on('disconnect', () => {
       setConnectionStatus('disconnected');
+      setRemoteCursors({});
     });
 
     socket.on('connect_error', () => {
@@ -81,6 +83,26 @@ export function useSocket({ roomId, user, onRemoteCodeChange, onRoomSync, onSave
       if (Array.isArray(users)) {
         setActiveUsers(users);
         setParticipantCount(users.length);
+
+        // Remove remote cursors for users who have left
+        const activeSocketIds = new Set(users.map((u) => u.socketId));
+        setRemoteCursors((prev) => {
+          let hasOrphans = false;
+          for (const sId of Object.keys(prev)) {
+            if (!activeSocketIds.has(sId)) {
+              hasOrphans = true;
+              break;
+            }
+          }
+          if (!hasOrphans) return prev;
+          const next = { ...prev };
+          for (const sId of Object.keys(next)) {
+            if (!activeSocketIds.has(sId)) {
+              delete next[sId];
+            }
+          }
+          return next;
+        });
       }
     });
 
@@ -108,6 +130,28 @@ export function useSocket({ roomId, user, onRemoteCodeChange, onRoomSync, onSave
       }
     });
 
+    // Remote collaborator cursor and selection updates
+    socket.on('cursor-change', (data) => {
+      if (data && data.socketId) {
+        setRemoteCursors((prev) => ({
+          ...prev,
+          [data.socketId]: data
+        }));
+      }
+    });
+
+    // Remote collaborator cursor cleared (e.g. switched files, blurred)
+    socket.on('cursor-clear', (data) => {
+      if (data?.socketId) {
+        setRemoteCursors((prev) => {
+          if (!prev[data.socketId]) return prev;
+          const next = { ...prev };
+          delete next[data.socketId];
+          return next;
+        });
+      }
+    });
+
     // Clean up on room change or unmount
     return () => {
       socket.off('connect');
@@ -121,8 +165,11 @@ export function useSocket({ roomId, user, onRemoteCodeChange, onRoomSync, onSave
       socket.off('code-change');
       socket.off('room-sync');
       socket.off('save-status');
+      socket.off('cursor-change');
+      socket.off('cursor-clear');
       socket.disconnect();
       socketRef.current = null;
+      setRemoteCursors({});
     };
   }, [roomId, user?.id]);
 
@@ -137,11 +184,35 @@ export function useSocket({ roomId, user, onRemoteCodeChange, onRoomSync, onSave
     }
   }, [roomId]);
 
+  // Method to emit local cursor position and selection
+  const emitCursorChange = useCallback((fileName, cursor, selection = null) => {
+    if (socketRef.current && socketRef.current.connected && fileName && cursor) {
+      socketRef.current.emit('cursor-change', {
+        roomId,
+        fileName,
+        cursor,
+        selection
+      });
+    }
+  }, [roomId]);
+
+  // Method to clear local cursor for other users (e.g. when leaving a file)
+  const emitCursorClear = useCallback(() => {
+    if (socketRef.current && socketRef.current.connected) {
+      socketRef.current.emit('cursor-clear', {
+        roomId
+      });
+    }
+  }, [roomId]);
+
   return {
     connectionStatus,
     participantCount,
     activeUsers,
     role,
-    emitCodeChange
+    remoteCursors,
+    emitCodeChange,
+    emitCursorChange,
+    emitCursorClear
   };
 }

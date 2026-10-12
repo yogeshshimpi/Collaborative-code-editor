@@ -102,7 +102,16 @@ export default function EditorWorkspacePage() {
   }, []);
 
   // Initialize Socket.IO connection hook with live user identity & role
-  const { connectionStatus, participantCount, activeUsers, role, emitCodeChange } = useSocket({
+  const {
+    connectionStatus,
+    participantCount,
+    activeUsers,
+    role,
+    remoteCursors,
+    emitCodeChange,
+    emitCursorChange,
+    emitCursorClear
+  } = useSocket({
     roomId,
     user: currentUser,
     onRemoteCodeChange: handleRemoteCodeChange,
@@ -110,6 +119,36 @@ export default function EditorWorkspacePage() {
     onSaveStatus: handleSaveStatus,
     onPermissionError: handlePermissionError
   });
+
+  // Throttled cursor and selection activity broadcaster (~35ms throttle for smooth real-time rendering)
+  const cursorThrottleTimerRef = useRef(null);
+  const pendingCursorPayloadRef = useRef(null);
+
+  const handleCursorActivity = useCallback(
+    ({ cursor, selection }) => {
+      if (!activeFile) return;
+
+      pendingCursorPayloadRef.current = { cursor, selection };
+
+      if (!cursorThrottleTimerRef.current) {
+        // Emit immediately on first activity
+        emitCursorChange(activeFile, cursor, selection);
+
+        cursorThrottleTimerRef.current = setTimeout(() => {
+          cursorThrottleTimerRef.current = null;
+          if (pendingCursorPayloadRef.current) {
+            emitCursorChange(
+              activeFile,
+              pendingCursorPayloadRef.current.cursor,
+              pendingCursorPayloadRef.current.selection
+            );
+            pendingCursorPayloadRef.current = null;
+          }
+        }, 35);
+      }
+    },
+    [activeFile, emitCursorChange]
+  );
 
   // Determine displayed project name and effective role
   const matchedProject = projects.find((p) => p.room_id === roomId || p.id === roomId);
@@ -121,12 +160,22 @@ export default function EditorWorkspacePage() {
   const handleChangeRoom = (newRoom) => {
     const trimmed = newRoom ? newRoom.trim() : '';
     if (!trimmed || trimmed === roomId) return;
+    emitCursorClear();
     navigate(`/projects/${encodeURIComponent(trimmed)}`);
     showToast(`Switched to room "${trimmed}"`, 'info');
   };
 
   // Switch active file from sidebar or tabs
   const handleSelectFile = (fileName) => {
+    if (fileName !== activeFile) {
+      if (cursorThrottleTimerRef.current) {
+        clearTimeout(cursorThrottleTimerRef.current);
+        cursorThrottleTimerRef.current = null;
+      }
+      pendingCursorPayloadRef.current = null;
+      emitCursorClear();
+    }
+
     if (!openTabs.includes(fileName)) {
       setOpenTabs((prev) => [...prev, fileName]);
     }
@@ -140,6 +189,13 @@ export default function EditorWorkspacePage() {
     setOpenTabs(updatedTabs);
 
     if (activeFile === fileName) {
+      if (cursorThrottleTimerRef.current) {
+        clearTimeout(cursorThrottleTimerRef.current);
+        cursorThrottleTimerRef.current = null;
+      }
+      pendingCursorPayloadRef.current = null;
+      emitCursorClear();
+
       if (updatedTabs.length > 0) {
         setActiveFile(updatedTabs[updatedTabs.length - 1]);
       } else {
@@ -185,6 +241,7 @@ export default function EditorWorkspacePage() {
   };
 
   const handleLogout = async () => {
+    emitCursorClear();
     await logout();
     navigate('/login', { replace: true });
   };
@@ -254,8 +311,11 @@ export default function EditorWorkspacePage() {
               language={currentLanguage}
               onChange={handleEditorChange}
               onCursorChange={setCursor}
+              onCursorActivity={handleCursorActivity}
               layoutTrigger={isSidebarOpen || isRightPanelOpen}
               readOnly={isViewer}
+              activeFile={activeFile}
+              remoteCursors={remoteCursors}
             />
           ) : (
             <div className="no-editor-state">
@@ -274,6 +334,7 @@ export default function EditorWorkspacePage() {
           roomId={roomId}
           currentUser={currentUser}
           activeUsers={activeUsers}
+          currentActiveFile={activeFile}
         />
       </div>
 

@@ -611,20 +611,23 @@ io.on('connection', (socket) => {
 
     // Determine user identity: Use authenticated user if session cookie is present, else guest identity
     const authUser = socket.data.authenticatedUser;
+    const initialActiveFile = typeof rawUser?.activeFile === 'string' && ALLOWED_FILES.has(rawUser.activeFile) ? rawUser.activeFile : 'main.js';
     const sanitizedUser = authUser
       ? {
           id: `auth-${authUser.id}`,
           name: authUser.name,
           color: rawUser?.color || '#6366f1',
           isAuthenticated: true,
-          socketId: socket.id
+          socketId: socket.id,
+          activeFile: initialActiveFile
         }
       : {
           id: typeof rawUser?.id === 'string' && rawUser.id.trim() ? rawUser.id.trim().slice(0, 64) : socket.id,
           name: typeof rawUser?.name === 'string' && rawUser.name.trim() ? rawUser.name.trim().slice(0, 32) : `Guest ${Math.floor(1000 + Math.random() * 9000)}`,
           color: typeof rawUser?.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(rawUser.color) ? rawUser.color : '#6366f1',
           isAuthenticated: false,
-          socketId: socket.id
+          socketId: socket.id,
+          activeFile: initialActiveFile
         };
 
     // Determine project access and user role
@@ -716,10 +719,87 @@ io.on('connection', (socket) => {
       });
   });
 
+  // Handle live collaborator cursor and selection changes
+  socket.on('cursor-change', (data) => {
+    if (!data || typeof data !== 'object') {
+      return;
+    }
+
+    const { roomId, fileName, cursor, selection } = data;
+
+    // Validate roomId and active file
+    if (
+      typeof roomId !== 'string' ||
+      !roomId.trim() ||
+      socket.data.currentRoom !== roomId.trim() ||
+      !ALLOWED_FILES.has(fileName)
+    ) {
+      return;
+    }
+
+    const cleanRoomId = roomId.trim();
+    const currentUser = socket.data.currentUser;
+    if (!currentUser) {
+      return;
+    }
+
+    // Update activeFile in room presence
+    const oldFile = currentUser.activeFile;
+    currentUser.activeFile = fileName;
+    const usersInRoom = roomUsers.get(cleanRoomId);
+    if (usersInRoom && usersInRoom.has(socket.id)) {
+      usersInRoom.set(socket.id, currentUser);
+      if (oldFile !== fileName) {
+        io.to(cleanRoomId).emit('room-users', { users: Array.from(usersInRoom.values()) });
+      }
+    }
+
+    // Broadcast cursor position and selection range to all other users in the room
+    socket.to(cleanRoomId).emit('cursor-change', {
+      socketId: socket.id,
+      userId: currentUser.id,
+      userName: currentUser.name,
+      userColor: currentUser.color,
+      fileName,
+      cursor: cursor && typeof cursor === 'object'
+        ? {
+            line: Math.max(1, Number(cursor.line) || 1),
+            column: Math.max(1, Number(cursor.column) || 1)
+          }
+        : null,
+      selection: selection && typeof selection === 'object'
+        ? {
+            startLineNumber: Math.max(1, Number(selection.startLineNumber) || 1),
+            startColumn: Math.max(1, Number(selection.startColumn) || 1),
+            endLineNumber: Math.max(1, Number(selection.endLineNumber) || 1),
+            endColumn: Math.max(1, Number(selection.endColumn) || 1)
+          }
+        : null
+    });
+  });
+
+  // Handle clearing remote cursor (e.g. when user switches files or blurs)
+  socket.on('cursor-clear', (data) => {
+    const rawRoomId = typeof data === 'object' && data !== null ? data.roomId : socket.data.currentRoom;
+    if (typeof rawRoomId === 'string' && rawRoomId.trim()) {
+      const cleanRoomId = rawRoomId.trim();
+      socket.to(cleanRoomId).emit('cursor-clear', {
+        socketId: socket.id,
+        userId: socket.data.currentUser?.id
+      });
+    }
+  });
+
   // Handle socket disconnecting to accurately update presence and participant counts
   socket.on('disconnecting', () => {
     for (const room of socket.rooms) {
       if (room !== socket.id && roomUsers.has(room)) {
+        // Emit cursor-clear to room immediately
+        socket.to(room).emit('cursor-clear', {
+          socketId: socket.id,
+          userId: socket.data.currentUser?.id
+        });
+
         const usersInRoom = roomUsers.get(room);
         usersInRoom.delete(socket.id);
 

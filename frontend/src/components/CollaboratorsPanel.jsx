@@ -6,7 +6,8 @@ export default function CollaboratorsPanel({
   onClose,
   roomId = 'demo-room',
   currentUser = { id: 'local', name: 'Guest', color: '#6366f1' },
-  activeUsers = []
+  activeUsers = [],
+  currentActiveFile = 'main.js'
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -43,6 +44,7 @@ export default function CollaboratorsPanel({
         {userList.map((user) => {
           const isYou = user.id === currentUser.id;
           const initials = user.name ? user.name.replace(/[^0-9a-zA-Z]/g, '').slice(-2) : 'G';
+          const activeFileName = isYou ? currentActiveFile : user.activeFile;
 
           return (
             <div key={user.socketId || user.id} className="collaborator-card">
@@ -64,7 +66,16 @@ export default function CollaboratorsPanel({
                   )}
                 </div>
                 <div className="collaborator-meta">
-                  Status: <span className="meta-file">Active in Room</span>
+                  {activeFileName ? (
+                    <>
+                      {user.role === 'viewer' ? 'Viewing' : 'Editing'}:{' '}
+                      <span className="meta-file">{activeFileName}</span>
+                    </>
+                  ) : (
+                    <>
+                      Status: <span className="meta-file">Active in Room</span>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
