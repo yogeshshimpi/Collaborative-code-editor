@@ -15,7 +15,8 @@ import {
   ChevronDown,
   Eye,
   ShieldCheck,
-  ShieldAlert
+  ShieldAlert,
+  History
 } from 'lucide-react';
 
 export default function Navbar({
@@ -30,6 +31,7 @@ export default function Navbar({
   onRun,
   onShare,
   onOpenCollaborators,
+  onOpenHistory,
   isRightPanelOpen,
   toggleRightPanel,
   onToggleSidebar,
@@ -246,6 +248,20 @@ export default function Navbar({
           >
             <LogIn size={14} />
             <span className="btn-text">Sign In</span>
+          </button>
+        )}
+
+        {/* Version History action button */}
+        {onOpenHistory && (
+          <button
+            type="button"
+            className="btn btn-secondary btn-action"
+            onClick={onOpenHistory}
+            title="View per-file version history & restore previous versions"
+            aria-label="Version History"
+          >
+            <History size={14} />
+            <span className="btn-text">History</span>
           </button>
         )}
 

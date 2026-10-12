@@ -102,10 +102,57 @@ body {
 };
 
 export const getLanguageFromFile = (fileName) => {
-  if (fileName.endsWith('.js')) return 'javascript';
-  if (fileName.endsWith('.html')) return 'html';
-  if (fileName.endsWith('.css')) return 'css';
-  if (fileName.endsWith('.json')) return 'json';
-  if (fileName.endsWith('.md')) return 'markdown';
+  if (!fileName || typeof fileName !== 'string') return 'plaintext';
+  const lower = fileName.toLowerCase();
+  if (lower.endsWith('.js') || lower.endsWith('.mjs') || lower.endsWith('.cjs')) return 'javascript';
+  if (lower.endsWith('.jsx')) return 'javascript';
+  if (lower.endsWith('.ts')) return 'typescript';
+  if (lower.endsWith('.tsx')) return 'typescript';
+  if (lower.endsWith('.html') || lower.endsWith('.htm')) return 'html';
+  if (lower.endsWith('.css') || lower.endsWith('.scss') || lower.endsWith('.sass') || lower.endsWith('.less')) return 'css';
+  if (lower.endsWith('.json')) return 'json';
+  if (lower.endsWith('.md') || lower.endsWith('.markdown')) return 'markdown';
+  if (lower.endsWith('.py')) return 'python';
+  if (lower.endsWith('.sql')) return 'sql';
+  if (lower.endsWith('.xml') || lower.endsWith('.svg')) return 'xml';
+  if (lower.endsWith('.yaml') || lower.endsWith('.yml')) return 'yaml';
+  if (lower.endsWith('.sh') || lower.endsWith('.bash')) return 'shell';
   return 'plaintext';
 };
+
+export const getDefaultFileContent = (fileName) => {
+  if (!fileName || typeof fileName !== 'string') return '';
+  const lower = fileName.toLowerCase();
+  if (lower.endsWith('.jsx')) {
+    const componentName = fileName.split('/').pop().replace(/\.jsx$/, '') || 'Component';
+    return `import React from 'react';\n\nexport default function ${componentName}() {\n  return (\n    <div>\n      <h2>${componentName}</h2>\n    </div>\n  );\n}\n`;
+  }
+  if (lower.endsWith('.tsx')) {
+    const componentName = fileName.split('/').pop().replace(/\.tsx$/, '') || 'Component';
+    return `import React from 'react';\n\ninterface Props {}\n\nexport default function ${componentName}(props: Props) {\n  return (\n    <div>\n      <h2>${componentName}</h2>\n    </div>\n  );\n}\n`;
+  }
+  if (lower.endsWith('.html')) {
+    return `<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8" />\n  <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n  <title>Document</title>\n</head>\n<body>\n  <h1>Hello World</h1>\n</body>\n</html>\n`;
+  }
+  if (lower.endsWith('.css')) {
+    return `/* Styles for ${fileName.split('/').pop()} */\n`;
+  }
+  if (lower.endsWith('.json')) {
+    return `{\n  \n}\n`;
+  }
+  if (lower.endsWith('.py')) {
+    return `def main():\n    print("Hello from Python")\n\nif __name__ == "__main__":\n    main()\n`;
+  }
+  if (lower.endsWith('.sql')) {
+    return `-- SQL Query\n`;
+  }
+  if (lower.endsWith('.md')) {
+    const title = fileName.split('/').pop().replace(/\.md$/, '') || 'Documentation';
+    return `# ${title}\n\nProject documentation.\n`;
+  }
+  if (lower.endsWith('.js') || lower.endsWith('.ts')) {
+    return `// ${fileName.split('/').pop()}\n`;
+  }
+  return '';
+};
+

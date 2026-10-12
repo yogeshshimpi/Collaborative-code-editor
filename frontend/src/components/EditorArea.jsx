@@ -192,9 +192,16 @@ export default function EditorArea({
     }
   }, [layoutTrigger]);
 
+  const [isMobileScreen, setIsMobileScreen] = useState(
+    () => typeof window !== 'undefined' && window.innerWidth < 768
+  );
+
   // Recalculate on window resize and mobile orientation change
   useEffect(() => {
     const handleLayoutRecalc = () => {
+      if (typeof window !== 'undefined') {
+        setIsMobileScreen(window.innerWidth < 768);
+      }
       if (editorRef.current) {
         editorRef.current.layout();
       }
@@ -225,15 +232,17 @@ export default function EditorArea({
           </div>
         }
         options={{
-          fontSize: 13.5,
+          fontSize: isMobileScreen ? 12.5 : 13.5,
           fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace",
           fontLigatures: true,
           minimap: {
-            enabled: true,
+            enabled: !isMobileScreen,
             side: 'right'
           },
           lineNumbers: 'on',
-          lineNumbersMinChars: 3,
+          lineNumbersMinChars: isMobileScreen ? 2 : 3,
+          glyphMargin: false,
+          folding: !isMobileScreen,
           automaticLayout: true,
           scrollBeyondLastLine: false,
           tabSize: 2,
@@ -243,7 +252,7 @@ export default function EditorArea({
           cursorSmoothCaretAnimation: 'on',
           renderLineHighlight: 'all',
           renderWhitespace: 'selection',
-          padding: { top: 10, bottom: 10 },
+          padding: { top: isMobileScreen ? 6 : 10, bottom: isMobileScreen ? 6 : 10 },
           bracketPairColorization: { enabled: true },
           readOnly: Boolean(readOnly),
           domReadOnly: Boolean(readOnly)

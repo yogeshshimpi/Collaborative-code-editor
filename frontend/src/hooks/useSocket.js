@@ -1,7 +1,21 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { initSocket } from '../socket';
 
-export function useSocket({ roomId, user, onRemoteCodeChange, onRoomSync, onSaveStatus, onPermissionError }) {
+export function useSocket({
+  roomId,
+  user,
+  onRemoteCodeChange,
+  onRoomSync,
+  onSaveStatus,
+  onPermissionError,
+  onFileCreated,
+  onFileRenamed,
+  onFileDeleted,
+  onFolderCreated,
+  onFolderRenamed,
+  onFolderDeleted,
+  onFileError
+}) {
   const [connectionStatus, setConnectionStatus] = useState('connecting'); // 'connecting' | 'connected' | 'disconnected'
   const [participantCount, setParticipantCount] = useState(1);
   const [activeUsers, setActiveUsers] = useState([]);
@@ -14,6 +28,13 @@ export function useSocket({ roomId, user, onRemoteCodeChange, onRoomSync, onSave
   const onRoomSyncRef = useRef(onRoomSync);
   const onSaveStatusRef = useRef(onSaveStatus);
   const onPermissionErrorRef = useRef(onPermissionError);
+  const onFileCreatedRef = useRef(onFileCreated);
+  const onFileRenamedRef = useRef(onFileRenamed);
+  const onFileDeletedRef = useRef(onFileDeleted);
+  const onFolderCreatedRef = useRef(onFolderCreated);
+  const onFolderRenamedRef = useRef(onFolderRenamed);
+  const onFolderDeletedRef = useRef(onFolderDeleted);
+  const onFileErrorRef = useRef(onFileError);
   const userRef = useRef(user);
 
   useEffect(() => {
@@ -31,6 +52,34 @@ export function useSocket({ roomId, user, onRemoteCodeChange, onRoomSync, onSave
   useEffect(() => {
     onPermissionErrorRef.current = onPermissionError;
   }, [onPermissionError]);
+
+  useEffect(() => {
+    onFileCreatedRef.current = onFileCreated;
+  }, [onFileCreated]);
+
+  useEffect(() => {
+    onFileRenamedRef.current = onFileRenamed;
+  }, [onFileRenamed]);
+
+  useEffect(() => {
+    onFileDeletedRef.current = onFileDeleted;
+  }, [onFileDeleted]);
+
+  useEffect(() => {
+    onFolderCreatedRef.current = onFolderCreated;
+  }, [onFolderCreated]);
+
+  useEffect(() => {
+    onFolderRenamedRef.current = onFolderRenamed;
+  }, [onFolderRenamed]);
+
+  useEffect(() => {
+    onFolderDeletedRef.current = onFolderDeleted;
+  }, [onFolderDeleted]);
+
+  useEffect(() => {
+    onFileErrorRef.current = onFileError;
+  }, [onFileError]);
 
   useEffect(() => {
     userRef.current = user;
@@ -75,6 +124,13 @@ export function useSocket({ roomId, user, onRemoteCodeChange, onRoomSync, onSave
     socket.on('permission-error', (data) => {
       if (data && onPermissionErrorRef.current) {
         onPermissionErrorRef.current(data);
+      }
+    });
+
+    // File operation error handler
+    socket.on('file-error', (data) => {
+      if (data && onFileErrorRef.current) {
+        onFileErrorRef.current(data);
       }
     });
 
@@ -130,6 +186,43 @@ export function useSocket({ roomId, user, onRemoteCodeChange, onRoomSync, onSave
       }
     });
 
+    // File and folder real-time synchronization events
+    socket.on('file-created', (data) => {
+      if (data && onFileCreatedRef.current) {
+        onFileCreatedRef.current(data);
+      }
+    });
+
+    socket.on('file-renamed', (data) => {
+      if (data && onFileRenamedRef.current) {
+        onFileRenamedRef.current(data);
+      }
+    });
+
+    socket.on('file-deleted', (data) => {
+      if (data && onFileDeletedRef.current) {
+        onFileDeletedRef.current(data);
+      }
+    });
+
+    socket.on('folder-created', (data) => {
+      if (data && onFolderCreatedRef.current) {
+        onFolderCreatedRef.current(data);
+      }
+    });
+
+    socket.on('folder-renamed', (data) => {
+      if (data && onFolderRenamedRef.current) {
+        onFolderRenamedRef.current(data);
+      }
+    });
+
+    socket.on('folder-deleted', (data) => {
+      if (data && onFolderDeletedRef.current) {
+        onFolderDeletedRef.current(data);
+      }
+    });
+
     // Remote collaborator cursor and selection updates
     socket.on('cursor-change', (data) => {
       if (data && data.socketId) {
@@ -160,11 +253,18 @@ export function useSocket({ roomId, user, onRemoteCodeChange, onRoomSync, onSave
       socket.off('reconnect_attempt');
       socket.off('user-role');
       socket.off('permission-error');
+      socket.off('file-error');
       socket.off('room-users');
       socket.off('room-participants');
       socket.off('code-change');
       socket.off('room-sync');
       socket.off('save-status');
+      socket.off('file-created');
+      socket.off('file-renamed');
+      socket.off('file-deleted');
+      socket.off('folder-created');
+      socket.off('folder-renamed');
+      socket.off('folder-deleted');
       socket.off('cursor-change');
       socket.off('cursor-clear');
       socket.disconnect();
@@ -205,6 +305,75 @@ export function useSocket({ roomId, user, onRemoteCodeChange, onRoomSync, onSave
     }
   }, [roomId]);
 
+  // Virtual file & folder emitter actions
+  const emitCreateFile = useCallback((filePath, content = '') => {
+    if (socketRef.current && socketRef.current.connected) {
+      socketRef.current.emit('create-file', {
+        roomId,
+        filePath,
+        content
+      });
+    }
+  }, [roomId]);
+
+  const emitCreateFolder = useCallback((folderPath) => {
+    if (socketRef.current && socketRef.current.connected) {
+      socketRef.current.emit('create-folder', {
+        roomId,
+        folderPath
+      });
+    }
+  }, [roomId]);
+
+  const emitRenameFile = useCallback((oldPath, newPath) => {
+    if (socketRef.current && socketRef.current.connected) {
+      socketRef.current.emit('rename-file', {
+        roomId,
+        oldPath,
+        newPath
+      });
+    }
+  }, [roomId]);
+
+  const emitRenameFolder = useCallback((oldFolder, newFolder) => {
+    if (socketRef.current && socketRef.current.connected) {
+      socketRef.current.emit('rename-folder', {
+        roomId,
+        oldFolder,
+        newFolder
+      });
+    }
+  }, [roomId]);
+
+  const emitDeleteFile = useCallback((filePath) => {
+    if (socketRef.current && socketRef.current.connected) {
+      socketRef.current.emit('delete-file', {
+        roomId,
+        filePath
+      });
+    }
+  }, [roomId]);
+
+  const emitDeleteFolder = useCallback((folderPath) => {
+    if (socketRef.current && socketRef.current.connected) {
+      socketRef.current.emit('delete-folder', {
+        roomId,
+        folderPath
+      });
+    }
+  }, [roomId]);
+
+  const emitMoveItem = useCallback((itemType, oldPath, targetParentFolder) => {
+    if (socketRef.current && socketRef.current.connected) {
+      socketRef.current.emit('move-item', {
+        roomId,
+        itemType,
+        oldPath,
+        targetParentFolder
+      });
+    }
+  }, [roomId]);
+
   return {
     connectionStatus,
     participantCount,
@@ -213,6 +382,13 @@ export function useSocket({ roomId, user, onRemoteCodeChange, onRoomSync, onSave
     remoteCursors,
     emitCodeChange,
     emitCursorChange,
-    emitCursorClear
+    emitCursorClear,
+    emitCreateFile,
+    emitCreateFolder,
+    emitRenameFile,
+    emitRenameFolder,
+    emitDeleteFile,
+    emitDeleteFolder,
+    emitMoveItem
   };
 }

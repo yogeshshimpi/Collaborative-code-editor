@@ -8,6 +8,7 @@ import EditorArea from '../components/EditorArea';
 import StatusBar from '../components/StatusBar';
 import CollaboratorsPanel from '../components/CollaboratorsPanel';
 import CollaboratorsModal from '../components/CollaboratorsModal';
+import VersionHistoryModal from '../components/VersionHistoryModal';
 import Toast from '../components/Toast';
 import { useAuth } from '../context/useAuth';
 import { INITIAL_FILES, getLanguageFromFile } from '../data/initialFiles';
@@ -25,6 +26,8 @@ export default function EditorWorkspacePage() {
 
   // File storage state - holds independent content per file
   const [filesState, setFilesState] = useState(INITIAL_FILES);
+  // Folder paths list in workspace
+  const [foldersState, setFoldersState] = useState([]);
   // Open tabs list
   const [openTabs, setOpenTabs] = useState(['main.js', 'index.html', 'styles.css']);
   // Currently active file
@@ -35,6 +38,8 @@ export default function EditorWorkspacePage() {
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(false);
   // Collaborators & Invitations Modal
   const [isCollaboratorsOpen, setIsCollaboratorsOpen] = useState(false);
+  // Version History Modal
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   // Mobile sidebar drawer state (open/close)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   // Toast feedback message
@@ -58,6 +63,11 @@ export default function EditorWorkspacePage() {
     showToast(err?.message || 'Permission denied: Viewers cannot edit or save code.', 'error');
   }, [showToast]);
 
+  // Handle file operation error
+  const handleFileError = useCallback((err) => {
+    showToast(err?.error || err?.message || 'File operation failed.', 'error');
+  }, [showToast]);
+
   // Remote code change callback
   const handleRemoteCodeChange = useCallback(({ fileName, content }) => {
     if (!fileName || typeof content !== 'string') return;
@@ -76,22 +86,179 @@ export default function EditorWorkspacePage() {
   }, []);
 
   // Room initial sync callback (when entering an active room session)
-  const handleRoomSync = useCallback((roomFiles) => {
-    if (!roomFiles || typeof roomFiles !== 'object') return;
+  const handleRoomSync = useCallback((syncData) => {
+    if (!syncData || typeof syncData !== 'object') return;
 
     isRemoteChangeRef.current = true;
-    setFilesState((prev) => {
-      const next = { ...prev };
-      let changed = false;
+    const incomingFiles = syncData.files || syncData;
+    const incomingFolders = Array.isArray(syncData.folders) ? syncData.folders : [];
 
-      for (const [name, content] of Object.entries(roomFiles)) {
-        if (next[name] && typeof content === 'string' && next[name].content !== content) {
-          next[name] = { ...next[name], content };
-          changed = true;
+    setFoldersState(incomingFolders);
+
+    setFilesState((prev) => {
+      const next = {};
+      for (const [name, content] of Object.entries(incomingFiles)) {
+        if (typeof content === 'string') {
+          next[name] = {
+            name,
+            language: getLanguageFromFile(name),
+            content
+          };
         }
       }
+      return next;
+    });
 
-      return changed ? next : prev;
+    const fileNames = Object.keys(incomingFiles);
+    if (fileNames.length > 0) {
+      setActiveFile((current) => {
+        if (current && fileNames.includes(current)) return current;
+        return fileNames[0];
+      });
+      setOpenTabs((prevTabs) => {
+        const valid = prevTabs.filter((t) => fileNames.includes(t));
+        return valid.length > 0 ? valid : [fileNames[0]];
+      });
+    }
+  }, []);
+
+  // Real-time file & folder event callbacks from collaborators
+  const handleFileCreated = useCallback(({ fileName, content }) => {
+    if (!fileName) return;
+    isRemoteChangeRef.current = true;
+    setFilesState((prev) => ({
+      ...prev,
+      [fileName]: {
+        name: fileName,
+        language: getLanguageFromFile(fileName),
+        content: content || ''
+      }
+    }));
+  }, []);
+
+  const handleFileRenamed = useCallback(({ oldPath, newPath }) => {
+    if (!oldPath || !newPath) return;
+    isRemoteChangeRef.current = true;
+    setFilesState((prev) => {
+      if (!prev[oldPath]) return prev;
+      const next = { ...prev };
+      next[newPath] = {
+        ...next[oldPath],
+        name: newPath,
+        language: getLanguageFromFile(newPath)
+      };
+      delete next[oldPath];
+      return next;
+    });
+
+    setOpenTabs((prev) => prev.map((t) => (t === oldPath ? newPath : t)));
+    setActiveFile((current) => (current === oldPath ? newPath : current));
+  }, []);
+
+  const handleFileDeleted = useCallback(({ filePath }) => {
+    if (!filePath) return;
+    isRemoteChangeRef.current = true;
+    setFilesState((prev) => {
+      if (!prev[filePath]) return prev;
+      const next = { ...prev };
+      delete next[filePath];
+      return next;
+    });
+
+    setOpenTabs((prevTabs) => {
+      const remaining = prevTabs.filter((t) => t !== filePath);
+      setActiveFile((current) => {
+        if (current === filePath) {
+          return remaining.length > 0 ? remaining[remaining.length - 1] : null;
+        }
+        return current;
+      });
+      return remaining;
+    });
+  }, []);
+
+  const handleFolderCreated = useCallback(({ folderPath }) => {
+    if (!folderPath) return;
+    setFoldersState((prev) => (prev.includes(folderPath) ? prev : [...prev, folderPath]));
+  }, []);
+
+  const handleFolderRenamed = useCallback(({ oldFolder, newFolder, affectedFiles }) => {
+    if (!oldFolder || !newFolder) return;
+    isRemoteChangeRef.current = true;
+
+    setFoldersState((prev) =>
+      prev.map((f) => {
+        if (f === oldFolder) return newFolder;
+        if (f.startsWith(`${oldFolder}/`)) {
+          return `${newFolder}/${f.slice(oldFolder.length + 1)}`;
+        }
+        return f;
+      })
+    );
+
+    if (Array.isArray(affectedFiles)) {
+      setFilesState((prev) => {
+        const next = { ...prev };
+        for (const { oldPath, newPath } of affectedFiles) {
+          if (next[oldPath]) {
+            next[newPath] = {
+              ...next[oldPath],
+              name: newPath,
+              language: getLanguageFromFile(newPath)
+            };
+            delete next[oldPath];
+          }
+        }
+        return next;
+      });
+
+      setOpenTabs((prevTabs) =>
+        prevTabs.map((t) => {
+          const match = affectedFiles.find((a) => a.oldPath === t);
+          return match ? match.newPath : t;
+        })
+      );
+
+      setActiveFile((current) => {
+        const match = affectedFiles.find((a) => a.oldPath === current);
+        return match ? match.newPath : current;
+      });
+    }
+  }, []);
+
+  const handleFolderDeleted = useCallback(({ folderPath, deletedFiles }) => {
+    if (!folderPath) return;
+    isRemoteChangeRef.current = true;
+
+    setFoldersState((prev) =>
+      prev.filter((f) => f !== folderPath && !f.startsWith(`${folderPath}/`))
+    );
+
+    const deletedList = Array.isArray(deletedFiles) ? deletedFiles : [];
+    setFilesState((prev) => {
+      const next = { ...prev };
+      for (const f of deletedList) {
+        delete next[f];
+      }
+      for (const key of Object.keys(next)) {
+        if (key.startsWith(`${folderPath}/`)) {
+          delete next[key];
+        }
+      }
+      return next;
+    });
+
+    setOpenTabs((prevTabs) => {
+      const remaining = prevTabs.filter(
+        (t) => !deletedList.includes(t) && !t.startsWith(`${folderPath}/`)
+      );
+      setActiveFile((current) => {
+        if (deletedList.includes(current) || current?.startsWith(`${folderPath}/`)) {
+          return remaining.length > 0 ? remaining[remaining.length - 1] : null;
+        }
+        return current;
+      });
+      return remaining;
     });
   }, []);
 
@@ -110,14 +277,28 @@ export default function EditorWorkspacePage() {
     remoteCursors,
     emitCodeChange,
     emitCursorChange,
-    emitCursorClear
+    emitCursorClear,
+    emitCreateFile,
+    emitCreateFolder,
+    emitRenameFile,
+    emitRenameFolder,
+    emitDeleteFile,
+    emitDeleteFolder,
+    emitMoveItem
   } = useSocket({
     roomId,
     user: currentUser,
     onRemoteCodeChange: handleRemoteCodeChange,
     onRoomSync: handleRoomSync,
     onSaveStatus: handleSaveStatus,
-    onPermissionError: handlePermissionError
+    onPermissionError: handlePermissionError,
+    onFileCreated: handleFileCreated,
+    onFileRenamed: handleFileRenamed,
+    onFileDeleted: handleFileDeleted,
+    onFolderCreated: handleFolderCreated,
+    onFolderRenamed: handleFolderRenamed,
+    onFolderDeleted: handleFolderDeleted,
+    onFileError: handleFileError
   });
 
   // Throttled cursor and selection activity broadcaster (~35ms throttle for smooth real-time rendering)
@@ -246,6 +427,55 @@ export default function EditorWorkspacePage() {
     navigate('/login', { replace: true });
   };
 
+  // Handle restoring a file from Version History
+  const handleVersionRestored = useCallback(
+    (fileName, newContent) => {
+      isRemoteChangeRef.current = true;
+      setFilesState((prev) => ({
+        ...prev,
+        [fileName]: {
+          ...prev[fileName],
+          content: newContent
+        }
+      }));
+      showToast(`Restored "${fileName}" to previous version.`, 'success');
+    },
+    [showToast]
+  );
+
+  // Virtual file & folder actions
+  const handleCreateFile = useCallback((path, content) => {
+    emitCreateFile(path, content);
+    setOpenTabs((prev) => (prev.includes(path) ? prev : [...prev, path]));
+    setActiveFile(path);
+    showToast(`Creating "${path}"...`, 'info');
+  }, [emitCreateFile, showToast]);
+
+  const handleCreateFolder = useCallback((path) => {
+    emitCreateFolder(path);
+    showToast(`Creating folder "${path}"...`, 'info');
+  }, [emitCreateFolder, showToast]);
+
+  const handleRenameFile = useCallback((oldPath, newPath) => {
+    emitRenameFile(oldPath, newPath);
+  }, [emitRenameFile]);
+
+  const handleRenameFolder = useCallback((oldFolder, newFolder) => {
+    emitRenameFolder(oldFolder, newFolder);
+  }, [emitRenameFolder]);
+
+  const handleDeleteFile = useCallback((path) => {
+    emitDeleteFile(path);
+  }, [emitDeleteFile]);
+
+  const handleDeleteFolder = useCallback((path) => {
+    emitDeleteFolder(path);
+  }, [emitDeleteFolder]);
+
+  const handleMoveItem = useCallback((itemType, oldPath, targetParentFolder) => {
+    emitMoveItem(itemType, oldPath, targetParentFolder);
+  }, [emitMoveItem]);
+
   const currentFileObj = activeFile ? filesState[activeFile] : null;
   const currentLanguage = activeFile ? getLanguageFromFile(activeFile) : 'plaintext';
   const fileList = Object.values(filesState);
@@ -265,6 +495,7 @@ export default function EditorWorkspacePage() {
         onRun={handleRun}
         onShare={() => setIsCollaboratorsOpen(true)}
         onOpenCollaborators={() => setIsCollaboratorsOpen(true)}
+        onOpenHistory={() => setIsHistoryOpen(true)}
         isRightPanelOpen={isRightPanelOpen}
         toggleRightPanel={() => setIsRightPanelOpen(!isRightPanelOpen)}
         onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
@@ -278,8 +509,18 @@ export default function EditorWorkspacePage() {
         {/* Left Explorer Sidebar (Drawer on mobile) */}
         <Sidebar
           files={fileList}
+          folders={foldersState}
           activeFile={activeFile}
           onSelectFile={handleSelectFile}
+          onCreateFile={handleCreateFile}
+          onCreateFolder={handleCreateFolder}
+          onRenameFile={handleRenameFile}
+          onRenameFolder={handleRenameFolder}
+          onDeleteFile={handleDeleteFile}
+          onDeleteFolder={handleDeleteFolder}
+          onMoveItem={handleMoveItem}
+          userRole={effectiveRole}
+          projectName={projectName}
           isOpen={isSidebarOpen}
           onClose={() => setIsSidebarOpen(false)}
         />
@@ -302,6 +543,7 @@ export default function EditorWorkspacePage() {
               activeTab={activeFile}
               onSelectTab={handleSelectFile}
               onCloseTab={handleCloseTab}
+              onOpenHistory={() => setIsHistoryOpen(true)}
             />
           )}
 
@@ -357,6 +599,17 @@ export default function EditorWorkspacePage() {
         projectName={projectName}
         userRole={effectiveRole}
         currentUserId={currentUser?.id}
+        onShowToast={showToast}
+      />
+
+      {/* Per-File Version History & Restore Modal */}
+      <VersionHistoryModal
+        isOpen={isHistoryOpen}
+        onClose={() => setIsHistoryOpen(false)}
+        roomId={roomId}
+        fileName={activeFile || 'main.js'}
+        userRole={effectiveRole}
+        onRestore={handleVersionRestored}
         onShowToast={showToast}
       />
 

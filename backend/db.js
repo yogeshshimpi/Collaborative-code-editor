@@ -1,5 +1,6 @@
 import pg from 'pg';
 import dotenv from 'dotenv';
+import crypto from 'crypto';
 
 dotenv.config();
 
@@ -97,7 +98,7 @@ body {
 `
 };
 
-let pool = null;
+export let pool = null;
 let dbConnected = false;
 
 // In-memory fallback stores if database is not reachable
@@ -106,6 +107,8 @@ const inMemoryUsers = new Map();
 const inMemoryProjects = new Map();
 const inMemoryMembers = new Map(); // projectId -> Array<{ id, project_id, user_id, role, created_at }>
 const inMemoryInvitations = new Map(); // invitationId -> { id, project_id, invited_by, invited_email, role, status, created_at, expires_at }
+const inMemoryFolders = new Map(); // roomId -> Set<folderPath>
+const inMemoryVersions = new Map(); // key: `${roomId}:${fileName}` -> Array<version>
 let inMemoryUserIdSeq = 1;
 
 // Initialize Postgres connection pool
@@ -197,9 +200,45 @@ export async function initDatabase() {
         CREATE INDEX IF NOT EXISTS idx_project_members_project_id ON project_members(project_id);
         CREATE INDEX IF NOT EXISTS idx_project_invitations_email ON project_invitations(LOWER(invited_email));
         CREATE INDEX IF NOT EXISTS idx_project_invitations_project_id ON project_invitations(project_id);
+
+        -- Per-file version history and restore table
+        CREATE TABLE IF NOT EXISTS file_versions (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          room_id VARCHAR(64) NOT NULL,
+          file_name VARCHAR(64) NOT NULL,
+          content TEXT NOT NULL,
+          content_hash VARCHAR(64) NOT NULL,
+          author_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+          version_type VARCHAR(20) NOT NULL DEFAULT 'auto'
+            CHECK (version_type IN ('auto', 'manual', 'restore')),
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+
+        -- Optional label/name for manual checkpoints
+        ALTER TABLE file_versions ADD COLUMN IF NOT EXISTS label VARCHAR(100);
+
+        -- Expand room_files and file_versions file_name to VARCHAR(255) to support nested paths
+        ALTER TABLE room_files ALTER COLUMN file_name TYPE VARCHAR(255);
+        ALTER TABLE file_versions ALTER COLUMN file_name TYPE VARCHAR(255);
+
+        CREATE INDEX IF NOT EXISTS idx_file_versions_lookup 
+          ON file_versions(room_id, file_name, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_file_versions_author 
+          ON file_versions(author_id);
+
+        -- Virtual project folders table
+        CREATE TABLE IF NOT EXISTS room_folders (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          room_id VARCHAR(64) NOT NULL,
+          folder_path VARCHAR(255) NOT NULL,
+          created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE (room_id, folder_path)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_room_folders_room ON room_folders(room_id);
       `);
       dbConnected = true;
-      console.log('✅ [PostgreSQL] Connected to Neon PostgreSQL database and verified tables (room_files, users, projects, project_members, project_invitations).');
+      console.log('✅ [PostgreSQL] Connected to Neon PostgreSQL database and verified tables (room_files, users, projects, project_members, project_invitations, file_versions, room_folders).');
       return true;
     } finally {
       client.release();
@@ -820,6 +859,7 @@ export async function deleteProject(id, ownerId) {
       const res = await client.query('DELETE FROM projects WHERE (id::text = $1 OR room_id = $1) AND owner_id = $2 RETURNING id, room_id;', [id, ownerId]);
       if (res.rows.length > 0) {
         await client.query('DELETE FROM room_files WHERE room_id = $1;', [res.rows[0].room_id]);
+        await client.query('DELETE FROM room_folders WHERE room_id = $1;', [res.rows[0].room_id]);
       }
       await client.query('COMMIT');
       return res.rows[0] || null;
@@ -835,64 +875,892 @@ export async function deleteProject(id, ownerId) {
   if (p && p.owner_id === ownerId) {
     inMemoryProjects.delete(id);
     inMemoryStore.delete(p.room_id || id);
+    inMemoryFolders.delete(p.room_id || id);
     return { id, room_id: p.room_id || id };
   }
   return null;
 }
 
 // -------------------------------------------------------------
-// ROOM FILES OPERATIONS
+// VIRTUAL FILE & FOLDER OPERATIONS
 // -------------------------------------------------------------
 
 /**
- * Retrieve all files for a given room.
- * Seeds default starter files if the room is new.
+ * Path utilities & validation
  */
-export async function getRoomFiles(roomId) {
-  // If PostgreSQL is connected, fetch from database
+export function normalizePath(rawPath) {
+  if (typeof rawPath !== 'string') return '';
+  let clean = rawPath.trim().replace(/\\/g, '/');
+  clean = clean.replace(/^\/+|\/+$/g, '');
+  clean = clean.replace(/\/+/g, '/');
+  return clean;
+}
+
+export function isValidPathSegment(segment) {
+  if (!segment || typeof segment !== 'string') return false;
+  if (segment === '.' || segment === '..') return false;
+  // Disallow control characters and invalid filesystem characters: \0 * ? " < > | :
+  // eslint-disable-next-line no-control-regex
+  if (/[\0*?"<>|:]/.test(segment)) return false;
+  return true;
+}
+
+export function isValidPath(rawPath) {
+  const normalized = normalizePath(rawPath);
+  if (!normalized || normalized.length > 255) return false;
+  const segments = normalized.split('/');
+  return segments.every(isValidPathSegment);
+}
+
+export function isValidFilePath(rawPath) {
+  return isValidPath(rawPath);
+}
+
+export function isValidFolderPath(rawPath) {
+  return isValidPath(rawPath);
+}
+
+/**
+ * Extracts all ancestor folder paths for a given normalized path.
+ * e.g. "src/components/App.jsx" -> ["src", "src/components"]
+ */
+export function getParentFolderPaths(normalizedPath) {
+  const parts = normalizedPath.split('/');
+  const folders = [];
+  let current = '';
+  for (let i = 0; i < parts.length - 1; i++) {
+    current = current ? `${current}/${parts[i]}` : parts[i];
+    folders.push(current);
+  }
+  return folders;
+}
+
+/**
+ * Retrieve entire workspace (files map and folders list) for a given room.
+ * Seeds default starter files if the room is completely new.
+ */
+export async function getRoomWorkspace(roomId) {
+  if (!roomId || typeof roomId !== 'string') {
+    return { files: { ...STARTER_FILES }, folders: [] };
+  }
+  const cleanRoomId = roomId.trim();
+
   if (dbConnected && pool) {
     try {
-      const query = `
-        SELECT file_name, content 
-        FROM room_files 
-        WHERE room_id = $1;
-      `;
-      const result = await pool.query(query, [roomId]);
+      const filesRes = await pool.query(
+        'SELECT file_name, content FROM room_files WHERE room_id = $1 ORDER BY file_name ASC;',
+        [cleanRoomId]
+      );
+      const foldersRes = await pool.query(
+        'SELECT folder_path FROM room_folders WHERE room_id = $1 ORDER BY folder_path ASC;',
+        [cleanRoomId]
+      );
 
-      if (result.rows.length > 0) {
-        const files = {};
-        for (const row of result.rows) {
-          files[row.file_name] = row.content;
+      const hasFiles = filesRes.rows.length > 0;
+      const hasFolders = foldersRes.rows.length > 0;
+
+      // If workspace is completely empty (brand new room), seed starter files
+      if (!hasFiles && !hasFolders) {
+        for (const [name, content] of Object.entries(STARTER_FILES)) {
+          await pool.query(
+            `INSERT INTO room_files (room_id, file_name, content, updated_at)
+             VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+             ON CONFLICT (room_id, file_name) DO NOTHING;`,
+            [cleanRoomId, name, content]
+          );
         }
 
-        // Ensure all 3 supported files exist in the returned set
-        for (const [name, defaultContent] of Object.entries(STARTER_FILES)) {
-          if (files[name] === undefined) {
-            files[name] = defaultContent;
-            // Seed missing starter file into database
-            await saveFileContent(roomId, name, defaultContent);
-          }
-        }
-
-        return files;
+        const seededFiles = { ...STARTER_FILES };
+        inMemoryStore.set(cleanRoomId, { ...seededFiles });
+        return { files: seededFiles, folders: [] };
       }
 
-      // Room is new: seed all 3 starter files into database
-      for (const [name, content] of Object.entries(STARTER_FILES)) {
-        await saveFileContent(roomId, name, content);
+      const files = {};
+      for (const row of filesRes.rows) {
+        files[row.file_name] = row.content;
       }
-      return { ...STARTER_FILES };
+      const folders = foldersRes.rows.map((r) => r.folder_path);
+
+      // Cache in memory for quick fallback access
+      inMemoryStore.set(cleanRoomId, { ...files });
+      if (!inMemoryFolders.has(cleanRoomId)) {
+        inMemoryFolders.set(cleanRoomId, new Set(folders));
+      } else {
+        const folderSet = inMemoryFolders.get(cleanRoomId);
+        folders.forEach((f) => folderSet.add(f));
+      }
+
+      return { files, folders };
     } catch (err) {
-      console.error(`[PostgreSQL] Error loading files for room "${roomId}":`, err.message);
-      // Fall through to in-memory store
+      console.error(`[PostgreSQL] Error loading workspace for room "${cleanRoomId}":`, err.message);
     }
   }
 
-  // Fallback to in-memory store
-  if (!inMemoryStore.has(roomId)) {
-    inMemoryStore.set(roomId, { ...STARTER_FILES });
+  // Fallback in-memory store
+  if (!inMemoryStore.has(cleanRoomId) && !inMemoryFolders.has(cleanRoomId)) {
+    inMemoryStore.set(cleanRoomId, { ...STARTER_FILES });
+    inMemoryFolders.set(cleanRoomId, new Set());
   }
-  return inMemoryStore.get(roomId);
+
+  const memFiles = inMemoryStore.get(cleanRoomId) || {};
+  const memFolders = Array.from(inMemoryFolders.get(cleanRoomId) || []);
+  return { files: { ...memFiles }, folders: memFolders };
+}
+
+/**
+ * Retrieve all files for a given room (backward compatibility).
+ */
+export async function getRoomFiles(roomId) {
+  const workspace = await getRoomWorkspace(roomId);
+  return workspace.files;
+}
+
+/**
+ * Create a new virtual file in the room.
+ */
+export async function createFileInRoom({ roomId, filePath, content = '', authorId = null }) {
+  const cleanPath = normalizePath(filePath);
+  if (!isValidFilePath(cleanPath)) {
+    throw new Error('Invalid file path. Path must not contain illegal characters or directory traversal.');
+  }
+
+  const cleanContent = typeof content === 'string' ? content : '';
+
+  if (dbConnected && pool) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Check if file already exists
+      const checkRes = await client.query(
+        'SELECT file_name FROM room_files WHERE room_id = $1 AND file_name = $2;',
+        [roomId, cleanPath]
+      );
+      if (checkRes.rows.length > 0) {
+        throw new Error(`A file named "${cleanPath}" already exists.`);
+      }
+
+      // Automatically register parent folders if path is nested
+      const parentFolders = getParentFolderPaths(cleanPath);
+      for (const folder of parentFolders) {
+        await client.query(
+          `INSERT INTO room_folders (room_id, folder_path)
+           VALUES ($1, $2)
+           ON CONFLICT (room_id, folder_path) DO NOTHING;`,
+          [roomId, folder]
+        );
+      }
+
+      // Insert file
+      await client.query(
+        `INSERT INTO room_files (room_id, file_name, content, updated_at)
+         VALUES ($1, $2, $3, CURRENT_TIMESTAMP);`,
+        [roomId, cleanPath, cleanContent]
+      );
+
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+
+    // Auto version history checkpoint
+    createFileVersion({
+      roomId,
+      fileName: cleanPath,
+      content: cleanContent,
+      authorId,
+      versionType: 'auto',
+      label: 'Initial file creation'
+    }).catch(() => {});
+  }
+
+  // Update in-memory fallback
+  if (!inMemoryStore.has(roomId)) {
+    inMemoryStore.set(roomId, {});
+  }
+  inMemoryStore.get(roomId)[cleanPath] = cleanContent;
+
+  const parentFolders = getParentFolderPaths(cleanPath);
+  if (!inMemoryFolders.has(roomId)) {
+    inMemoryFolders.set(roomId, new Set());
+  }
+  const folderSet = inMemoryFolders.get(roomId);
+  parentFolders.forEach((f) => folderSet.add(f));
+
+  return { fileName: cleanPath, content: cleanContent };
+}
+
+/**
+ * Create a new virtual folder in the room.
+ */
+export async function createFolderInRoom({ roomId, folderPath }) {
+  const cleanFolder = normalizePath(folderPath);
+  if (!isValidFolderPath(cleanFolder)) {
+    throw new Error('Invalid folder path. Folder path must not contain illegal characters or directory traversal.');
+  }
+
+  if (dbConnected && pool) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Check if folder already exists
+      const checkRes = await client.query(
+        'SELECT folder_path FROM room_folders WHERE room_id = $1 AND folder_path = $2;',
+        [roomId, cleanFolder]
+      );
+      if (checkRes.rows.length > 0) {
+        throw new Error(`A folder named "${cleanFolder}" already exists.`);
+      }
+
+      // Ensure parent folders are also registered
+      const parentFolders = getParentFolderPaths(cleanFolder);
+      for (const parent of parentFolders) {
+        await client.query(
+          `INSERT INTO room_folders (room_id, folder_path)
+           VALUES ($1, $2)
+           ON CONFLICT (room_id, folder_path) DO NOTHING;`,
+          [roomId, parent]
+        );
+      }
+
+      await client.query(
+        `INSERT INTO room_folders (room_id, folder_path)
+         VALUES ($1, $2)
+         ON CONFLICT (room_id, folder_path) DO NOTHING;`,
+        [roomId, cleanFolder]
+      );
+
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  // Update in-memory fallback
+  if (!inMemoryFolders.has(roomId)) {
+    inMemoryFolders.set(roomId, new Set());
+  }
+  const folderSet = inMemoryFolders.get(roomId);
+  const parentFolders = getParentFolderPaths(cleanFolder);
+  parentFolders.forEach((p) => folderSet.add(p));
+  folderSet.add(cleanFolder);
+
+  return { folderPath: cleanFolder };
+}
+
+/**
+ * Rename a virtual file in the room.
+ */
+export async function renameFileInRoom({ roomId, oldPath, newPath }) {
+  const cleanOld = normalizePath(oldPath);
+  const cleanNew = normalizePath(newPath);
+
+  if (!isValidFilePath(cleanOld) || !isValidFilePath(cleanNew)) {
+    throw new Error('Invalid file path.');
+  }
+  if (cleanOld === cleanNew) {
+    return { oldPath: cleanOld, newPath: cleanNew };
+  }
+
+  if (dbConnected && pool) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Verify old file exists
+      const oldCheck = await client.query(
+        'SELECT content FROM room_files WHERE room_id = $1 AND file_name = $2;',
+        [roomId, cleanOld]
+      );
+      if (oldCheck.rows.length === 0) {
+        throw new Error(`File "${cleanOld}" not found.`);
+      }
+
+      // Verify new file does not exist
+      const newCheck = await client.query(
+        'SELECT file_name FROM room_files WHERE room_id = $1 AND file_name = $2;',
+        [roomId, cleanNew]
+      );
+      if (newCheck.rows.length > 0) {
+        throw new Error(`A file named "${cleanNew}" already exists.`);
+      }
+
+      // Ensure new parent folders are registered
+      const newParents = getParentFolderPaths(cleanNew);
+      for (const parent of newParents) {
+        await client.query(
+          `INSERT INTO room_folders (room_id, folder_path)
+           VALUES ($1, $2)
+           ON CONFLICT (room_id, folder_path) DO NOTHING;`,
+          [roomId, parent]
+        );
+      }
+
+      // Update room_files
+      await client.query(
+        `UPDATE room_files
+         SET file_name = $1, updated_at = CURRENT_TIMESTAMP
+         WHERE room_id = $2 AND file_name = $3;`,
+        [cleanNew, roomId, cleanOld]
+      );
+
+      // Preserve version history by updating file_versions
+      await client.query(
+        `UPDATE file_versions
+         SET file_name = $1
+         WHERE room_id = $2 AND file_name = $3;`,
+        [cleanNew, roomId, cleanOld]
+      );
+
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  // In-memory fallback
+  if (inMemoryStore.has(roomId)) {
+    const store = inMemoryStore.get(roomId);
+    if (store[cleanOld] !== undefined) {
+      store[cleanNew] = store[cleanOld];
+      delete store[cleanOld];
+    }
+  }
+  const oldKey = `${roomId}:${cleanOld}`;
+  const newKey = `${roomId}:${cleanNew}`;
+  if (inMemoryVersions.has(oldKey)) {
+    const vers = inMemoryVersions.get(oldKey);
+    vers.forEach((v) => (v.file_name = cleanNew));
+    inMemoryVersions.set(newKey, vers);
+    inMemoryVersions.delete(oldKey);
+  }
+
+  return { oldPath: cleanOld, newPath: cleanNew };
+}
+
+/**
+ * Rename a virtual folder and all its contents in the room.
+ */
+export async function renameFolderInRoom({ roomId, oldFolder, newFolder }) {
+  const cleanOld = normalizePath(oldFolder);
+  const cleanNew = normalizePath(newFolder);
+
+  if (!isValidFolderPath(cleanOld) || !isValidFolderPath(cleanNew)) {
+    throw new Error('Invalid folder path.');
+  }
+  if (cleanOld === cleanNew) {
+    return { oldFolder: cleanOld, newFolder: cleanNew, affectedFiles: [] };
+  }
+  if (cleanNew.startsWith(`${cleanOld}/`)) {
+    throw new Error('Cannot move or rename a folder into its own subfolder.');
+  }
+
+  const affectedFiles = [];
+
+  if (dbConnected && pool) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // 1. Find all affected files in room_files
+      const filesRes = await client.query(
+        `SELECT file_name FROM room_files
+         WHERE room_id = $1 AND (file_name = $2 OR file_name LIKE $2 || '/%');`,
+        [roomId, cleanOld]
+      );
+
+      for (const row of filesRes.rows) {
+        const oldFile = row.file_name;
+        const newFile = oldFile === cleanOld
+          ? cleanNew
+          : `${cleanNew}/${oldFile.slice(cleanOld.length + 1)}`;
+
+        // Verify target file doesn't already exist
+        const targetCheck = await client.query(
+          'SELECT file_name FROM room_files WHERE room_id = $1 AND file_name = $2;',
+          [roomId, newFile]
+        );
+        if (targetCheck.rows.length > 0) {
+          throw new Error(`Cannot rename folder: "${newFile}" already exists.`);
+        }
+
+        // Update file
+        await client.query(
+          `UPDATE room_files
+           SET file_name = $1, updated_at = CURRENT_TIMESTAMP
+           WHERE room_id = $2 AND file_name = $3;`,
+          [newFile, roomId, oldFile]
+        );
+
+        // Update file_versions
+        await client.query(
+          `UPDATE file_versions
+           SET file_name = $1
+           WHERE room_id = $2 AND file_name = $3;`,
+          [newFile, roomId, oldFile]
+        );
+
+        affectedFiles.push({ oldPath: oldFile, newPath: newFile });
+      }
+
+      // 2. Find and update affected folders in room_folders
+      const foldersRes = await client.query(
+        `SELECT folder_path FROM room_folders
+         WHERE room_id = $1 AND (folder_path = $2 OR folder_path LIKE $2 || '/%');`,
+        [roomId, cleanOld]
+      );
+
+      for (const row of foldersRes.rows) {
+        const oldF = row.folder_path;
+        const newF = oldF === cleanOld
+          ? cleanNew
+          : `${cleanNew}/${oldF.slice(cleanOld.length + 1)}`;
+
+        await client.query(
+          `UPDATE room_folders
+           SET folder_path = $1
+           WHERE room_id = $2 AND folder_path = $3;`,
+          [newF, roomId, oldF]
+        );
+      }
+
+      // Ensure parents of newFolder are registered
+      const newParents = getParentFolderPaths(cleanNew);
+      for (const parent of newParents) {
+        await client.query(
+          `INSERT INTO room_folders (room_id, folder_path)
+           VALUES ($1, $2)
+           ON CONFLICT (room_id, folder_path) DO NOTHING;`,
+          [roomId, parent]
+        );
+      }
+
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  // In-memory fallback
+  if (inMemoryStore.has(roomId)) {
+    const store = inMemoryStore.get(roomId);
+    for (const [key, content] of Object.entries(store)) {
+      if (key === cleanOld || key.startsWith(`${cleanOld}/`)) {
+        const newFile = key === cleanOld
+          ? cleanNew
+          : `${cleanNew}/${key.slice(cleanOld.length + 1)}`;
+        store[newFile] = content;
+        delete store[key];
+        if (!affectedFiles.some((a) => a.oldPath === key)) {
+          affectedFiles.push({ oldPath: key, newPath: newFile });
+        }
+      }
+    }
+  }
+  if (inMemoryFolders.has(roomId)) {
+    const set = inMemoryFolders.get(roomId);
+    const updatedFolders = [];
+    for (const f of Array.from(set)) {
+      if (f === cleanOld || f.startsWith(`${cleanOld}/`)) {
+        set.delete(f);
+        const newF = f === cleanOld ? cleanNew : `${cleanNew}/${f.slice(cleanOld.length + 1)}`;
+        updatedFolders.push(newF);
+      }
+    }
+    updatedFolders.forEach((f) => set.add(f));
+    getParentFolderPaths(cleanNew).forEach((p) => set.add(p));
+    set.add(cleanNew);
+  }
+
+  return { oldFolder: cleanOld, newFolder: cleanNew, affectedFiles };
+}
+
+/**
+ * Delete a virtual file from the room.
+ */
+export async function deleteFileInRoom({ roomId, filePath }) {
+  const cleanPath = normalizePath(filePath);
+  if (!isValidFilePath(cleanPath)) {
+    throw new Error('Invalid file path.');
+  }
+
+  if (dbConnected && pool) {
+    await pool.query(
+      'DELETE FROM room_files WHERE room_id = $1 AND file_name = $2;',
+      [roomId, cleanPath]
+    );
+  }
+
+  if (inMemoryStore.has(roomId)) {
+    delete inMemoryStore.get(roomId)[cleanPath];
+  }
+
+  return { filePath: cleanPath };
+}
+
+/**
+ * Delete a virtual folder and all its contents from the room.
+ */
+export async function deleteFolderInRoom({ roomId, folderPath }) {
+  const cleanFolder = normalizePath(folderPath);
+  if (!isValidFolderPath(cleanFolder)) {
+    throw new Error('Invalid folder path.');
+  }
+
+  const deletedFiles = [];
+
+  if (dbConnected && pool) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const filesRes = await client.query(
+        `SELECT file_name FROM room_files
+         WHERE room_id = $1 AND (file_name = $2 OR file_name LIKE $2 || '/%');`,
+        [roomId, cleanFolder]
+      );
+      for (const row of filesRes.rows) {
+        deletedFiles.push(row.file_name);
+      }
+
+      await client.query(
+        `DELETE FROM room_files
+         WHERE room_id = $1 AND (file_name = $2 OR file_name LIKE $2 || '/%');`,
+        [roomId, cleanFolder]
+      );
+
+      await client.query(
+        `DELETE FROM room_folders
+         WHERE room_id = $1 AND (folder_path = $2 OR folder_path LIKE $2 || '/%');`,
+        [roomId, cleanFolder]
+      );
+
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  // In-memory fallback
+  if (inMemoryStore.has(roomId)) {
+    const store = inMemoryStore.get(roomId);
+    for (const key of Object.keys(store)) {
+      if (key === cleanFolder || key.startsWith(`${cleanFolder}/`)) {
+        delete store[key];
+        if (!deletedFiles.includes(key)) {
+          deletedFiles.push(key);
+        }
+      }
+    }
+  }
+  if (inMemoryFolders.has(roomId)) {
+    const set = inMemoryFolders.get(roomId);
+    for (const f of Array.from(set)) {
+      if (f === cleanFolder || f.startsWith(`${cleanFolder}/`)) {
+        set.delete(f);
+      }
+    }
+  }
+
+  return { folderPath: cleanFolder, deletedFiles };
+}
+
+/**
+ * Move a file or folder into a target folder or workspace root.
+ */
+export async function moveItemInRoom({ roomId, itemType, oldPath, targetParentFolder }) {
+  const cleanOld = normalizePath(oldPath);
+  const cleanTarget = targetParentFolder ? normalizePath(targetParentFolder) : '';
+
+  if (!cleanOld) {
+    throw new Error('Source path is required.');
+  }
+
+  const baseName = cleanOld.split('/').pop();
+  const cleanNew = cleanTarget ? `${cleanTarget}/${baseName}` : baseName;
+
+  if (cleanOld === cleanNew) {
+    return { itemType, oldPath: cleanOld, newPath: cleanNew };
+  }
+
+  if (itemType === 'folder') {
+    return renameFolderInRoom({ roomId, oldFolder: cleanOld, newFolder: cleanNew });
+  } else {
+    return renameFileInRoom({ roomId, oldPath: cleanOld, newPath: cleanNew });
+  }
+}
+
+/**
+ * Compute SHA-256 content hash for integrity and duplicate prevention.
+ */
+export function computeContentHash(content) {
+  return crypto.createHash('sha256').update(content || '', 'utf8').digest('hex');
+}
+
+/**
+ * Create or collapse an auto, manual, or restore file version.
+ * - Does not create duplicate snapshots for identical content.
+ * - Automatically collapses rapid auto-saves within a 2-minute window.
+ */
+export async function createFileVersion({
+  roomId,
+  fileName,
+  content,
+  authorId = null,
+  versionType = 'auto',
+  label = null
+}) {
+  const cleanContent = typeof content === 'string' ? content : '';
+  const contentHash = computeContentHash(cleanContent);
+  const cleanLabel = typeof label === 'string' && label.trim() ? label.trim().slice(0, 100) : null;
+
+  if (dbConnected && pool) {
+    // Check latest version for this room and file
+    const latestQuery = `
+      SELECT id, content_hash, version_type, created_at
+      FROM file_versions
+      WHERE room_id = $1 AND file_name = $2
+      ORDER BY created_at DESC
+      LIMIT 1;
+    `;
+    const latestRes = await pool.query(latestQuery, [roomId, fileName]);
+    const latest = latestRes.rows[0];
+
+    // Skip if content has not changed from the latest version
+    if (latest && latest.content_hash === contentHash) {
+      return latest;
+    }
+
+    // Collapse rapid auto-saves within a 2-minute window (120,000ms)
+    if (versionType === 'auto' && latest && latest.version_type === 'auto') {
+      const elapsedMs = Date.now() - new Date(latest.created_at).getTime();
+      if (elapsedMs < 120000) {
+        const updateQuery = `
+          UPDATE file_versions
+          SET content = $1, content_hash = $2, author_id = $3, created_at = NOW()
+          WHERE id = $4
+          RETURNING id, room_id, file_name, content_hash, author_id, version_type, label, created_at;
+        `;
+        const updateRes = await pool.query(updateQuery, [cleanContent, contentHash, authorId, latest.id]);
+        return updateRes.rows[0];
+      }
+    }
+
+    // Insert new version row
+    const insertQuery = `
+      INSERT INTO file_versions (room_id, file_name, content, content_hash, author_id, version_type, label, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+      RETURNING id, room_id, file_name, content_hash, author_id, version_type, label, created_at;
+    `;
+    const insertRes = await pool.query(insertQuery, [
+      roomId,
+      fileName,
+      cleanContent,
+      contentHash,
+      authorId,
+      versionType,
+      cleanLabel
+    ]);
+    return insertRes.rows[0];
+  }
+
+  // Fallback in-memory version tracking
+  const key = `${roomId}:${fileName}`;
+  if (!inMemoryVersions.has(key)) {
+    inMemoryVersions.set(key, []);
+  }
+  const list = inMemoryVersions.get(key);
+  const latest = list[0];
+
+  if (latest && latest.content_hash === contentHash) {
+    return latest;
+  }
+
+  if (versionType === 'auto' && latest && latest.version_type === 'auto') {
+    const elapsedMs = Date.now() - new Date(latest.created_at).getTime();
+    if (elapsedMs < 120000) {
+      latest.content = cleanContent;
+      latest.content_hash = contentHash;
+      latest.author_id = authorId;
+      latest.created_at = new Date();
+      return latest;
+    }
+  }
+
+  // Lookup author details if present
+  let authorName = 'System';
+  let authorEmail = '';
+  if (authorId) {
+    const authorUser = Array.from(inMemoryUsers.values()).find((u) => u.id === authorId);
+    if (authorUser) {
+      authorName = authorUser.name;
+      authorEmail = authorUser.email;
+    }
+  }
+
+  const newVer = {
+    id: `ver-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+    room_id: roomId,
+    file_name: fileName,
+    content: cleanContent,
+    content_hash: contentHash,
+    author_id: authorId,
+    author_name: authorName,
+    author_email: authorEmail,
+    version_type: versionType,
+    label: cleanLabel,
+    created_at: new Date()
+  };
+  list.unshift(newVer);
+  return newVer;
+}
+
+/**
+ * Retrieve metadata list of previous versions for a file.
+ */
+export async function getFileVersions(roomId, fileName, limit = 50) {
+  const safeLimit = Math.min(100, Math.max(1, Number(limit) || 50));
+
+  if (dbConnected && pool) {
+    const query = `
+      SELECT 
+        fv.id,
+        fv.room_id,
+        fv.file_name,
+        fv.content_hash,
+        fv.author_id,
+        fv.version_type,
+        fv.label,
+        fv.created_at,
+        LENGTH(fv.content) AS size_bytes,
+        u.name AS author_name,
+        u.email AS author_email
+      FROM file_versions fv
+      LEFT JOIN users u ON fv.author_id = u.id
+      WHERE fv.room_id = $1 AND fv.file_name = $2
+      ORDER BY fv.created_at DESC
+      LIMIT $3;
+    `;
+    const res = await pool.query(query, [roomId, fileName, safeLimit]);
+    return res.rows;
+  }
+
+  // Fallback in-memory
+  const key = `${roomId}:${fileName}`;
+  const list = inMemoryVersions.get(key) || [];
+  return list.slice(0, safeLimit).map((v) => ({
+    id: v.id,
+    room_id: v.room_id,
+    file_name: v.file_name,
+    content_hash: v.content_hash,
+    author_id: v.author_id,
+    version_type: v.version_type,
+    label: v.label,
+    created_at: v.created_at,
+    size_bytes: v.content ? v.content.length : 0,
+    author_name: v.author_name || 'System',
+    author_email: v.author_email || ''
+  }));
+}
+
+/**
+ * Retrieve a single version with full code content for previewing or restoring.
+ */
+export async function getFileVersionById(versionId, roomId) {
+  if (dbConnected && pool) {
+    const query = `
+      SELECT 
+        fv.id,
+        fv.room_id,
+        fv.file_name,
+        fv.content,
+        fv.content_hash,
+        fv.author_id,
+        fv.version_type,
+        fv.label,
+        fv.created_at,
+        u.name AS author_name,
+        u.email AS author_email
+      FROM file_versions fv
+      LEFT JOIN users u ON fv.author_id = u.id
+      WHERE fv.id::text = $1 AND fv.room_id = $2;
+    `;
+    const res = await pool.query(query, [versionId, roomId]);
+    return res.rows[0] || null;
+  }
+
+  // Fallback in-memory
+  for (const [, list] of inMemoryVersions.entries()) {
+    const found = list.find((v) => v.id === versionId && v.room_id === roomId);
+    if (found) return found;
+  }
+  return null;
+}
+
+/**
+ * Restore an earlier file version safely.
+ * - Replaces current room_files active content with the version content.
+ * - Records a new version checkpoint with version_type = 'restore'.
+ */
+export async function restoreFileVersion({ versionId, roomId, restoredByUserId }) {
+  const version = await getFileVersionById(versionId, roomId);
+  if (!version) {
+    const error = new Error('Version not found for this project.');
+    error.status = 404;
+    throw error;
+  }
+
+  const { file_name: fileName, content } = version;
+
+  // 1. Update room_files in PostgreSQL
+  if (dbConnected && pool) {
+    const upsertQuery = `
+      INSERT INTO room_files (room_id, file_name, content, updated_at)
+      VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+      ON CONFLICT (room_id, file_name)
+      DO UPDATE SET content = EXCLUDED.content, updated_at = CURRENT_TIMESTAMP;
+    `;
+    await pool.query(upsertQuery, [roomId, fileName, content]);
+  }
+
+  // Update in-memory room_files cache
+  if (!inMemoryStore.has(roomId)) {
+    inMemoryStore.set(roomId, {});
+  }
+  inMemoryStore.get(roomId)[fileName] = content;
+
+  // 2. Insert new version record indicating restore
+  const restoreRecord = await createFileVersion({
+    roomId,
+    fileName,
+    content,
+    authorId: restoredByUserId || null,
+    versionType: 'restore',
+    label: `Restored from version (${new Date(version.created_at).toLocaleTimeString()})`
+  });
+
+  return {
+    fileName,
+    content,
+    restoredFromId: versionId,
+    newVersionId: restoreRecord.id
+  };
 }
 
 // Pending debounced database writes. Every caller receives the final result of
@@ -901,8 +1769,9 @@ const pendingSaves = new Map();
 
 /**
  * Persist file content to PostgreSQL with debounced writes to optimize performance.
+ * Also records debounced version history checkpoints without storing every keypress.
  */
-export function saveFileContent(roomId, fileName, content) {
+export function saveFileContent(roomId, fileName, content, authorId = null) {
   // Always update in-memory cache immediately
   if (!inMemoryStore.has(roomId)) {
     inMemoryStore.set(roomId, {});
@@ -910,6 +1779,13 @@ export function saveFileContent(roomId, fileName, content) {
   inMemoryStore.get(roomId)[fileName] = content;
 
   if (!dbConnected || !pool) {
+    createFileVersion({
+      roomId,
+      fileName,
+      content,
+      authorId,
+      versionType: 'auto'
+    }).catch(() => {});
     return Promise.reject(new Error('Database is not connected'));
   }
 
@@ -921,11 +1797,12 @@ export function saveFileContent(roomId, fileName, content) {
     let pending = pendingSaves.get(timerKey);
 
     if (!pending) {
-      pending = { roomId, fileName, content, timer: null, waiters: [] };
+      pending = { roomId, fileName, content, authorId, timer: null, waiters: [] };
       pendingSaves.set(timerKey, pending);
     } else {
       clearTimeout(pending.timer);
       pending.content = content;
+      if (authorId) pending.authorId = authorId;
     }
 
     pending.waiters.push({ resolve, reject });
@@ -940,6 +1817,17 @@ export function saveFileContent(roomId, fileName, content) {
         `;
         await pool.query(upsertQuery, [pending.roomId, pending.fileName, pending.content]);
         pending.waiters.forEach(({ resolve }) => resolve());
+
+        // Automatically record debounced version checkpoint (collapses within 2 minutes)
+        createFileVersion({
+          roomId: pending.roomId,
+          fileName: pending.fileName,
+          content: pending.content,
+          authorId: pending.authorId || null,
+          versionType: 'auto'
+        }).catch((err) => {
+          console.warn(`[Version History] Auto version creation skipped: ${err.message}`);
+        });
       } catch (err) {
         console.error(`[PostgreSQL] Failed to save file "${fileName}" in room "${roomId}":`, err.message);
         pending.waiters.forEach(({ reject: rejectSave }) => rejectSave(err));

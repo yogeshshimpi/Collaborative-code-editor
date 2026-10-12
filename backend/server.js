@@ -30,7 +30,22 @@ import {
   getUserPendingInvitations,
   respondToInvitation,
   updateProjectName,
-  deleteProject
+  deleteProject,
+  createFileVersion,
+  getFileVersions,
+  getFileVersionById,
+  restoreFileVersion,
+  getRoomWorkspace,
+  isValidFilePath,
+  isValidFolderPath,
+  normalizePath,
+  createFileInRoom,
+  createFolderInRoom,
+  renameFileInRoom,
+  renameFolderInRoom,
+  deleteFileInRoom,
+  deleteFolderInRoom,
+  moveItemInRoom
 } from './db.js';
 
 dotenv.config();
@@ -525,6 +540,469 @@ app.post('/api/invitations/:id/respond', requireAuth, async (req, res) => {
   }
 });
 
+// -------------------------------------------------------------
+// PER-FILE VERSION HISTORY & RESTORE ROUTES
+// -------------------------------------------------------------
+
+// List versions for a specific file in a project (supports nested paths)
+app.get(['/api/projects/:roomId/files/:fileName/versions', /^\/api\/projects\/([^/]+)\/files\/(.+)\/versions$/], requireAuth, async (req, res) => {
+  try {
+    const roomId = req.params.roomId || req.params[0];
+    const rawFileName = req.query.file || req.params.fileName || (req.params[1] ? decodeURIComponent(req.params[1]) : '');
+    const fileName = normalizePath(rawFileName);
+
+    if (!isValidFilePath(fileName)) {
+      return res.status(400).json({ error: 'Invalid file path.' });
+    }
+
+    const projectRole = await getProjectRole(roomId, req.user.id);
+    const project = await getProjectById(roomId, req.user.id);
+    if (project && !projectRole) {
+      return res.status(403).json({ error: 'You do not have access to view this project.' });
+    }
+
+    const versions = await getFileVersions(roomId, fileName);
+    res.json({
+      roomId,
+      fileName,
+      versions,
+      userRole: projectRole || 'editor'
+    });
+  } catch (err) {
+    console.error('[Version History Error] Failed to list file versions:', err);
+    res.status(500).json({ error: 'Failed to retrieve version history.' });
+  }
+});
+
+// Get a single version with full code content for previewing (supports nested paths)
+app.get(['/api/projects/:roomId/files/:fileName/versions/:versionId', /^\/api\/projects\/([^/]+)\/files\/(.+)\/versions\/([^/]+)$/], requireAuth, async (req, res) => {
+  try {
+    const roomId = req.params.roomId || req.params[0];
+    const rawFileName = req.query.file || req.params.fileName || (req.params[1] ? decodeURIComponent(req.params[1]) : '');
+    const versionId = req.params.versionId || req.params[2];
+    const fileName = normalizePath(rawFileName);
+
+    if (!isValidFilePath(fileName)) {
+      return res.status(400).json({ error: 'Invalid file path.' });
+    }
+
+    const projectRole = await getProjectRole(roomId, req.user.id);
+    const project = await getProjectById(roomId, req.user.id);
+    if (project && !projectRole) {
+      return res.status(403).json({ error: 'You do not have access to view this project.' });
+    }
+
+    const version = await getFileVersionById(versionId, roomId);
+    if (!version || version.file_name !== fileName) {
+      return res.status(404).json({ error: 'Version not found for this file.' });
+    }
+
+    res.json({ version });
+  } catch (err) {
+    console.error('[Version History Error] Failed to retrieve version preview:', err);
+    res.status(500).json({ error: 'Failed to retrieve version preview.' });
+  }
+});
+
+// Create a manual checkpoint / snapshot (supports nested paths)
+app.post(['/api/projects/:roomId/files/:fileName/versions', /^\/api\/projects\/([^/]+)\/files\/(.+)\/versions$/], requireAuth, async (req, res) => {
+  try {
+    const roomId = req.params.roomId || req.params[0];
+    const rawFileName = req.query.file || req.params.fileName || (req.params[1] ? decodeURIComponent(req.params[1]) : '');
+    const fileName = normalizePath(rawFileName);
+    const { label, content } = req.body;
+
+    if (!isValidFilePath(fileName)) {
+      return res.status(400).json({ error: 'Invalid file path.' });
+    }
+
+    const projectRole = await getProjectRole(roomId, req.user.id);
+    const project = await getProjectById(roomId, req.user.id);
+    if (project && !projectRole) {
+      return res.status(403).json({ error: 'You do not have access to this project.' });
+    }
+    if (projectRole === 'viewer') {
+      return res.status(403).json({ error: 'Permission denied: Viewers cannot create manual versions.' });
+    }
+
+    let fileContent = typeof content === 'string' ? content : null;
+    if (fileContent === null) {
+      const roomFiles = await getRoomFiles(roomId);
+      fileContent = roomFiles[fileName] || '';
+    }
+
+    const newVersion = await createFileVersion({
+      roomId,
+      fileName,
+      content: fileContent,
+      authorId: req.user.id,
+      versionType: 'manual',
+      label: typeof label === 'string' && label.trim() ? label.trim().slice(0, 100) : 'Manual Snapshot'
+    });
+
+    res.status(201).json({
+      message: 'Snapshot created successfully.',
+      version: newVersion
+    });
+  } catch (err) {
+    console.error('[Version History Error] Failed to create manual version:', err);
+    res.status(500).json({ error: 'Failed to create snapshot.' });
+  }
+});
+
+// Restore an earlier version (supports nested paths)
+app.post(['/api/projects/:roomId/files/:fileName/versions/:versionId/restore', /^\/api\/projects\/([^/]+)\/files\/(.+)\/versions\/([^/]+)\/restore$/], requireAuth, async (req, res) => {
+  try {
+    const roomId = req.params.roomId || req.params[0];
+    const rawFileName = req.query.file || req.params.fileName || (req.params[1] ? decodeURIComponent(req.params[1]) : '');
+    const versionId = req.params.versionId || req.params[2];
+    const fileName = normalizePath(rawFileName);
+
+    if (!isValidFilePath(fileName)) {
+      return res.status(400).json({ error: 'Invalid file path.' });
+    }
+
+    const projectRole = await getProjectRole(roomId, req.user.id);
+    const project = await getProjectById(roomId, req.user.id);
+    if (project && !projectRole) {
+      return res.status(403).json({ error: 'You do not have access to this project.' });
+    }
+    if (projectRole === 'viewer') {
+      return res.status(403).json({ error: 'Permission denied: Viewers cannot restore versions.' });
+    }
+
+    const targetVersion = await getFileVersionById(versionId, roomId);
+    if (!targetVersion || targetVersion.file_name !== fileName) {
+      return res.status(404).json({ error: 'Version not found for this file.' });
+    }
+
+    const restored = await restoreFileVersion({
+      versionId,
+      roomId,
+      restoredByUserId: req.user.id
+    });
+
+    // Broadcast restored code change to all collaborators in the room
+    io.to(roomId).emit('code-change', {
+      fileName: restored.fileName,
+      content: restored.content
+    });
+
+    // Notify room of saved status
+    io.to(roomId).emit('save-status', {
+      status: 'saved',
+      fileName: restored.fileName,
+      savedAt: new Date().toISOString()
+    });
+
+    res.json({
+      message: `Successfully restored ${restored.fileName} from previous version.`,
+      fileName: restored.fileName,
+      content: restored.content,
+      newVersionId: restored.newVersionId
+    });
+  } catch (err) {
+    console.error('[Version History Error] Failed to restore version:', err);
+    res.status(500).json({ error: err.message || 'Failed to restore version.' });
+  }
+});
+
+// -------------------------------------------------------------
+// VIRTUAL FILE & FOLDER EXPLORER ROUTES
+// -------------------------------------------------------------
+
+// Get workspace file and folder tree
+app.get('/api/projects/:roomId/tree', requireAuth, async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const projectRole = await getProjectRole(roomId, req.user.id);
+    const project = await getProjectById(roomId, req.user.id);
+    if (project && !projectRole) {
+      return res.status(403).json({ error: 'You do not have access to this project.' });
+    }
+
+    const workspace = await getRoomWorkspace(roomId);
+    res.json({
+      roomId,
+      files: workspace.files,
+      folders: workspace.folders,
+      userRole: projectRole || 'editor'
+    });
+  } catch (err) {
+    console.error('[File Tree Error] Failed to get workspace tree:', err);
+    res.status(500).json({ error: 'Failed to retrieve workspace tree.' });
+  }
+});
+
+// Alias for getting files and folders
+app.get('/api/projects/:roomId/files', requireAuth, async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const projectRole = await getProjectRole(roomId, req.user.id);
+    const project = await getProjectById(roomId, req.user.id);
+    if (project && !projectRole) {
+      return res.status(403).json({ error: 'You do not have access to this project.' });
+    }
+
+    const workspace = await getRoomWorkspace(roomId);
+    res.json({
+      roomId,
+      files: workspace.files,
+      folders: workspace.folders,
+      userRole: projectRole || 'editor'
+    });
+  } catch (err) {
+    console.error('[Files Error] Failed to get project files:', err);
+    res.status(500).json({ error: 'Failed to retrieve project files.' });
+  }
+});
+
+// Create new virtual file
+app.post('/api/projects/:roomId/files', requireAuth, async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const { path, content } = req.body;
+
+    const projectRole = await getProjectRole(roomId, req.user.id);
+    if (projectRole === 'viewer') {
+      return res.status(403).json({ error: 'Permission denied: Viewers cannot create files.' });
+    }
+
+    const created = await createFileInRoom({
+      roomId,
+      filePath: path,
+      content: content || '',
+      authorId: req.user.id
+    });
+
+    // Broadcast file creation live to collaborators
+    io.to(roomId).emit('file-created', {
+      roomId,
+      fileName: created.fileName,
+      content: created.content
+    });
+
+    res.status(201).json({
+      message: `File "${created.fileName}" created successfully.`,
+      file: created
+    });
+  } catch (err) {
+    console.error('[Create File Error]:', err.message);
+    res.status(400).json({ error: err.message || 'Failed to create file.' });
+  }
+});
+
+// Create new virtual folder
+app.post('/api/projects/:roomId/folders', requireAuth, async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const { path } = req.body;
+
+    const projectRole = await getProjectRole(roomId, req.user.id);
+    if (projectRole === 'viewer') {
+      return res.status(403).json({ error: 'Permission denied: Viewers cannot create folders.' });
+    }
+
+    const created = await createFolderInRoom({
+      roomId,
+      folderPath: path
+    });
+
+    // Broadcast folder creation live to collaborators
+    io.to(roomId).emit('folder-created', {
+      roomId,
+      folderPath: created.folderPath
+    });
+
+    res.status(201).json({
+      message: `Folder "${created.folderPath}" created successfully.`,
+      folder: created
+    });
+  } catch (err) {
+    console.error('[Create Folder Error]:', err.message);
+    res.status(400).json({ error: err.message || 'Failed to create folder.' });
+  }
+});
+
+// Rename virtual file
+app.put('/api/projects/:roomId/files/rename', requireAuth, async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const { oldPath, newPath } = req.body;
+
+    const projectRole = await getProjectRole(roomId, req.user.id);
+    if (projectRole === 'viewer') {
+      return res.status(403).json({ error: 'Permission denied: Viewers cannot rename files.' });
+    }
+
+    const renamed = await renameFileInRoom({
+      roomId,
+      oldPath,
+      newPath
+    });
+
+    // Broadcast file rename live to collaborators
+    io.to(roomId).emit('file-renamed', {
+      roomId,
+      oldPath: renamed.oldPath,
+      newPath: renamed.newPath
+    });
+
+    res.json({
+      message: `Renamed "${renamed.oldPath}" to "${renamed.newPath}".`,
+      ...renamed
+    });
+  } catch (err) {
+    console.error('[Rename File Error]:', err.message);
+    res.status(400).json({ error: err.message || 'Failed to rename file.' });
+  }
+});
+
+// Rename virtual folder
+app.put('/api/projects/:roomId/folders/rename', requireAuth, async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const { oldFolder, newFolder, oldPath, newPath } = req.body;
+    const source = oldFolder || oldPath;
+    const target = newFolder || newPath;
+
+    const projectRole = await getProjectRole(roomId, req.user.id);
+    if (projectRole === 'viewer') {
+      return res.status(403).json({ error: 'Permission denied: Viewers cannot rename folders.' });
+    }
+
+    const renamed = await renameFolderInRoom({
+      roomId,
+      oldFolder: source,
+      newFolder: target
+    });
+
+    // Broadcast folder rename live to collaborators
+    io.to(roomId).emit('folder-renamed', {
+      roomId,
+      oldFolder: renamed.oldFolder,
+      newFolder: renamed.newFolder,
+      affectedFiles: renamed.affectedFiles
+    });
+
+    res.json({
+      message: `Renamed folder "${renamed.oldFolder}" to "${renamed.newFolder}".`,
+      ...renamed
+    });
+  } catch (err) {
+    console.error('[Rename Folder Error]:', err.message);
+    res.status(400).json({ error: err.message || 'Failed to rename folder.' });
+  }
+});
+
+// Delete virtual file
+app.delete('/api/projects/:roomId/files', requireAuth, async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const path = req.body?.path || req.query?.path;
+
+    const projectRole = await getProjectRole(roomId, req.user.id);
+    if (projectRole === 'viewer') {
+      return res.status(403).json({ error: 'Permission denied: Viewers cannot delete files.' });
+    }
+
+    const deleted = await deleteFileInRoom({
+      roomId,
+      filePath: path
+    });
+
+    // Broadcast file deletion live to collaborators
+    io.to(roomId).emit('file-deleted', {
+      roomId,
+      filePath: deleted.filePath
+    });
+
+    res.json({
+      message: `Deleted file "${deleted.filePath}".`,
+      ...deleted
+    });
+  } catch (err) {
+    console.error('[Delete File Error]:', err.message);
+    res.status(400).json({ error: err.message || 'Failed to delete file.' });
+  }
+});
+
+// Delete virtual folder
+app.delete('/api/projects/:roomId/folders', requireAuth, async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const path = req.body?.path || req.query?.path;
+
+    const projectRole = await getProjectRole(roomId, req.user.id);
+    if (projectRole === 'viewer') {
+      return res.status(403).json({ error: 'Permission denied: Viewers cannot delete folders.' });
+    }
+
+    const deleted = await deleteFolderInRoom({
+      roomId,
+      folderPath: path
+    });
+
+    // Broadcast folder deletion live to collaborators
+    io.to(roomId).emit('folder-deleted', {
+      roomId,
+      folderPath: deleted.folderPath,
+      deletedFiles: deleted.deletedFiles
+    });
+
+    res.json({
+      message: `Deleted folder "${deleted.folderPath}".`,
+      ...deleted
+    });
+  } catch (err) {
+    console.error('[Delete Folder Error]:', err.message);
+    res.status(400).json({ error: err.message || 'Failed to delete folder.' });
+  }
+});
+
+// Move item (file or folder)
+app.put('/api/projects/:roomId/move', requireAuth, async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const { itemType, oldPath, targetParentFolder } = req.body;
+
+    const projectRole = await getProjectRole(roomId, req.user.id);
+    if (projectRole === 'viewer') {
+      return res.status(403).json({ error: 'Permission denied: Viewers cannot move items.' });
+    }
+
+    const moved = await moveItemInRoom({
+      roomId,
+      itemType: itemType || 'file',
+      oldPath,
+      targetParentFolder: targetParentFolder || ''
+    });
+
+    if (itemType === 'folder') {
+      io.to(roomId).emit('folder-renamed', {
+        roomId,
+        oldFolder: moved.oldFolder,
+        newFolder: moved.newFolder,
+        affectedFiles: moved.affectedFiles
+      });
+    } else {
+      io.to(roomId).emit('file-renamed', {
+        roomId,
+        oldPath: moved.oldPath,
+        newPath: moved.newPath
+      });
+    }
+
+    res.json({
+      message: 'Moved successfully.',
+      ...moved
+    });
+  } catch (err) {
+    console.error('[Move Item Error]:', err.message);
+    res.status(400).json({ error: err.message || 'Failed to move item.' });
+  }
+});
+
 // =============================================================
 // HEALTH & EXISTING ROOM API
 // =============================================================
@@ -540,12 +1018,12 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// REST endpoint to get room files
+// REST endpoint to get room workspace files & folders
 app.get('/api/rooms/:roomId', async (req, res) => {
   try {
     const { roomId } = req.params;
-    const files = await getRoomFiles(roomId);
-    res.json({ roomId, files });
+    const workspace = await getRoomWorkspace(roomId);
+    res.json({ roomId, files: workspace.files, folders: workspace.folders });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch room files' });
   }
@@ -584,9 +1062,6 @@ io.use((socket, next) => {
   next();
 });
 
-// Supported files for validation
-const ALLOWED_FILES = new Set(['main.js', 'index.html', 'styles.css']);
-
 // Temporary in-memory collaborator presence per room
 // Map<roomId, Map<socketId, { id, name, color, socketId }>>
 const roomUsers = new Map();
@@ -611,7 +1086,7 @@ io.on('connection', (socket) => {
 
     // Determine user identity: Use authenticated user if session cookie is present, else guest identity
     const authUser = socket.data.authenticatedUser;
-    const initialActiveFile = typeof rawUser?.activeFile === 'string' && ALLOWED_FILES.has(rawUser.activeFile) ? rawUser.activeFile : 'main.js';
+    const initialActiveFile = typeof rawUser?.activeFile === 'string' && isValidFilePath(rawUser.activeFile) ? rawUser.activeFile : 'main.js';
     const sanitizedUser = authUser
       ? {
           id: `auth-${authUser.id}`,
@@ -657,9 +1132,9 @@ io.on('connection', (socket) => {
     const usersInRoom = roomUsers.get(roomId);
     usersInRoom.set(socket.id, sanitizedUser);
 
-    // Retrieve persisted room files from PostgreSQL (or in-memory cache)
-    const roomFiles = await getRoomFiles(roomId);
-    socket.emit('room-sync', roomFiles);
+    // Retrieve persisted room workspace (files and folders) from PostgreSQL
+    const workspace = await getRoomWorkspace(roomId);
+    socket.emit('room-sync', workspace);
 
     // Broadcast updated presence list & count to everyone in the room
     const currentUsers = Array.from(usersInRoom.values());
@@ -689,7 +1164,7 @@ io.on('connection', (socket) => {
       typeof roomId !== 'string' ||
       !roomId.trim() ||
       roomId.trim().length > 64 ||
-      !ALLOWED_FILES.has(fileName) ||
+      !isValidFilePath(fileName) ||
       typeof content !== 'string'
     ) {
       console.warn(`[Rejected Invalid code-change] Socket ${socket.id}`, { roomId, fileName, contentType: typeof content });
@@ -706,7 +1181,8 @@ io.on('connection', (socket) => {
 
     // Notify editing browser of save status
     socket.emit('save-status', { status: 'saving', fileName });
-    saveFileContent(cleanRoomId, fileName, content)
+    const authorId = socket.data.authenticatedUser?.id || null;
+    saveFileContent(cleanRoomId, fileName, content, authorId)
       .then(() => {
         socket.emit('save-status', {
           status: 'saved',
@@ -717,6 +1193,196 @@ io.on('connection', (socket) => {
       .catch(() => {
         socket.emit('save-status', { status: 'error', fileName });
       });
+  });
+
+  // Real-time Virtual File & Folder Management Socket Events
+  socket.on('create-file', async (data) => {
+    if (!data || typeof data !== 'object') return;
+    if (socket.data.role === 'viewer') {
+      socket.emit('permission-error', { error: 'Viewers cannot create files.' });
+      return;
+    }
+    const cleanRoom = data.roomId?.trim() || socket.data.currentRoom;
+    if (!cleanRoom) return;
+
+    try {
+      const created = await createFileInRoom({
+        roomId: cleanRoom,
+        filePath: data.filePath || data.path,
+        content: data.content || '',
+        authorId: socket.data.authenticatedUser?.id || null
+      });
+
+      io.to(cleanRoom).emit('file-created', {
+        roomId: cleanRoom,
+        fileName: created.fileName,
+        content: created.content
+      });
+    } catch (err) {
+      socket.emit('file-error', { error: err.message });
+    }
+  });
+
+  socket.on('create-folder', async (data) => {
+    if (!data || typeof data !== 'object') return;
+    if (socket.data.role === 'viewer') {
+      socket.emit('permission-error', { error: 'Viewers cannot create folders.' });
+      return;
+    }
+    const cleanRoom = data.roomId?.trim() || socket.data.currentRoom;
+    if (!cleanRoom) return;
+
+    try {
+      const created = await createFolderInRoom({
+        roomId: cleanRoom,
+        folderPath: data.folderPath || data.path
+      });
+
+      io.to(cleanRoom).emit('folder-created', {
+        roomId: cleanRoom,
+        folderPath: created.folderPath
+      });
+    } catch (err) {
+      socket.emit('file-error', { error: err.message });
+    }
+  });
+
+  socket.on('rename-file', async (data) => {
+    if (!data || typeof data !== 'object') return;
+    if (socket.data.role === 'viewer') {
+      socket.emit('permission-error', { error: 'Viewers cannot rename files.' });
+      return;
+    }
+    const cleanRoom = data.roomId?.trim() || socket.data.currentRoom;
+    if (!cleanRoom) return;
+
+    try {
+      const renamed = await renameFileInRoom({
+        roomId: cleanRoom,
+        oldPath: data.oldPath,
+        newPath: data.newPath
+      });
+
+      io.to(cleanRoom).emit('file-renamed', {
+        roomId: cleanRoom,
+        oldPath: renamed.oldPath,
+        newPath: renamed.newPath
+      });
+    } catch (err) {
+      socket.emit('file-error', { error: err.message });
+    }
+  });
+
+  socket.on('rename-folder', async (data) => {
+    if (!data || typeof data !== 'object') return;
+    if (socket.data.role === 'viewer') {
+      socket.emit('permission-error', { error: 'Viewers cannot rename folders.' });
+      return;
+    }
+    const cleanRoom = data.roomId?.trim() || socket.data.currentRoom;
+    if (!cleanRoom) return;
+
+    try {
+      const renamed = await renameFolderInRoom({
+        roomId: cleanRoom,
+        oldFolder: data.oldFolder || data.oldPath,
+        newFolder: data.newFolder || data.newPath
+      });
+
+      io.to(cleanRoom).emit('folder-renamed', {
+        roomId: cleanRoom,
+        oldFolder: renamed.oldFolder,
+        newFolder: renamed.newFolder,
+        affectedFiles: renamed.affectedFiles
+      });
+    } catch (err) {
+      socket.emit('file-error', { error: err.message });
+    }
+  });
+
+  socket.on('delete-file', async (data) => {
+    if (!data || typeof data !== 'object') return;
+    if (socket.data.role === 'viewer') {
+      socket.emit('permission-error', { error: 'Viewers cannot delete files.' });
+      return;
+    }
+    const cleanRoom = data.roomId?.trim() || socket.data.currentRoom;
+    if (!cleanRoom) return;
+
+    try {
+      const deleted = await deleteFileInRoom({
+        roomId: cleanRoom,
+        filePath: data.filePath || data.path
+      });
+
+      io.to(cleanRoom).emit('file-deleted', {
+        roomId: cleanRoom,
+        filePath: deleted.filePath
+      });
+    } catch (err) {
+      socket.emit('file-error', { error: err.message });
+    }
+  });
+
+  socket.on('delete-folder', async (data) => {
+    if (!data || typeof data !== 'object') return;
+    if (socket.data.role === 'viewer') {
+      socket.emit('permission-error', { error: 'Viewers cannot delete folders.' });
+      return;
+    }
+    const cleanRoom = data.roomId?.trim() || socket.data.currentRoom;
+    if (!cleanRoom) return;
+
+    try {
+      const deleted = await deleteFolderInRoom({
+        roomId: cleanRoom,
+        folderPath: data.folderPath || data.path
+      });
+
+      io.to(cleanRoom).emit('folder-deleted', {
+        roomId: cleanRoom,
+        folderPath: deleted.folderPath,
+        deletedFiles: deleted.deletedFiles
+      });
+    } catch (err) {
+      socket.emit('file-error', { error: err.message });
+    }
+  });
+
+  socket.on('move-item', async (data) => {
+    if (!data || typeof data !== 'object') return;
+    if (socket.data.role === 'viewer') {
+      socket.emit('permission-error', { error: 'Viewers cannot move files or folders.' });
+      return;
+    }
+    const cleanRoom = data.roomId?.trim() || socket.data.currentRoom;
+    if (!cleanRoom) return;
+
+    try {
+      const moved = await moveItemInRoom({
+        roomId: cleanRoom,
+        itemType: data.itemType || 'file',
+        oldPath: data.oldPath,
+        targetParentFolder: data.targetParentFolder || ''
+      });
+
+      if (data.itemType === 'folder') {
+        io.to(cleanRoom).emit('folder-renamed', {
+          roomId: cleanRoom,
+          oldFolder: moved.oldFolder,
+          newFolder: moved.newFolder,
+          affectedFiles: moved.affectedFiles
+        });
+      } else {
+        io.to(cleanRoom).emit('file-renamed', {
+          roomId: cleanRoom,
+          oldPath: moved.oldPath,
+          newPath: moved.newPath
+        });
+      }
+    } catch (err) {
+      socket.emit('file-error', { error: err.message });
+    }
   });
 
   // Handle live collaborator cursor and selection changes
@@ -732,7 +1398,7 @@ io.on('connection', (socket) => {
       typeof roomId !== 'string' ||
       !roomId.trim() ||
       socket.data.currentRoom !== roomId.trim() ||
-      !ALLOWED_FILES.has(fileName)
+      !isValidFilePath(fileName)
     ) {
       return;
     }

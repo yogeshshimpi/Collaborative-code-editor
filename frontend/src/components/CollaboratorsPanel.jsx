@@ -24,7 +24,13 @@ export default function CollaboratorsPanel({
   const userList = activeUsers.length > 0 ? activeUsers : [currentUser];
 
   return (
-    <aside className="collaborators-panel">
+    <>
+      <div
+        className="collaborators-backdrop"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      <aside className="collaborators-panel">
       <div className="panel-header">
         <div className="panel-title">
           <Users size={15} />
@@ -99,5 +105,6 @@ export default function CollaboratorsPanel({
         </button>
       </div>
     </aside>
+    </>
   );
 }
