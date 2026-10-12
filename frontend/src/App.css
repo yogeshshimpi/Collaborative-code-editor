@@ -984,6 +984,10 @@
   color: var(--color-success);
 }
 
+.status-save-success {
+  color: var(--color-success);
+}
+
 .text-accent {
   color: var(--accent-primary);
 }

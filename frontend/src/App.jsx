@@ -42,6 +42,9 @@ function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   // Toast feedback message
   const [toast, setToast] = useState(null);
+  // Updated only from server acknowledgements: never claim a cloud save until
+  // PostgreSQL has actually accepted the latest change.
+  const [saveStatus, setSaveStatus] = useState('idle');
 
   // Flag to avoid infinite loops: prevent remote updates from being emitted back
   const isRemoteChangeRef = useRef(false);
@@ -91,12 +94,19 @@ function App() {
     });
   }, []);
 
+  const handleSaveStatus = useCallback(({ status }) => {
+    if (status === 'saving' || status === 'saved' || status === 'error') {
+      setSaveStatus(status);
+    }
+  }, []);
+
   // Initialize Socket.IO connection hook with live user identity
   const { connectionStatus, participantCount, activeUsers, emitCodeChange } = useSocket({
     roomId,
     user: currentUser,
     onRemoteCodeChange: handleRemoteCodeChange,
-    onRoomSync: handleRoomSync
+    onRoomSync: handleRoomSync,
+    onSaveStatus: handleSaveStatus
   });
 
   // Switch active room
@@ -256,6 +266,7 @@ function App() {
         encoding="UTF-8"
         connectionStatus={connectionStatus}
         roomId={roomId}
+        saveStatus={saveStatus}
       />
 
       {/* Feedback Toast */}

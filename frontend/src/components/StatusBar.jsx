@@ -1,11 +1,12 @@
-import { CheckCircle2, GitBranch, Radio, WifiOff, Loader2 } from 'lucide-react';
+import { CheckCircle2, GitBranch, Radio, WifiOff, Loader2, Cloud, CloudOff } from 'lucide-react';
 
 export default function StatusBar({
   language = 'JavaScript',
   cursor = { line: 1, column: 1 },
   encoding = 'UTF-8',
   connectionStatus = 'connected',
-  roomId = 'demo-room'
+  roomId = 'demo-room',
+  saveStatus = 'idle'
 }) {
   const getLanguageLabel = (lang) => {
     switch (lang.toLowerCase()) {
@@ -50,6 +51,34 @@ export default function StatusBar({
     );
   };
 
+  const renderSaveStatus = () => {
+    if (saveStatus === 'saving') {
+      return (
+        <div className="status-item text-warning" title="Saving the latest edit to the cloud database">
+          <Loader2 size={12} className="spinner" />
+          <span>Saving...</span>
+        </div>
+      );
+    }
+    if (saveStatus === 'saved') {
+      return (
+        <div className="status-item status-save-success" title="The latest edit was confirmed by the cloud database">
+          <Cloud size={12} />
+          <span>Saved to cloud</span>
+        </div>
+      );
+    }
+    if (saveStatus === 'error') {
+      return (
+        <div className="status-item text-danger" title="The latest edit could not be saved to the cloud database">
+          <CloudOff size={12} />
+          <span>Save failed</span>
+        </div>
+      );
+    }
+    return null;
+  };
+
   return (
     <footer className="status-bar">
       <div className="status-bar-left">
@@ -67,6 +96,7 @@ export default function StatusBar({
 
         {/* Sync status: prioritized */}
         {renderSyncStatus()}
+        {renderSaveStatus()}
       </div>
 
       <div className="status-bar-right">

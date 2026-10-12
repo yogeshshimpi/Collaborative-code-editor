@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { initSocket } from '../socket';
 
-export function useSocket({ roomId, user, onRemoteCodeChange, onRoomSync }) {
+export function useSocket({ roomId, user, onRemoteCodeChange, onRoomSync, onSaveStatus }) {
   const [connectionStatus, setConnectionStatus] = useState('connecting'); // 'connecting' | 'connected' | 'disconnected'
   const [participantCount, setParticipantCount] = useState(1);
   const [activeUsers, setActiveUsers] = useState([]);
@@ -10,6 +10,7 @@ export function useSocket({ roomId, user, onRemoteCodeChange, onRoomSync }) {
   // Store callbacks and user in refs to keep listener references stable
   const onRemoteCodeChangeRef = useRef(onRemoteCodeChange);
   const onRoomSyncRef = useRef(onRoomSync);
+  const onSaveStatusRef = useRef(onSaveStatus);
   const userRef = useRef(user);
 
   useEffect(() => {
@@ -19,6 +20,10 @@ export function useSocket({ roomId, user, onRemoteCodeChange, onRoomSync }) {
   useEffect(() => {
     onRoomSyncRef.current = onRoomSync;
   }, [onRoomSync]);
+
+  useEffect(() => {
+    onSaveStatusRef.current = onSaveStatus;
+  }, [onSaveStatus]);
 
   useEffect(() => {
     userRef.current = user;
@@ -77,6 +82,12 @@ export function useSocket({ roomId, user, onRemoteCodeChange, onRoomSync }) {
       }
     });
 
+    socket.on('save-status', (data) => {
+      if (data && onSaveStatusRef.current) {
+        onSaveStatusRef.current(data);
+      }
+    });
+
     // Clean up on room change or unmount
     return () => {
       socket.off('connect');
@@ -87,6 +98,7 @@ export function useSocket({ roomId, user, onRemoteCodeChange, onRoomSync }) {
       socket.off('room-participants');
       socket.off('code-change');
       socket.off('room-sync');
+      socket.off('save-status');
       socket.disconnect();
       socketRef.current = null;
     };

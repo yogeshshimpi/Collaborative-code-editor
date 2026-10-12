@@ -2,12 +2,19 @@ import express from 'express';
 import http from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
+import dotenv from 'dotenv';
+import { initDatabase, getRoomFiles, saveFileContent, isDbConnected } from './db.js';
+
+dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
 
-// CORS configuration for local development
+// Initialize PostgreSQL database schema
+initDatabase();
+
+// CORS configuration for local development and Render deployment
 app.use(cors({
   origin: CLIENT_URL,
   methods: ['GET', 'POST'],
@@ -15,13 +22,26 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Keep the existing health check endpoint
+// Health check endpoint (reports service and database status)
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
-    message: 'Backend is running successfully!',
+    service: 'CodeCollab Backend',
+    database: isDbConnected() ? 'connected' : 'in-memory-fallback',
+    uptime: Math.floor(process.uptime()),
     timestamp: new Date().toISOString()
   });
+});
+
+// REST endpoint to get room files
+app.get('/api/rooms/:roomId', async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const files = await getRoomFiles(roomId);
+    res.json({ roomId, files });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch room files' });
+  }
 });
 
 // Create HTTP server and attach Socket.IO
@@ -37,10 +57,6 @@ const io = new Server(server, {
 // Supported files for validation
 const ALLOWED_FILES = new Set(['main.js', 'index.html', 'styles.css']);
 
-// Temporary in-memory room code state for active sessions
-// Map<roomId, { [fileName]: string }>
-const activeRooms = new Map();
-
 // Temporary in-memory collaborator presence per room
 // Map<roomId, Map<socketId, { id, name, color, socketId }>>
 const roomUsers = new Map();
@@ -49,7 +65,7 @@ io.on('connection', (socket) => {
   console.log(`[Socket Connected] ID: ${socket.id}`);
 
   // Handle joining a room with user presence details
-  socket.on('join-room', (payload) => {
+  socket.on('join-room', async (payload) => {
     const rawRoomId = typeof payload === 'object' && payload !== null ? payload.roomId : payload;
     const rawUser = typeof payload === 'object' && payload !== null ? payload.user : null;
     
@@ -80,10 +96,9 @@ io.on('connection', (socket) => {
     const usersInRoom = roomUsers.get(roomId);
     usersInRoom.set(socket.id, sanitizedUser);
 
-    // Send latest room code if already modified in this session
-    if (activeRooms.has(roomId)) {
-      socket.emit('room-sync', activeRooms.get(roomId));
-    }
+    // Retrieve persisted room files from PostgreSQL (or in-memory cache)
+    const roomFiles = await getRoomFiles(roomId);
+    socket.emit('room-sync', roomFiles);
 
     // Broadcast updated presence list & count to everyone in the room
     const currentUsers = Array.from(usersInRoom.values());
@@ -118,17 +133,26 @@ io.on('connection', (socket) => {
 
     const cleanRoomId = roomId.trim();
 
-    // Update temporary in-memory room session state
-    if (!activeRooms.has(cleanRoomId)) {
-      activeRooms.set(cleanRoomId, {});
-    }
-    activeRooms.get(cleanRoomId)[fileName] = content;
-
-    // Broadcast update to all other sockets in the room (not back to sender)
+    // Broadcast update to all other sockets in the room (instant live sync)
     socket.to(cleanRoomId).emit('code-change', {
       fileName,
       content
     });
+
+    // Tell the editing browser exactly what is happening. The final "saved"
+    // event is only sent after PostgreSQL has confirmed the upsert.
+    socket.emit('save-status', { status: 'saving', fileName });
+    saveFileContent(cleanRoomId, fileName, content)
+      .then(() => {
+        socket.emit('save-status', {
+          status: 'saved',
+          fileName,
+          savedAt: new Date().toISOString()
+        });
+      })
+      .catch(() => {
+        socket.emit('save-status', { status: 'error', fileName });
+      });
   });
 
   // Handle socket disconnecting to accurately update presence and participant counts
