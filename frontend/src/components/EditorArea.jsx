@@ -1,6 +1,7 @@
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState, useCallback } from 'react';
 import Editor from '@monaco-editor/react';
 import { Loader2 } from 'lucide-react';
+import CodingShortcutToolbar from './CodingShortcutToolbar';
 
 // Convert hex color to semi-transparent rgba for clean selection highlight
 function hexToRgba(color, alpha = 0.22) {
@@ -28,15 +29,22 @@ export default function EditorArea({
   layoutTrigger,
   readOnly = false,
   activeFile,
-  remoteCursors = {}
+  remoteCursors = {},
+  onRun,
+  onOpenConsole,
+  editorRef: externalEditorRef
 }) {
-  const editorRef = useRef(null);
+  const internalEditorRef = useRef(null);
+  const editorRef = externalEditorRef || internalEditorRef;
   const monacoRef = useRef(null);
   const decorationsRef = useRef([]);
   const [isEditorReady, setIsEditorReady] = useState(false);
 
   const handleEditorDidMount = (editor, monaco) => {
     editorRef.current = editor;
+    if (externalEditorRef) {
+      externalEditorRef.current = editor;
+    }
     monacoRef.current = monaco;
     setIsEditorReady(true);
 
@@ -193,14 +201,43 @@ export default function EditorArea({
   }, [layoutTrigger]);
 
   const [isMobileScreen, setIsMobileScreen] = useState(
-    () => typeof window !== 'undefined' && window.innerWidth < 768
+    () => typeof window !== 'undefined' && window.innerWidth < 1024
   );
+
+  const [isToolbarCollapsed, setIsToolbarCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem('codecollab_mobile_toolbar_collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const handleToggleToolbar = useCallback(() => {
+    setIsToolbarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('codecollab_mobile_toolbar_collapsed', String(next));
+      } catch {}
+      return next;
+    });
+  }, []);
+
+  // Recalculate Monaco layout when toolbar collapse state changes
+  useEffect(() => {
+    if (editorRef.current) {
+      editorRef.current.layout();
+      const timer = setTimeout(() => {
+        editorRef.current?.layout();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [isToolbarCollapsed]);
 
   // Recalculate on window resize and mobile orientation change
   useEffect(() => {
     const handleLayoutRecalc = () => {
       if (typeof window !== 'undefined') {
-        setIsMobileScreen(window.innerWidth < 768);
+        setIsMobileScreen(window.innerWidth < 1024);
       }
       if (editorRef.current) {
         editorRef.current.layout();
@@ -217,46 +254,58 @@ export default function EditorArea({
 
   return (
     <div className="editor-area-container">
-      <Editor
-        height="100%"
-        width="100%"
-        language={language}
-        value={content}
-        theme="vs-dark"
-        onChange={onChange}
-        onMount={handleEditorDidMount}
-        loading={
-          <div className="editor-loader">
-            <Loader2 className="spinner" size={24} />
-            <span>Loading Monaco Editor...</span>
-          </div>
-        }
-        options={{
-          fontSize: isMobileScreen ? 12.5 : 13.5,
-          fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace",
-          fontLigatures: true,
-          minimap: {
-            enabled: !isMobileScreen,
-            side: 'right'
-          },
-          lineNumbers: 'on',
-          lineNumbersMinChars: isMobileScreen ? 2 : 3,
-          glyphMargin: false,
-          folding: !isMobileScreen,
-          automaticLayout: true,
-          scrollBeyondLastLine: false,
-          tabSize: 2,
-          wordWrap: 'on',
-          smoothScrolling: true,
-          cursorBlinking: 'smooth',
-          cursorSmoothCaretAnimation: 'on',
-          renderLineHighlight: 'all',
-          renderWhitespace: 'selection',
-          padding: { top: isMobileScreen ? 6 : 10, bottom: isMobileScreen ? 6 : 10 },
-          bracketPairColorization: { enabled: true },
-          readOnly: Boolean(readOnly),
-          domReadOnly: Boolean(readOnly)
-        }}
+      <div className="monaco-viewport-wrapper">
+        <Editor
+          height="100%"
+          width="100%"
+          language={language}
+          value={content}
+          theme="vs-dark"
+          onChange={onChange}
+          onMount={handleEditorDidMount}
+          loading={
+            <div className="editor-loader">
+              <Loader2 className="spinner" size={24} />
+              <span>Loading Monaco Editor...</span>
+            </div>
+          }
+          options={{
+            fontSize: isMobileScreen ? 12.5 : 13.5,
+            fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace",
+            fontLigatures: true,
+            minimap: {
+              enabled: !isMobileScreen,
+              side: 'right'
+            },
+            lineNumbers: 'on',
+            lineNumbersMinChars: isMobileScreen ? 2 : 3,
+            glyphMargin: false,
+            folding: !isMobileScreen,
+            automaticLayout: true,
+            scrollBeyondLastLine: false,
+            tabSize: 2,
+            wordWrap: 'on',
+            smoothScrolling: true,
+            cursorBlinking: 'smooth',
+            cursorSmoothCaretAnimation: 'on',
+            renderLineHighlight: 'all',
+            renderWhitespace: 'selection',
+            padding: { top: isMobileScreen ? 6 : 10, bottom: isMobileScreen ? 6 : 10 },
+            bracketPairColorization: { enabled: true },
+            readOnly: Boolean(readOnly),
+            domReadOnly: Boolean(readOnly)
+          }}
+        />
+      </div>
+
+      {/* CodeCollab Coding Shortcut Toolbar for All Screen Sizes */}
+      <CodingShortcutToolbar
+        editorRef={editorRef}
+        readOnly={readOnly}
+        isCollapsed={isToolbarCollapsed}
+        onToggleCollapse={handleToggleToolbar}
+        onRun={onRun}
+        onOpenConsole={onOpenConsole}
       />
     </div>
   );

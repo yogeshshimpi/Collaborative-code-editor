@@ -15,7 +15,8 @@ import {
   ChevronDown,
   Eye,
   ShieldCheck,
-  History
+  History,
+  Activity
 } from 'lucide-react';
 
 export default function Navbar({
@@ -33,6 +34,8 @@ export default function Navbar({
   onShare,
   onOpenCollaborators,
   onOpenHistory,
+  onOpenActivity,
+  isActivityOpen = false,
   isRightPanelOpen,
   toggleRightPanel,
   onToggleSidebar,
@@ -324,6 +327,21 @@ export default function Navbar({
           </button>
         )}
 
+        {/* Project Activity Log action button */}
+        {onOpenActivity && (
+          <button
+            type="button"
+            className={`btn btn-secondary btn-action ${isActivityOpen ? 'active-action' : ''}`}
+            onClick={onOpenActivity}
+            title={isActivityOpen ? "Close Project Activity Log" : "View project activity log & timeline"}
+            aria-label="Project Activity"
+            aria-pressed={isActivityOpen}
+          >
+            <Activity size={14} />
+            <span className="btn-text">Activity</span>
+          </button>
+        )}
+
         <button
           type="button"
           className="btn btn-secondary btn-action"
@@ -386,6 +404,21 @@ export default function Navbar({
               </div>
 
               <div className="dropdown-divider" />
+
+              {onOpenActivity && (
+                <button
+                  type="button"
+                  className="dropdown-item"
+                  onClick={() => {
+                    setIsUserMenuOpen(false);
+                    onOpenActivity();
+                  }}
+                  role="menuitem"
+                >
+                  <Activity size={14} />
+                  <span>Activity Log</span>
+                </button>
+              )}
 
               {isAuthenticated ? (
                 <>

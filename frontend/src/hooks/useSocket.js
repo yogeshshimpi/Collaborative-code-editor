@@ -16,7 +16,8 @@ export function useSocket({
   onFolderDeleted,
   onFileError,
   onProjectInfo,
-  onProjectRenamed
+  onProjectRenamed,
+  onActivityLogEntry
 }) {
   const [connectionStatus, setConnectionStatus] = useState('connecting'); // 'connecting' | 'connected' | 'disconnected'
   const [participantCount, setParticipantCount] = useState(1);
@@ -39,6 +40,7 @@ export function useSocket({
   const onFileErrorRef = useRef(onFileError);
   const onProjectInfoRef = useRef(onProjectInfo);
   const onProjectRenamedRef = useRef(onProjectRenamed);
+  const onActivityLogEntryRef = useRef(onActivityLogEntry);
   const userRef = useRef(user);
 
   useEffect(() => {
@@ -92,6 +94,10 @@ export function useSocket({
   useEffect(() => {
     onProjectRenamedRef.current = onProjectRenamed;
   }, [onProjectRenamed]);
+
+  useEffect(() => {
+    onActivityLogEntryRef.current = onActivityLogEntry;
+  }, [onActivityLogEntry]);
 
   useEffect(() => {
     userRef.current = user;
@@ -271,6 +277,13 @@ export function useSocket({
       }
     });
 
+    // Real-time project activity log entry broadcast
+    socket.on('activity-log-entry', (data) => {
+      if (data && onActivityLogEntryRef.current) {
+        onActivityLogEntryRef.current(data);
+      }
+    });
+
     // Clean up on room change or unmount
     return () => {
       socket.off('connect');
@@ -293,6 +306,7 @@ export function useSocket({
       socket.off('folder-deleted');
       socket.off('cursor-change');
       socket.off('cursor-clear');
+      socket.off('activity-log-entry');
       socket.disconnect();
       socketRef.current = null;
       setRemoteCursors({});

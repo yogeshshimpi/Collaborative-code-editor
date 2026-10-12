@@ -46,7 +46,9 @@ import {
   renameFolderInRoom,
   deleteFileInRoom,
   deleteFolderInRoom,
-  moveItemInRoom
+  moveItemInRoom,
+  recordProjectActivity,
+  getProjectActivityLogs
 } from './db.js';
 
 dotenv.config();
@@ -488,6 +490,21 @@ app.post('/api/projects/:id/invitations', requireAuth, async (req, res) => {
       role
     });
 
+    const roleDisplay = role.charAt(0).toUpperCase() + role.slice(1).toLowerCase();
+    recordProjectActivity({
+      roomId: project.room_id,
+      projectId: project.id,
+      userId: req.user.id,
+      userName: req.user.name,
+      userEmail: req.user.email,
+      actionType: 'member_invite',
+      targetName: email.trim(),
+      details: { role: roleDisplay },
+      summary: `${req.user.name} invited ${email.trim()} as ${roleDisplay}`
+    }).then((act) => {
+      if (act) io.to(project.room_id).emit('activity-log-entry', act);
+    }).catch(() => {});
+
     res.status(201).json({ invitation });
   } catch (err) {
     console.error('[Invitations Error] Failed to invite collaborator:', err.message);
@@ -535,10 +552,28 @@ app.put('/api/projects/:id/members/:userId', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'Cannot modify the owner role.' });
     }
 
+    const targetUser = await findUserById(targetUserId);
     const updated = await updateProjectMemberRole(project.id, targetUserId, role);
     if (!updated) {
       return res.status(404).json({ error: 'Project member not found.' });
     }
+
+    const roleDisplay = role.charAt(0).toUpperCase() + role.slice(1).toLowerCase();
+    const targetName = targetUser?.name || `User #${targetUserId}`;
+    recordProjectActivity({
+      roomId: project.room_id,
+      projectId: project.id,
+      userId: req.user.id,
+      userName: req.user.name,
+      userEmail: req.user.email,
+      actionType: 'member_role_change',
+      targetName,
+      details: { newRole: roleDisplay },
+      summary: `${req.user.name} changed ${targetName}’s role to ${roleDisplay}`
+    }).then((act) => {
+      if (act) io.to(project.room_id).emit('activity-log-entry', act);
+    }).catch(() => {});
+
     res.json({ member: updated });
   } catch (err) {
     console.error('[Members Error] Failed to update role:', err);
@@ -563,10 +598,31 @@ app.delete('/api/projects/:id/members/:userId', requireAuth, async (req, res) =>
       return res.status(400).json({ error: 'Project owner cannot be removed.' });
     }
 
+    const targetUser = await findUserById(targetUserId);
     const removed = await removeProjectMember(project.id, targetUserId);
     if (!removed) {
       return res.status(404).json({ error: 'Project member not found.' });
     }
+
+    const targetName = targetUser?.name || `User #${targetUserId}`;
+    const summary = isSelf
+      ? `${req.user.name} left the project`
+      : `${req.user.name} removed ${targetName} from the project`;
+
+    recordProjectActivity({
+      roomId: project.room_id,
+      projectId: project.id,
+      userId: req.user.id,
+      userName: req.user.name,
+      userEmail: req.user.email,
+      actionType: isSelf ? 'member_leave' : 'member_remove',
+      targetName,
+      details: { targetUserId },
+      summary
+    }).then((act) => {
+      if (act) io.to(project.room_id).emit('activity-log-entry', act);
+    }).catch(() => {});
+
     res.json({ message: isSelf ? 'You have left the project.' : 'Member removed successfully.', userId: targetUserId });
   } catch (err) {
     console.error('[Members Error] Failed to remove member:', err);
@@ -594,10 +650,82 @@ app.post('/api/invitations/:id/respond', requireAuth, async (req, res) => {
     }
 
     const result = await respondToInvitation(req.params.id, req.user.email, req.user.id, action);
+    if (action === 'accept' && result?.invitation?.project_id) {
+      const proj = await getProjectById(result.invitation.project_id, req.user.id);
+      if (proj) {
+        recordProjectActivity({
+          roomId: proj.room_id,
+          projectId: proj.id,
+          userId: req.user.id,
+          userName: req.user.name,
+          userEmail: req.user.email,
+          actionType: 'member_join',
+          targetName: req.user.name,
+          details: { role: result.invitation.role },
+          summary: `${req.user.name} joined the project as ${result.invitation.role}`
+        }).then((act) => {
+          if (act) io.to(proj.room_id).emit('activity-log-entry', act);
+        }).catch(() => {});
+      }
+    }
     res.json(result);
   } catch (err) {
     console.error('[Invitations Error] Failed to respond to invitation:', err.message);
     res.status(400).json({ error: err.message || 'Failed to process invitation.' });
+  }
+});
+
+// -------------------------------------------------------------
+// PROJECT ACTIVITY LOG ROUTES
+// -------------------------------------------------------------
+
+// Retrieve activity timeline for a project
+app.get('/api/projects/:id/activity', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { limit = 50, offset = 0, filter = 'all' } = req.query;
+
+    // Direct access for demo-room
+    if (id === 'demo-room') {
+      const data = await getProjectActivityLogs({ roomId: 'demo-room', limit, offset, filter });
+      return res.json(data);
+    }
+
+    // Authenticated access for real projects
+    const token = req.cookies[COOKIE_NAME];
+    if (!token) {
+      return res.status(401).json({ error: 'Authentication required to view project activity.' });
+    }
+    const decoded = verifyToken(token);
+    if (!decoded) {
+      return res.status(401).json({ error: 'Session expired.' });
+    }
+    const user = await findUserById(decoded.id);
+    if (!user) {
+      return res.status(401).json({ error: 'User not found.' });
+    }
+
+    const project = await getProjectById(id, user.id);
+    const projectRole = await getProjectRole(id, user.id);
+    if (project && !projectRole) {
+      return res.status(403).json({ error: 'You do not have access to view this project activity.' });
+    }
+
+    const targetRoom = project?.room_id || id;
+    const targetProjectId = project?.id || null;
+
+    const data = await getProjectActivityLogs({
+      roomId: targetRoom,
+      projectId: targetProjectId,
+      limit,
+      offset,
+      filter
+    });
+
+    res.json(data);
+  } catch (err) {
+    console.error('[Activity Log Error]:', err);
+    res.status(500).json({ error: 'Failed to retrieve project activity logs.' });
   }
 });
 
@@ -766,6 +894,23 @@ app.post(['/api/projects/:roomId/files/:fileName/versions/:versionId/restore', /
       savedAt: new Date().toISOString()
     });
 
+    recordProjectActivity({
+      roomId: targetRoom,
+      projectId: project?.id || null,
+      userId: req.user.id,
+      userName: req.user.name,
+      userEmail: req.user.email,
+      actionType: 'file_restore',
+      targetName: restored.fileName,
+      details: { restoredFromId: versionId, newVersionId: restored.newVersionId },
+      summary: `${req.user.name} restored ${restored.fileName} to an earlier version`
+    }).then((act) => {
+      if (act) {
+        io.to(targetRoom).emit('activity-log-entry', act);
+        if (targetRoom !== roomId) io.to(roomId).emit('activity-log-entry', act);
+      }
+    }).catch(() => {});
+
     res.json({
       message: `Successfully restored ${restored.fileName} from previous version.`,
       fileName: restored.fileName,
@@ -855,6 +1000,19 @@ app.post('/api/projects/:roomId/files', requireAuth, async (req, res) => {
       content: created.content
     });
 
+    recordProjectActivity({
+      roomId,
+      userId: req.user.id,
+      userName: req.user.name,
+      userEmail: req.user.email,
+      actionType: 'file_create',
+      targetName: created.fileName,
+      details: {},
+      summary: `${req.user.name} created ${created.fileName}`
+    }).then((act) => {
+      if (act) io.to(roomId).emit('activity-log-entry', act);
+    }).catch(() => {});
+
     res.status(201).json({
       message: `File "${created.fileName}" created successfully.`,
       file: created
@@ -886,6 +1044,19 @@ app.post('/api/projects/:roomId/folders', requireAuth, async (req, res) => {
       roomId,
       folderPath: created.folderPath
     });
+
+    recordProjectActivity({
+      roomId,
+      userId: req.user.id,
+      userName: req.user.name,
+      userEmail: req.user.email,
+      actionType: 'folder_create',
+      targetName: created.folderPath,
+      details: {},
+      summary: `${req.user.name} created ${created.folderPath}`
+    }).then((act) => {
+      if (act) io.to(roomId).emit('activity-log-entry', act);
+    }).catch(() => {});
 
     res.status(201).json({
       message: `Folder "${created.folderPath}" created successfully.`,
@@ -920,6 +1091,19 @@ app.put('/api/projects/:roomId/files/rename', requireAuth, async (req, res) => {
       oldPath: renamed.oldPath,
       newPath: renamed.newPath
     });
+
+    recordProjectActivity({
+      roomId,
+      userId: req.user.id,
+      userName: req.user.name,
+      userEmail: req.user.email,
+      actionType: 'file_rename',
+      targetName: renamed.newPath,
+      details: { oldPath: renamed.oldPath, newPath: renamed.newPath },
+      summary: `${req.user.name} renamed ${renamed.oldPath} to ${renamed.newPath}`
+    }).then((act) => {
+      if (act) io.to(roomId).emit('activity-log-entry', act);
+    }).catch(() => {});
 
     res.json({
       message: `Renamed "${renamed.oldPath}" to "${renamed.newPath}".`,
@@ -958,6 +1142,19 @@ app.put('/api/projects/:roomId/folders/rename', requireAuth, async (req, res) =>
       affectedFiles: renamed.affectedFiles
     });
 
+    recordProjectActivity({
+      roomId,
+      userId: req.user.id,
+      userName: req.user.name,
+      userEmail: req.user.email,
+      actionType: 'folder_rename',
+      targetName: renamed.newFolder,
+      details: { oldFolder: renamed.oldFolder, newFolder: renamed.newFolder },
+      summary: `${req.user.name} renamed folder ${renamed.oldFolder} to ${renamed.newFolder}`
+    }).then((act) => {
+      if (act) io.to(roomId).emit('activity-log-entry', act);
+    }).catch(() => {});
+
     res.json({
       message: `Renamed folder "${renamed.oldFolder}" to "${renamed.newFolder}".`,
       ...renamed
@@ -989,6 +1186,19 @@ app.delete('/api/projects/:roomId/files', requireAuth, async (req, res) => {
       roomId,
       filePath: deleted.filePath
     });
+
+    recordProjectActivity({
+      roomId,
+      userId: req.user.id,
+      userName: req.user.name,
+      userEmail: req.user.email,
+      actionType: 'file_delete',
+      targetName: deleted.filePath,
+      details: {},
+      summary: `${req.user.name} deleted ${deleted.filePath}`
+    }).then((act) => {
+      if (act) io.to(roomId).emit('activity-log-entry', act);
+    }).catch(() => {});
 
     res.json({
       message: `Deleted file "${deleted.filePath}".`,
@@ -1022,6 +1232,19 @@ app.delete('/api/projects/:roomId/folders', requireAuth, async (req, res) => {
       folderPath: deleted.folderPath,
       deletedFiles: deleted.deletedFiles
     });
+
+    recordProjectActivity({
+      roomId,
+      userId: req.user.id,
+      userName: req.user.name,
+      userEmail: req.user.email,
+      actionType: 'folder_delete',
+      targetName: deleted.folderPath,
+      details: {},
+      summary: `${req.user.name} deleted folder ${deleted.folderPath}`
+    }).then((act) => {
+      if (act) io.to(roomId).emit('activity-log-entry', act);
+    }).catch(() => {});
 
     res.json({
       message: `Deleted folder "${deleted.folderPath}".`,
@@ -1065,6 +1288,21 @@ app.put('/api/projects/:roomId/move', requireAuth, async (req, res) => {
         newPath: moved.newPath
       });
     }
+
+    const originPath = itemType === 'folder' ? moved.oldFolder : moved.oldPath;
+    const targetPath = itemType === 'folder' ? moved.newFolder : moved.newPath;
+    recordProjectActivity({
+      roomId,
+      userId: req.user.id,
+      userName: req.user.name,
+      userEmail: req.user.email,
+      actionType: 'item_move',
+      targetName: targetPath,
+      details: { oldPath: originPath, newPath: targetPath, itemType },
+      summary: `${req.user.name} moved ${originPath} to ${targetParentFolder || 'root'}`
+    }).then((act) => {
+      if (act) io.to(roomId).emit('activity-log-entry', act);
+    }).catch(() => {});
 
     res.json({
       message: 'Moved successfully.',

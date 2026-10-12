@@ -9,6 +9,7 @@ import StatusBar from '../components/StatusBar';
 import CollaboratorsPanel from '../components/CollaboratorsPanel';
 import CollaboratorsModal from '../components/CollaboratorsModal';
 import VersionHistoryModal from '../components/VersionHistoryModal';
+import ActivityLogModal from '../components/ActivityLogModal';
 import LivePreview from '../components/LivePreview';
 import WorkspaceSplitDivider from '../components/WorkspaceSplitDivider';
 import Toast from '../components/Toast';
@@ -141,8 +142,12 @@ export default function EditorWorkspacePage() {
   const [isCollaboratorsOpen, setIsCollaboratorsOpen] = useState(false);
   // Version History Modal
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  // Project Activity Log Modal
+  const [isActivityLogOpen, setIsActivityLogOpen] = useState(false);
+  const [liveActivityEntry, setLiveActivityEntry] = useState(null);
   // Live Preview Sandbox & Split Pane Workspace state
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [previewActiveTab, setPreviewActiveTab] = useState('preview');
   const [splitRatio, setSplitRatio] = useState(50); // percentage: 15% to 85%, default 50%
   const [maximizedPane, setMaximizedPane] = useState('none'); // 'none' | 'editor' | 'preview'
   const [isDraggingSplit, setIsDraggingSplit] = useState(false);
@@ -152,6 +157,7 @@ export default function EditorWorkspacePage() {
     () => typeof window !== 'undefined' && window.innerWidth < 1024
   );
   const workspaceRowRef = useRef(null);
+  const editorRef = useRef(null);
 
   // Responsive workspace layout detection
   useEffect(() => {
@@ -426,7 +432,10 @@ export default function EditorWorkspacePage() {
     onFolderDeleted: handleFolderDeleted,
     onFileError: handleFileError,
     onProjectInfo: handleProjectInfo,
-    onProjectRenamed: handleProjectRenamed
+    onProjectRenamed: handleProjectRenamed,
+    onActivityLogEntry: (entry) => {
+      setLiveActivityEntry(entry);
+    }
   });
 
   // Throttled cursor and selection activity broadcaster (~35ms throttle for smooth real-time rendering)
@@ -462,6 +471,21 @@ export default function EditorWorkspacePage() {
   // Effective role in project workspace
   const effectiveRole = role || currentProject?.role || matchedInContext?.role || 'editor';
   const isViewer = effectiveRole === 'viewer';
+
+  // Undo and Redo actions for TabBar and coding controls
+  const handleUndo = useCallback(() => {
+    if (editorRef.current && !isViewer) {
+      editorRef.current.trigger('tab-bar', 'undo');
+      editorRef.current.focus();
+    }
+  }, [isViewer]);
+
+  const handleRedo = useCallback(() => {
+    if (editorRef.current && !isViewer) {
+      editorRef.current.trigger('tab-bar', 'redo');
+      editorRef.current.focus();
+    }
+  }, [isViewer]);
 
   // Switch active room by navigating to the new route
   const handleChangeRoom = (newRoom) => {
@@ -565,8 +589,9 @@ export default function EditorWorkspacePage() {
   };
 
   // Action handlers
-  const handleRun = () => {
+  const handleRun = useCallback(() => {
     setIsPreviewOpen(true);
+    setPreviewActiveTab('preview');
     if (maximizedPane === 'editor') {
       setMaximizedPane('none');
     }
@@ -576,7 +601,16 @@ export default function EditorWorkspacePage() {
     } else {
       showToast('Running project in Live Preview split panel', 'success');
     }
-  };
+  }, [maximizedPane, isViewer, showToast]);
+
+  const handleOpenConsole = useCallback(() => {
+    setIsPreviewOpen(true);
+    setPreviewActiveTab('console');
+    if (maximizedPane === 'editor') {
+      setMaximizedPane('none');
+    }
+    showToast('Switched to Virtual Console output', 'info');
+  }, [maximizedPane, showToast]);
 
   // Toggle Live Preview split panel from TabBar
   const handleTogglePreview = () => {
@@ -645,6 +679,26 @@ export default function EditorWorkspacePage() {
     emitMoveItem(itemType, oldPath, targetParentFolder);
   }, [emitMoveItem]);
 
+  const handleToggleActivity = useCallback(() => {
+    setIsActivityLogOpen((prev) => {
+      const next = !prev;
+      if (next && !isMobileWorkspace) {
+        setIsRightPanelOpen(false);
+      }
+      return next;
+    });
+  }, [isMobileWorkspace]);
+
+  const handleToggleCollaborators = useCallback(() => {
+    setIsRightPanelOpen((prev) => {
+      const next = !prev;
+      if (next && !isMobileWorkspace) {
+        setIsActivityLogOpen(false);
+      }
+      return next;
+    });
+  }, [isMobileWorkspace]);
+
   const currentFileObj = activeFile ? filesState[activeFile] : null;
   const currentLanguage = activeFile ? getLanguageFromFile(activeFile) : 'plaintext';
   const fileList = Object.values(filesState);
@@ -700,8 +754,10 @@ export default function EditorWorkspacePage() {
         onShare={() => setIsCollaboratorsOpen(true)}
         onOpenCollaborators={() => setIsCollaboratorsOpen(true)}
         onOpenHistory={() => setIsHistoryOpen(true)}
+        onOpenActivity={handleToggleActivity}
+        isActivityOpen={isActivityLogOpen}
         isRightPanelOpen={isRightPanelOpen}
-        toggleRightPanel={() => setIsRightPanelOpen(!isRightPanelOpen)}
+        toggleRightPanel={handleToggleCollaborators}
         onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
         isAuthenticated={true}
         onOpenProjects={() => navigate('/projects')}
@@ -747,9 +803,11 @@ export default function EditorWorkspacePage() {
               activeTab={activeFile}
               onSelectTab={handleSelectFile}
               onCloseTab={handleCloseTab}
-              onOpenHistory={() => setIsHistoryOpen(true)}
-              onTogglePreview={handleTogglePreview}
-              isPreviewOpen={isPreviewOpen}
+              onConsole={handleOpenConsole}
+              onUndo={handleUndo}
+              onRedo={handleRedo}
+              onRun={handleRun}
+              readOnly={isViewer}
             />
           )}
 
@@ -841,6 +899,9 @@ export default function EditorWorkspacePage() {
                   readOnly={isViewer}
                   activeFile={activeFile}
                   remoteCursors={remoteCursors}
+                  onRun={handleRun}
+                  onOpenConsole={handleOpenConsole}
+                  editorRef={editorRef}
                 />
               ) : (
                 <div className="no-editor-state">
@@ -884,6 +945,8 @@ export default function EditorWorkspacePage() {
                 isMaximized={maximizedPane === 'preview'}
                 onToggleMaximize={handleToggleMaximizePreview}
                 runTrigger={runTrigger}
+                previewTab={previewActiveTab}
+                onTabChange={setPreviewActiveTab}
                 style={{
                   width:
                     isMobileWorkspace && mobileWorkspaceView === 'split'
@@ -914,6 +977,19 @@ export default function EditorWorkspacePage() {
           activeUsers={activeUsers}
           currentActiveFile={activeFile}
         />
+
+        {/* Right Activity Log Panel on big screens */}
+        {!isMobileWorkspace && isActivityLogOpen && (
+          <ActivityLogModal
+            isOpen={isActivityLogOpen}
+            onClose={() => setIsActivityLogOpen(false)}
+            projectId={currentProject?.id || matchedInContext?.id}
+            roomId={activeRoomId}
+            projectName={projectName}
+            liveActivityEntry={liveActivityEntry}
+            isSidebar={true}
+          />
+        )}
       </div>
 
       {/* Bottom Status Bar */}
@@ -948,6 +1024,19 @@ export default function EditorWorkspacePage() {
         onRestore={handleVersionRestored}
         onShowToast={showToast}
       />
+
+      {/* Project Activity Log Modal on smaller screens / mobile ("less ratio") */}
+      {isMobileWorkspace && isActivityLogOpen && (
+        <ActivityLogModal
+          isOpen={isActivityLogOpen}
+          onClose={() => setIsActivityLogOpen(false)}
+          projectId={currentProject?.id || matchedInContext?.id}
+          roomId={activeRoomId}
+          projectName={projectName}
+          liveActivityEntry={liveActivityEntry}
+          isSidebar={false}
+        />
+      )}
 
       {/* Feedback Toast */}
       {toast && (

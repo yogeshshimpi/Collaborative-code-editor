@@ -148,5 +148,18 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ action })
     });
+  },
+
+  // Project Activity Logs
+  async getProjectActivity(projectId, params = {}) {
+    const query = new URLSearchParams();
+    if (params.limit) query.set('limit', params.limit);
+    if (params.offset) query.set('offset', params.offset);
+    if (params.filter) query.set('filter', params.filter);
+    const queryString = query.toString() ? `?${query.toString()}` : '';
+    return request(`/api/projects/${encodeURIComponent(projectId)}/activity${queryString}`, {
+      method: 'GET'
+    });
   }
 };
+

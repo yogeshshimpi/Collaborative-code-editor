@@ -1,14 +1,25 @@
 import { useRef, useEffect } from 'react';
-import { X, FileCode, FileText, Palette, History, Play } from 'lucide-react';
+import {
+  X,
+  FileCode,
+  FileText,
+  Palette,
+  Terminal,
+  Undo2,
+  Redo2,
+  Play
+} from 'lucide-react';
 
 export default function TabBar({
   openTabs = [],
   activeTab,
   onSelectTab,
   onCloseTab,
-  onOpenHistory,
-  onTogglePreview,
-  isPreviewOpen = false
+  onConsole,
+  onUndo,
+  onRedo,
+  onRun,
+  readOnly = false
 }) {
   const scrollContainerRef = useRef(null);
   const activeTabRef = useRef(null);
@@ -85,34 +96,61 @@ export default function TabBar({
         </div>
       </div>
 
-      {/* Zone 2: Fixed action buttons pinned on right */}
+      {/* Zone 2: Key editor action buttons pinned on right: [ Console ] [ Undo ] [ Redo ] [ Run ] */}
       <div className="tab-bar-actions">
-        {onTogglePreview && (
-          <button
-            type="button"
-            className={`tab-action-btn ${isPreviewOpen ? 'active' : ''}`}
-            onClick={onTogglePreview}
-            title={isPreviewOpen ? 'Hide Live Preview' : 'Open Live Preview'}
-            aria-label={isPreviewOpen ? 'Hide Live Preview' : 'Open Live Preview'}
-          >
-            <Play size={13} fill={isPreviewOpen ? 'currentColor' : 'none'} />
-            <span className="tab-action-text">Preview</span>
-          </button>
-        )}
 
-        {onOpenHistory && (
-          <button
-            type="button"
-            className="tab-action-btn"
-            onClick={onOpenHistory}
-            title={activeTab ? `View version history for ${activeTab}` : 'View version history'}
-            aria-label="View Version History"
-            disabled={!activeTab}
-          >
-            <History size={13} />
-            <span className="tab-action-text">History</span>
-          </button>
-        )}
+        {/* [ Undo ] */}
+        <button
+          type="button"
+          className="tab-action-btn btn-tab-undo"
+          onClick={onUndo}
+          onMouseDown={(e) => e.preventDefault()}
+          title="Undo (Ctrl+Z)"
+          aria-label="Undo"
+          disabled={readOnly || !activeTab}
+        >
+          <Undo2 size={13} className="tab-action-icon" />
+          <span className="tab-action-text">Undo</span>
+        </button>
+
+        {/* [ Redo ] */}
+        <button
+          type="button"
+          className="tab-action-btn btn-tab-redo"
+          onClick={onRedo}
+          onMouseDown={(e) => e.preventDefault()}
+          title="Redo (Ctrl+Y)"
+          aria-label="Redo"
+          disabled={readOnly || !activeTab}
+        >
+          <Redo2 size={13} className="tab-action-icon" />
+          <span className="tab-action-text">Redo</span>
+        </button>
+
+        {/* [ Run ] */}
+        <button
+          type="button"
+          className="tab-action-btn btn-tab-run"
+          onClick={onRun}
+          onMouseDown={(e) => e.preventDefault()}
+          title="Run project in Live Preview"
+          aria-label="Run Live Preview"
+        >
+          <Play size={12} fill="currentColor" className="tab-action-icon" />
+          <span className="tab-action-text">Run</span>
+        </button>
+        {/* [ Console ] */}
+        <button
+          type="button"
+          className="tab-action-btn btn-tab-console"
+          onClick={onConsole}
+          onMouseDown={(e) => e.preventDefault()}
+          title="Open Virtual Console"
+          aria-label="Open Virtual Console"
+        >
+          <Terminal size={13} className="tab-action-icon" />
+          <span className="tab-action-text">Console</span>
+        </button>
       </div>
     </div>
   );

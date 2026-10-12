@@ -36,9 +36,24 @@ export default function LivePreview({
   runTrigger,
   onShowToast,
   style,
-  className = ''
+  className = '',
+  previewTab,
+  onTabChange
 }) {
-  const [activeTab, setActiveTab] = useState('preview'); // 'preview' | 'console'
+  const [activeTab, setActiveTab] = useState(previewTab || 'preview');
+
+  useEffect(() => {
+    if (previewTab) {
+      setActiveTab(previewTab);
+    }
+  }, [previewTab]);
+
+  const handleSelectTab = (tab) => {
+    setActiveTab(tab);
+    if (onTabChange) {
+      onTabChange(tab);
+    }
+  };
   const [viewportMode, setViewportMode] = useState('responsive'); // 'responsive' | 'tablet' | 'mobile'
   const [selectedHtmlFile, setSelectedHtmlFile] = useState(null);
   const [consoleLogs, setConsoleLogs] = useState([]);
@@ -248,7 +263,7 @@ export default function LivePreview({
             <button
               type="button"
               className={`preview-tab-btn ${activeTab === 'preview' ? 'active' : ''}`}
-              onClick={() => setActiveTab('preview')}
+              onClick={() => handleSelectTab('preview')}
               role="tab"
               aria-selected={activeTab === 'preview'}
             >
@@ -258,7 +273,7 @@ export default function LivePreview({
             <button
               type="button"
               className={`preview-tab-btn ${activeTab === 'console' ? 'active' : ''}`}
-              onClick={() => setActiveTab('console')}
+              onClick={() => handleSelectTab('console')}
               role="tab"
               aria-selected={activeTab === 'console'}
             >
