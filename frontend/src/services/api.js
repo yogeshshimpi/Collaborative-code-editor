@@ -2,10 +2,20 @@
 // Note: Tokens are stored exclusively in HttpOnly cookies managed by the browser.
 // All requests use credentials: 'include'.
 
-const API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || '').replace(/\/$/, '');
+// Authentication and REST APIs must use the backend origin. Socket.IO already
+// uses VITE_SOCKET_SERVER_URL, so use it as a safe fallback when a separate
+// VITE_API_URL was not configured during the Vite build.
+const API_BASE = (
+  import.meta.env.VITE_API_URL
+  || import.meta.env.VITE_BACKEND_URL
+  || import.meta.env.VITE_SOCKET_SERVER_URL
+  || ''
+).replace(/\/$/, '');
+
+export const apiUrl = (endpoint) => `${API_BASE}${endpoint}`;
 
 async function request(endpoint, options = {}) {
-  const url = `${API_BASE}${endpoint}`;
+  const url = apiUrl(endpoint);
   const config = {
     ...options,
     credentials: 'include', // Include HttpOnly cookies on all requests
@@ -16,13 +26,17 @@ async function request(endpoint, options = {}) {
   };
 
   const response = await fetch(url, config);
-  const data = await response.json().catch(() => ({}));
+  const data = await response.json().catch(() => null);
 
   if (!response.ok) {
     const error = new Error(data?.error || `Request failed with status ${response.status}`);
     error.status = response.status;
     error.data = data;
     throw error;
+  }
+
+  if (!data || typeof data !== 'object') {
+    throw new Error('The API returned an invalid response. Check the frontend backend URL configuration.');
   }
 
   return data;

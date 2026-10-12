@@ -15,6 +15,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { getLanguageFromFile } from '../data/initialFiles';
+import { apiUrl } from '../services/api';
 
 export default function VersionHistoryModal({
   isOpen,
@@ -69,7 +70,8 @@ export default function VersionHistoryModal({
     setIsLoadingList(true);
     setError(null);
     try {
-      const res = await fetch(`/api/projects/${encodeURIComponent(roomId)}/files/${encodeURIComponent(fileName)}/versions`, {
+      const res = await fetch(apiUrl(`/api/projects/${encodeURIComponent(roomId)}/files/${encodeURIComponent(fileName)}/versions`), {
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' }
       });
       if (!res.ok) {
@@ -102,7 +104,9 @@ export default function VersionHistoryModal({
     let isMounted = true;
     setIsLoadingPreview(true);
 
-    fetch(`/api/projects/${encodeURIComponent(roomId)}/files/${encodeURIComponent(fileName)}/versions/${encodeURIComponent(selectedVersionId)}`)
+    fetch(apiUrl(`/api/projects/${encodeURIComponent(roomId)}/files/${encodeURIComponent(fileName)}/versions/${encodeURIComponent(selectedVersionId)}`), {
+      credentials: 'include'
+    })
       .then((res) => {
         if (!res.ok) throw new Error('Failed to load version preview.');
         return res.json();
@@ -141,8 +145,9 @@ export default function VersionHistoryModal({
 
     setIsCreatingSnapshot(true);
     try {
-      const res = await fetch(`/api/projects/${encodeURIComponent(roomId)}/files/${encodeURIComponent(fileName)}/versions`, {
+      const res = await fetch(apiUrl(`/api/projects/${encodeURIComponent(roomId)}/files/${encodeURIComponent(fileName)}/versions`), {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           label: snapshotLabel.trim() || 'Manual Checkpoint'
@@ -175,9 +180,10 @@ export default function VersionHistoryModal({
     setIsRestoring(true);
     try {
       const res = await fetch(
-        `/api/projects/${encodeURIComponent(roomId)}/files/${encodeURIComponent(fileName)}/versions/${encodeURIComponent(selectedVersionId)}/restore`,
+        apiUrl(`/api/projects/${encodeURIComponent(roomId)}/files/${encodeURIComponent(fileName)}/versions/${encodeURIComponent(selectedVersionId)}/restore`),
         {
           method: 'POST',
+          credentials: 'include',
           headers: { 'Content-Type': 'application/json' }
         }
       );
