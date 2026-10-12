@@ -1,5 +1,22 @@
-import { useState } from 'react';
-import { Code2, Play, Share2, Users, Hash, Edit2, Check, PanelLeft } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import {
+  Code2,
+  Play,
+  Share2,
+  Users,
+  Hash,
+  Edit2,
+  Check,
+  PanelLeft,
+  LogIn,
+  LogOut,
+  FolderCode,
+  User,
+  ChevronDown,
+  Eye,
+  ShieldCheck,
+  ShieldAlert
+} from 'lucide-react';
 
 export default function Navbar({
   projectName = 'Untitled Project',
@@ -9,14 +26,37 @@ export default function Navbar({
   participantCount = 1,
   currentUser = { name: 'Guest', color: '#6366f1', initials: 'G' },
   activeUsers = [],
+  userRole = 'editor',
   onRun,
   onShare,
+  onOpenCollaborators,
   isRightPanelOpen,
   toggleRightPanel,
-  onToggleSidebar
+  onToggleSidebar,
+  isAuthenticated = false,
+  onOpenAuth,
+  onOpenProjects,
+  onLogout
 }) {
   const [isEditingRoom, setIsEditingRoom] = useState(false);
   const [roomInput, setRoomInput] = useState(roomId);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const userMenuRef = useRef(null);
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
+        setIsUserMenuOpen(false);
+      }
+    }
+    if (isUserMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isUserMenuOpen]);
 
   const handleRoomSubmit = (e) => {
     e.preventDefault();
@@ -125,6 +165,20 @@ export default function Navbar({
         <div className="project-title-container">
           <span className="project-title">{projectName}</span>
         </div>
+
+        {/* User Role Badge in Header */}
+        {userRole === 'viewer' && (
+          <div className="navbar-role-badge badge-viewer" title="You have View-Only access to this project. Editing and saving are disabled.">
+            <Eye size={12} />
+            <span>View Only</span>
+          </div>
+        )}
+        {userRole === 'owner' && (
+          <div className="navbar-role-badge badge-owner" title="You are the Owner of this project with full permissions.">
+            <ShieldCheck size={12} />
+            <span>Owner</span>
+          </div>
+        )}
       </div>
 
       <div className="navbar-right">
@@ -167,15 +221,43 @@ export default function Navbar({
           </div>
         )}
 
+        {/* My Projects shortcut button when logged in */}
+        {isAuthenticated && (
+          <button
+            type="button"
+            className="btn btn-secondary btn-action"
+            onClick={onOpenProjects}
+            title="Manage Projects"
+            aria-label="Manage Projects"
+          >
+            <FolderCode size={14} />
+            <span className="btn-text">Projects</span>
+          </button>
+        )}
+
+        {/* Sign In CTA when in guest mode */}
+        {!isAuthenticated && (
+          <button
+            type="button"
+            className="btn btn-secondary btn-action btn-auth"
+            onClick={() => onOpenAuth && onOpenAuth('login')}
+            title="Sign in to save projects"
+            aria-label="Sign In"
+          >
+            <LogIn size={14} />
+            <span className="btn-text">Sign In</span>
+          </button>
+        )}
+
         <button
           type="button"
           className="btn btn-secondary btn-action"
-          onClick={onShare}
-          title="Share Project Room"
-          aria-label="Share Project Room"
+          onClick={onOpenCollaborators || onShare}
+          title={userRole === 'owner' ? "Invite collaborators & manage permissions" : "Share project & view collaborators"}
+          aria-label="Share Project"
         >
           <Share2 size={15} />
-          <span className="btn-text">Share</span>
+          <span className="btn-text">{userRole === 'owner' ? 'Share & Invite' : 'Share'}</span>
         </button>
 
         <button
@@ -191,14 +273,102 @@ export default function Navbar({
 
         <div className="divider-vertical divider-desktop" />
 
-        {/* Current User Avatar with custom presence color */}
-        <div
-          className="user-avatar"
-          style={{ backgroundColor: currentUser.color }}
-          title={`You: ${currentUser.name}`}
-          aria-label={`You: ${currentUser.name}`}
-        >
-          <span>{currentUser.initials || currentUser.name.slice(0, 2).toUpperCase()}</span>
+        {/* User Account / Avatar Dropdown */}
+        <div className="user-menu-container" ref={userMenuRef}>
+          <button
+            type="button"
+            className="user-avatar-trigger"
+            onClick={() => setIsUserMenuOpen((prev) => !prev)}
+            title={currentUser.name}
+            aria-expanded={isUserMenuOpen}
+            aria-haspopup="true"
+          >
+            <div
+              className="user-avatar"
+              style={{ backgroundColor: currentUser.color }}
+            >
+              <span>{currentUser.initials || currentUser.name.slice(0, 2).toUpperCase()}</span>
+            </div>
+            <ChevronDown size={12} className="user-caret" />
+          </button>
+
+          {isUserMenuOpen && (
+            <div className="user-dropdown-menu" role="menu">
+              <div className="dropdown-user-header">
+                <div
+                  className="dropdown-avatar"
+                  style={{ backgroundColor: currentUser.color }}
+                >
+                  <span>{currentUser.initials || currentUser.name.slice(0, 2).toUpperCase()}</span>
+                </div>
+                <div className="dropdown-user-info">
+                  <span className="dropdown-user-name">{currentUser.name}</span>
+                  <span className="dropdown-user-email">
+                    {isAuthenticated ? currentUser.email : 'Guest Session'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="dropdown-divider" />
+
+              {isAuthenticated ? (
+                <>
+                  <button
+                    type="button"
+                    className="dropdown-item"
+                    onClick={() => {
+                      setIsUserMenuOpen(false);
+                      if (onOpenProjects) onOpenProjects();
+                    }}
+                    role="menuitem"
+                  >
+                    <FolderCode size={14} />
+                    <span>My Projects</span>
+                  </button>
+                  <div className="dropdown-divider" />
+                  <button
+                    type="button"
+                    className="dropdown-item danger"
+                    onClick={() => {
+                      setIsUserMenuOpen(false);
+                      if (onLogout) onLogout();
+                    }}
+                    role="menuitem"
+                  >
+                    <LogOut size={14} />
+                    <span>Log Out</span>
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className="dropdown-item"
+                    onClick={() => {
+                      setIsUserMenuOpen(false);
+                      if (onOpenAuth) onOpenAuth('login');
+                    }}
+                    role="menuitem"
+                  >
+                    <LogIn size={14} />
+                    <span>Sign In</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="dropdown-item"
+                    onClick={() => {
+                      setIsUserMenuOpen(false);
+                      if (onOpenAuth) onOpenAuth('register');
+                    }}
+                    role="menuitem"
+                  >
+                    <User size={14} />
+                    <span>Create Account</span>
+                  </button>
+                </>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </header>

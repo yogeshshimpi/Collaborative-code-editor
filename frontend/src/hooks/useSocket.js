@@ -1,16 +1,18 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { initSocket } from '../socket';
 
-export function useSocket({ roomId, user, onRemoteCodeChange, onRoomSync, onSaveStatus }) {
+export function useSocket({ roomId, user, onRemoteCodeChange, onRoomSync, onSaveStatus, onPermissionError }) {
   const [connectionStatus, setConnectionStatus] = useState('connecting'); // 'connecting' | 'connected' | 'disconnected'
   const [participantCount, setParticipantCount] = useState(1);
   const [activeUsers, setActiveUsers] = useState([]);
+  const [role, setRole] = useState('editor');
   const socketRef = useRef(null);
 
   // Store callbacks and user in refs to keep listener references stable
   const onRemoteCodeChangeRef = useRef(onRemoteCodeChange);
   const onRoomSyncRef = useRef(onRoomSync);
   const onSaveStatusRef = useRef(onSaveStatus);
+  const onPermissionErrorRef = useRef(onPermissionError);
   const userRef = useRef(user);
 
   useEffect(() => {
@@ -24,6 +26,10 @@ export function useSocket({ roomId, user, onRemoteCodeChange, onRoomSync, onSave
   useEffect(() => {
     onSaveStatusRef.current = onSaveStatus;
   }, [onSaveStatus]);
+
+  useEffect(() => {
+    onPermissionErrorRef.current = onPermissionError;
+  }, [onPermissionError]);
 
   useEffect(() => {
     userRef.current = user;
@@ -54,6 +60,20 @@ export function useSocket({ roomId, user, onRemoteCodeChange, onRoomSync, onSave
 
     socket.on('reconnect_attempt', () => {
       setConnectionStatus('connecting');
+    });
+
+    // Receive workspace permission role (owner, editor, viewer)
+    socket.on('user-role', (data) => {
+      if (data?.role) {
+        setRole(data.role);
+      }
+    });
+
+    // Permission error handler
+    socket.on('permission-error', (data) => {
+      if (data && onPermissionErrorRef.current) {
+        onPermissionErrorRef.current(data);
+      }
     });
 
     // Update active collaborator presence list
@@ -94,6 +114,8 @@ export function useSocket({ roomId, user, onRemoteCodeChange, onRoomSync, onSave
       socket.off('disconnect');
       socket.off('connect_error');
       socket.off('reconnect_attempt');
+      socket.off('user-role');
+      socket.off('permission-error');
       socket.off('room-users');
       socket.off('room-participants');
       socket.off('code-change');
@@ -102,7 +124,7 @@ export function useSocket({ roomId, user, onRemoteCodeChange, onRoomSync, onSave
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [roomId]);
+  }, [roomId, user?.id]);
 
   // Method to emit local code changes safely
   const emitCodeChange = useCallback((fileName, content) => {
@@ -119,6 +141,7 @@ export function useSocket({ roomId, user, onRemoteCodeChange, onRoomSync, onSave
     connectionStatus,
     participantCount,
     activeUsers,
+    role,
     emitCodeChange
   };
 }

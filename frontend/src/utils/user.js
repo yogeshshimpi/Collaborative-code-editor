@@ -45,3 +45,34 @@ export function getOrCreateUser() {
 
   return user;
 }
+
+export function formatAuthUser(user) {
+  if (!user) return null;
+
+  const initials = user.name
+    ? user.name
+        .trim()
+        .split(/\s+/)
+        .map((part) => part[0])
+        .join('')
+        .slice(0, 2)
+        .toUpperCase()
+    : 'U';
+
+  // Deterministic avatar color based on user email or name
+  let hash = 0;
+  const seed = (user.email || user.name || 'user').toLowerCase();
+  for (let i = 0; i < seed.length; i++) {
+    hash = seed.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const color = USER_COLORS[Math.abs(hash) % USER_COLORS.length];
+
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    initials,
+    color,
+    isAuthenticated: true
+  };
+}

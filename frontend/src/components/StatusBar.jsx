@@ -1,4 +1,4 @@
-import { CheckCircle2, GitBranch, Radio, WifiOff, Loader2, Cloud, CloudOff } from 'lucide-react';
+import { CheckCircle2, GitBranch, Radio, WifiOff, Loader2, Cloud, CloudOff, Shield, ShieldCheck, Eye } from 'lucide-react';
 
 export default function StatusBar({
   language = 'JavaScript',
@@ -6,7 +6,8 @@ export default function StatusBar({
   encoding = 'UTF-8',
   connectionStatus = 'connected',
   roomId = 'demo-room',
-  saveStatus = 'idle'
+  saveStatus = 'idle',
+  userRole = 'editor'
 }) {
   const getLanguageLabel = (lang) => {
     switch (lang.toLowerCase()) {
@@ -108,6 +109,15 @@ export default function StatusBar({
         {/* Encoding: hidden on mobile */}
         <div className="status-item status-item-encoding" title="File Encoding">
           <span>{encoding}</span>
+        </div>
+
+        {/* Role badge */}
+        <div
+          className={`status-item status-role-item ${userRole === 'viewer' ? 'status-role-viewer' : userRole === 'owner' ? 'status-role-owner' : ''}`}
+          title={`Your project access: ${userRole.toUpperCase()}`}
+        >
+          {userRole === 'owner' ? <ShieldCheck size={12} /> : userRole === 'viewer' ? <Eye size={12} /> : <Shield size={12} />}
+          <span>{userRole === 'owner' ? 'Owner' : userRole === 'viewer' ? 'Read-Only' : 'Editor'}</span>
         </div>
 
         {/* Language Mode: ALWAYS visible */}

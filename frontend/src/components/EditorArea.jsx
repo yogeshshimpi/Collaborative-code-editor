@@ -7,7 +7,8 @@ export default function EditorArea({
   language,
   onChange,
   onCursorChange,
-  layoutTrigger
+  layoutTrigger,
+  readOnly = false
 }) {
   const editorRef = useRef(null);
 
@@ -92,7 +93,9 @@ export default function EditorArea({
           renderLineHighlight: 'all',
           renderWhitespace: 'selection',
           padding: { top: 10, bottom: 10 },
-          bracketPairColorization: { enabled: true }
+          bracketPairColorization: { enabled: true },
+          readOnly: Boolean(readOnly),
+          domReadOnly: Boolean(readOnly)
         }}
       />
     </div>

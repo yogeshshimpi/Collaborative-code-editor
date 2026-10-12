@@ -8,6 +8,7 @@ export const initSocket = () => {
     reconnection: true,
     reconnectionAttempts: Infinity,
     reconnectionDelay: 1000,
-    transports: ['websocket', 'polling']
+    transports: ['websocket', 'polling'],
+    withCredentials: true
   });
 };
