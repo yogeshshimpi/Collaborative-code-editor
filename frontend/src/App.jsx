@@ -38,6 +38,8 @@ function App() {
   const [cursor, setCursor] = useState({ line: 1, column: 1 });
   // Right panel toggle (Collaborators)
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(false);
+  // Mobile sidebar drawer state (open/close)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   // Toast feedback message
   const [toast, setToast] = useState(null);
 
@@ -121,6 +123,8 @@ function App() {
       setOpenTabs((prev) => [...prev, fileName]);
     }
     setActiveFile(fileName);
+    // Automatically close mobile sidebar drawer after selection
+    setIsSidebarOpen(false);
   };
 
   // Close an open tab
@@ -192,15 +196,18 @@ function App() {
         onShare={handleShare}
         isRightPanelOpen={isRightPanelOpen}
         toggleRightPanel={() => setIsRightPanelOpen(!isRightPanelOpen)}
+        onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
       />
 
       {/* Main Workspace */}
       <div className="workspace">
-        {/* Left Explorer Sidebar */}
+        {/* Left Explorer Sidebar (Drawer on mobile) */}
         <Sidebar
           files={fileList}
           activeFile={activeFile}
           onSelectFile={handleSelectFile}
+          isOpen={isSidebarOpen}
+          onClose={() => setIsSidebarOpen(false)}
         />
 
         {/* Center Code Editor Area */}
@@ -220,6 +227,7 @@ function App() {
               language={currentLanguage}
               onChange={handleEditorChange}
               onCursorChange={setCursor}
+              layoutTrigger={isSidebarOpen || isRightPanelOpen}
             />
           ) : (
             <div className="no-editor-state">

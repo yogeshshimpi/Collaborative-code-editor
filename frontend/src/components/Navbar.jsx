@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Code2, Play, Share2, Users, Hash, Edit2, Check } from 'lucide-react';
+import { Code2, Play, Share2, Users, Hash, Edit2, Check, PanelLeft } from 'lucide-react';
 
 export default function Navbar({
   projectName = 'Untitled Project',
@@ -12,7 +12,8 @@ export default function Navbar({
   onRun,
   onShare,
   isRightPanelOpen,
-  toggleRightPanel
+  toggleRightPanel,
+  onToggleSidebar
 }) {
   const [isEditingRoom, setIsEditingRoom] = useState(false);
   const [roomInput, setRoomInput] = useState(roomId);
@@ -55,6 +56,17 @@ export default function Navbar({
   return (
     <header className="navbar">
       <div className="navbar-left">
+        {/* Mobile/Responsive Sidebar Toggle Button */}
+        <button
+          type="button"
+          className="btn-sidebar-toggle"
+          onClick={onToggleSidebar}
+          title="Toggle Explorer"
+          aria-label="Toggle Explorer"
+        >
+          <PanelLeft size={16} />
+        </button>
+
         <div className="brand" title="CodeCollab Workspace">
           <div className="brand-icon">
             <Code2 size={18} />
@@ -62,7 +74,7 @@ export default function Navbar({
           <span className="brand-name">CodeCollab</span>
         </div>
 
-        <div className="divider-vertical" />
+        <div className="divider-vertical divider-desktop" />
 
         {/* Dynamic Real-time Connection Indicator */}
         <div className={`connection-pill ${connConfig.className}`} title={connConfig.title}>
@@ -70,7 +82,7 @@ export default function Navbar({
           <span className="status-label">{connConfig.label}</span>
         </div>
 
-        <div className="divider-vertical" />
+        <div className="divider-vertical divider-desktop" />
 
         {/* Room Switcher / Display */}
         <div className="room-badge-container">
@@ -86,7 +98,7 @@ export default function Navbar({
                 onBlur={handleRoomSubmit}
                 placeholder="Room name"
               />
-              <button type="submit" className="room-submit-btn" title="Confirm Room">
+              <button type="submit" className="room-submit-btn" title="Confirm Room" aria-label="Confirm Room">
                 <Check size={12} />
               </button>
             </form>
@@ -108,7 +120,7 @@ export default function Navbar({
           )}
         </div>
 
-        <div className="divider-vertical" />
+        <div className="divider-vertical divider-tablet" />
 
         <div className="project-title-container">
           <span className="project-title">{projectName}</span>
@@ -122,11 +134,13 @@ export default function Navbar({
           className={`collaborators-counter-btn ${isRightPanelOpen ? 'active' : ''}`}
           onClick={toggleRightPanel}
           title="Toggle Collaborators Panel"
+          aria-label="Toggle Collaborators Panel"
         >
           <Users size={14} />
           <span className="participant-count-text">
             {participantCount} {participantCount === 1 ? 'collaborator' : 'collaborators'}
           </span>
+          <span className="participant-count-short">{participantCount}</span>
         </button>
 
         {/* Peer Collaborator Avatars Stack */}
@@ -155,31 +169,34 @@ export default function Navbar({
 
         <button
           type="button"
-          className="btn btn-secondary"
+          className="btn btn-secondary btn-action"
           onClick={onShare}
           title="Share Project Room"
+          aria-label="Share Project Room"
         >
           <Share2 size={15} />
-          <span>Share</span>
+          <span className="btn-text">Share</span>
         </button>
 
         <button
           type="button"
-          className="btn btn-primary"
+          className="btn btn-primary btn-action"
           onClick={onRun}
           title="Run Code"
+          aria-label="Run Code"
         >
           <Play size={15} fill="currentColor" />
-          <span>Run</span>
+          <span className="btn-text">Run</span>
         </button>
 
-        <div className="divider-vertical" />
+        <div className="divider-vertical divider-desktop" />
 
         {/* Current User Avatar with custom presence color */}
         <div
           className="user-avatar"
           style={{ backgroundColor: currentUser.color }}
           title={`You: ${currentUser.name}`}
+          aria-label={`You: ${currentUser.name}`}
         >
           <span>{currentUser.initials || currentUser.name.slice(0, 2).toUpperCase()}</span>
         </div>

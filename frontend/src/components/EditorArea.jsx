@@ -1,3 +1,4 @@
+import { useRef, useEffect } from 'react';
 import Editor from '@monaco-editor/react';
 import { Loader2 } from 'lucide-react';
 
@@ -5,9 +6,14 @@ export default function EditorArea({
   content,
   language,
   onChange,
-  onCursorChange
+  onCursorChange,
+  layoutTrigger
 }) {
+  const editorRef = useRef(null);
+
   const handleEditorDidMount = (editor) => {
+    editorRef.current = editor;
+
     // Track cursor movement for status bar updates
     editor.onDidChangeCursorPosition((e) => {
       if (onCursorChange) {
@@ -18,9 +24,37 @@ export default function EditorArea({
       }
     });
 
-    // Focus editor automatically
-    editor.focus();
+    // Ensure immediate layout calculation
+    editor.layout();
   };
+
+  // Recalculate Monaco layout when layoutTrigger (e.g. sidebar open/close) changes
+  useEffect(() => {
+    if (editorRef.current) {
+      // Trigger immediately and after drawer animation completes
+      editorRef.current.layout();
+      const timer = setTimeout(() => {
+        editorRef.current?.layout();
+      }, 260);
+      return () => clearTimeout(timer);
+    }
+  }, [layoutTrigger]);
+
+  // Recalculate on window resize and mobile orientation change
+  useEffect(() => {
+    const handleLayoutRecalc = () => {
+      if (editorRef.current) {
+        editorRef.current.layout();
+      }
+    };
+
+    window.addEventListener('resize', handleLayoutRecalc);
+    window.addEventListener('orientationchange', handleLayoutRecalc);
+    return () => {
+      window.removeEventListener('resize', handleLayoutRecalc);
+      window.removeEventListener('orientationchange', handleLayoutRecalc);
+    };
+  }, []);
 
   return (
     <div className="editor-area-container">
@@ -39,8 +73,8 @@ export default function EditorArea({
           </div>
         }
         options={{
-          fontSize: 14,
-          fontFamily: "'Fira Code', 'Cascadia Code', Consolas, 'Courier New', monospace",
+          fontSize: 13.5,
+          fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace",
           fontLigatures: true,
           minimap: {
             enabled: true,
@@ -57,7 +91,7 @@ export default function EditorArea({
           cursorSmoothCaretAnimation: 'on',
           renderLineHighlight: 'all',
           renderWhitespace: 'selection',
-          padding: { top: 12, bottom: 12 },
+          padding: { top: 10, bottom: 10 },
           bracketPairColorization: { enabled: true }
         }}
       />

@@ -29,13 +29,14 @@ export default function StatusBar({
       return (
         <div className="status-item status-live" title={`Real-time sync active in ${roomId}`}>
           <Radio size={12} className="text-success" />
-          <span>Sync: {roomId}</span>
+          <span className="status-sync-text">Sync: {roomId}</span>
+          <span className="status-sync-short">Synced</span>
         </div>
       );
     }
     if (connectionStatus === 'connecting') {
       return (
-        <div className="status-item" title="Connecting to sync server...">
+        <div className="status-item status-connecting-item" title="Connecting to sync server...">
           <Loader2 size={12} className="spinner text-warning" />
           <span>Syncing...</span>
         </div>
@@ -44,7 +45,7 @@ export default function StatusBar({
     return (
       <div className="status-item text-danger" title="Offline (Changes local only)">
         <WifiOff size={12} />
-        <span>Sync Offline</span>
+        <span>Offline</span>
       </div>
     );
   };
@@ -52,28 +53,34 @@ export default function StatusBar({
   return (
     <footer className="status-bar">
       <div className="status-bar-left">
-        <div className="status-item git-branch" title="Current Branch">
+        {/* Branch: hidden on narrow screens */}
+        <div className="status-item status-item-branch" title="Current Branch">
           <GitBranch size={13} />
           <span>main</span>
         </div>
 
-        <div className="status-item status-clean" title="Code Health Status">
+        {/* Health status: hidden on narrow screens */}
+        <div className="status-item status-item-health" title="Code Health Status">
           <CheckCircle2 size={13} className="text-success" />
           <span>No errors</span>
         </div>
 
+        {/* Sync status: prioritized */}
         {renderSyncStatus()}
       </div>
 
       <div className="status-bar-right">
-        <div className="status-item" title="Cursor Line and Column">
+        {/* Cursor Ln/Col: hidden on very small phones */}
+        <div className="status-item status-item-cursor" title="Cursor Line and Column">
           <span>Ln {cursor.line}, Col {cursor.column}</span>
         </div>
 
-        <div className="status-item" title="File Encoding">
+        {/* Encoding: hidden on mobile */}
+        <div className="status-item status-item-encoding" title="File Encoding">
           <span>{encoding}</span>
         </div>
 
+        {/* Language Mode: ALWAYS visible */}
         <div className="status-item language-badge" title="Active Language Mode">
           <span>{getLanguageLabel(language)}</span>
         </div>

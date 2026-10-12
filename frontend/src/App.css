@@ -4,7 +4,9 @@
   display: flex;
   flex-direction: column;
   height: 100vh;
-  width: 100vw;
+  height: 100dvh;
+  width: 100%;
+  max-width: 100vw;
   background-color: var(--bg-app);
   overflow: hidden;
   position: relative;
@@ -15,6 +17,7 @@
    ========================================================= */
 .navbar {
   height: 48px;
+  min-height: 48px;
   background-color: var(--bg-surface);
   border-bottom: 1px solid var(--border-subtle);
   display: flex;
@@ -23,13 +26,39 @@
   padding: 0 16px;
   z-index: 20;
   user-select: none;
+  width: 100%;
+  max-width: 100vw;
+  box-sizing: border-box;
 }
 
 .navbar-left,
 .navbar-right {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* Mobile Sidebar Toggle Button (Hidden on desktop) */
+.btn-sidebar-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.btn-sidebar-toggle:hover {
+  background-color: var(--bg-surface-hover);
+  color: var(--text-primary);
+  border-color: var(--border-focus);
 }
 
 .brand {
@@ -37,6 +66,7 @@
   align-items: center;
   gap: 8px;
   cursor: pointer;
+  flex-shrink: 0;
 }
 
 .brand-icon {
@@ -49,6 +79,7 @@
   align-items: center;
   justify-content: center;
   box-shadow: 0 2px 8px rgba(99, 102, 241, 0.35);
+  flex-shrink: 0;
 }
 
 .brand-name {
@@ -56,13 +87,15 @@
   font-weight: 700;
   color: var(--text-primary);
   letter-spacing: -0.02em;
+  white-space: nowrap;
 }
 
 .divider-vertical {
   width: 1px;
   height: 18px;
   background-color: var(--border-subtle);
-  margin: 0 4px;
+  margin: 0 2px;
+  flex-shrink: 0;
 }
 
 /* Connection Status Pill */
@@ -75,6 +108,8 @@
   font-size: 11px;
   font-weight: 500;
   transition: all 0.2s ease;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .connection-pill.status-connected {
@@ -113,6 +148,7 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
+  flex-shrink: 0;
 }
 
 @keyframes pulse-dot {
@@ -124,6 +160,7 @@
 .room-badge-container {
   display: flex;
   align-items: center;
+  min-width: 0;
 }
 
 .room-badge {
@@ -138,6 +175,7 @@
   font-size: 12px;
   color: var(--text-secondary);
   transition: all 0.15s ease;
+  min-width: 0;
 }
 
 .room-badge:hover {
@@ -148,12 +186,13 @@
 
 .room-icon {
   color: var(--accent-primary);
+  flex-shrink: 0;
 }
 
 .room-name {
   font-family: var(--font-mono);
   font-weight: 500;
-  max-width: 120px;
+  max-width: 110px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -162,6 +201,7 @@
 .room-edit-icon {
   color: var(--text-muted);
   opacity: 0.7;
+  flex-shrink: 0;
 }
 
 .room-edit-form {
@@ -181,7 +221,7 @@
   color: var(--text-primary);
   font-family: var(--font-mono);
   font-size: 12px;
-  width: 100px;
+  width: 90px;
 }
 
 .room-submit-btn {
@@ -194,45 +234,10 @@
   padding: 2px;
 }
 
-/* Collaborator Counter Button in Navbar */
-.collaborators-counter-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 10px;
-  background-color: var(--bg-sidebar);
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.collaborators-counter-btn:hover {
-  background-color: var(--bg-surface-hover);
-  color: var(--text-primary);
-  border-color: var(--border-focus);
-}
-
-.collaborators-counter-btn.active {
-  background-color: var(--accent-subtle);
-  border-color: var(--accent-primary);
-  color: var(--accent-primary);
-}
-
-.text-danger {
-  color: var(--color-error);
-}
-
-.text-warning {
-  color: var(--color-warning);
-}
-
 .project-title-container {
   display: flex;
   align-items: center;
+  min-width: 0;
 }
 
 .project-title {
@@ -243,6 +248,10 @@
   border-radius: 5px;
   border: 1px solid transparent;
   transition: all 0.15s ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
 }
 
 .project-title:hover {
@@ -263,6 +272,8 @@
   border: 1px solid transparent;
   cursor: pointer;
   transition: all 0.15s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .btn-secondary {
@@ -292,61 +303,51 @@
   transform: translateY(1px);
 }
 
-.btn-icon {
-  width: 30px;
-  height: 30px;
-  border-radius: 6px;
-  border: 1px solid var(--border-subtle);
-  background-color: transparent;
-  color: var(--text-secondary);
+/* Collaborator Counter Button in Navbar */
+.collaborators-counter-btn {
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 6px;
+  padding: 5px 10px;
+  background-color: var(--bg-sidebar);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
   cursor: pointer;
   transition: all 0.15s ease;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
-.btn-icon:hover {
+.collaborators-counter-btn:hover {
   background-color: var(--bg-surface-hover);
   color: var(--text-primary);
+  border-color: var(--border-focus);
 }
 
-.btn-icon.active {
+.collaborators-counter-btn.active {
   background-color: var(--accent-subtle);
   border-color: var(--accent-primary);
   color: var(--accent-primary);
 }
 
-.user-avatar {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  border: 1.5px solid var(--border-focus);
-  color: #ffffff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  font-weight: 700;
-  cursor: pointer;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
-  transition: transform 0.15s ease;
-}
-
-.user-avatar:hover {
-  transform: scale(1.05);
+.participant-count-short {
+  display: none;
 }
 
 /* Peer Collaborator Avatars Stack in Navbar */
 .peer-avatars-stack {
   display: flex;
   align-items: center;
-  margin-right: 4px;
+  margin-right: 2px;
+  flex-shrink: 0;
 }
 
 .peer-avatar {
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   border: 2px solid var(--bg-surface);
   color: #ffffff;
@@ -355,11 +356,12 @@
   justify-content: center;
   font-size: 10px;
   font-weight: 700;
-  margin-left: -8px;
+  margin-left: -7px;
   cursor: pointer;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
   transition: transform 0.15s ease, z-index 0.15s ease;
   user-select: none;
+  flex-shrink: 0;
 }
 
 .peer-avatar:first-child {
@@ -379,6 +381,27 @@
   font-weight: 600;
 }
 
+.user-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border-focus);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+}
+
+.user-avatar:hover {
+  transform: scale(1.05);
+}
+
 .you-badge {
   font-size: 10px;
   font-weight: 600;
@@ -388,6 +411,13 @@
   border-radius: 4px;
 }
 
+.text-danger {
+  color: var(--color-error);
+}
+
+.text-warning {
+  color: var(--color-warning);
+}
 
 /* =========================================================
    WORKSPACE & EXPLORER SIDEBAR
@@ -397,6 +427,9 @@
   display: flex;
   overflow: hidden;
   position: relative;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
 }
 
 .sidebar {
@@ -408,6 +441,8 @@
   flex-direction: column;
   user-select: none;
   z-index: 10;
+  flex-shrink: 0;
+  height: 100%;
 }
 
 .sidebar-header {
@@ -417,6 +452,7 @@
   justify-content: space-between;
   padding: 0 12px;
   border-bottom: 1px solid rgba(32, 38, 55, 0.4);
+  flex-shrink: 0;
 }
 
 .sidebar-title {
@@ -449,6 +485,10 @@
 .action-icon-btn:hover {
   background-color: var(--bg-surface-hover);
   color: var(--text-primary);
+}
+
+.mobile-close-btn {
+  display: none;
 }
 
 .explorer-tree {
@@ -500,7 +540,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 12px 6px 28px;
+  padding: 7px 12px 7px 28px;
   cursor: pointer;
   font-size: 13px;
   color: var(--text-secondary);
@@ -555,6 +595,11 @@
   color: #38bdf8;
 }
 
+/* Mobile Sidebar Backdrop */
+.sidebar-backdrop {
+  display: none;
+}
+
 /* =========================================================
    MAIN EDITOR WORKSPACE & TABS
    ========================================================= */
@@ -565,22 +610,36 @@
   background-color: var(--bg-editor);
   overflow: hidden;
   position: relative;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
 }
 
 .tab-bar {
   height: 36px;
+  min-height: 36px;
   background-color: var(--bg-surface);
   border-bottom: 1px solid var(--border-subtle);
   display: flex;
   align-items: center;
   overflow-x: auto;
+  overflow-y: hidden;
   user-select: none;
+  width: 100%;
+  min-width: 0;
+  scrollbar-width: none; /* Firefox */
+  -webkit-overflow-scrolling: touch;
+}
+
+.tab-bar::-webkit-scrollbar {
+  display: none; /* Chrome/Safari */
 }
 
 .tab-list {
   display: flex;
   align-items: center;
   height: 100%;
+  min-width: 0;
 }
 
 .tab-item {
@@ -595,6 +654,8 @@
   border-right: 1px solid var(--border-subtle);
   position: relative;
   transition: all 0.12s ease;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .tab-item:hover {
@@ -652,7 +713,10 @@
   flex: 1;
   height: 100%;
   width: 100%;
+  min-width: 0;
+  min-height: 0;
   position: relative;
+  overflow: hidden;
 }
 
 .editor-loader {
@@ -682,6 +746,7 @@
   align-items: center;
   justify-content: center;
   background-color: var(--bg-editor);
+  padding: 20px;
 }
 
 .no-editor-content {
@@ -705,20 +770,25 @@
    ========================================================= */
 .collaborators-panel {
   width: 240px;
-  min-width: 220px;
+  min-width: 200px;
   background-color: var(--bg-surface);
   border-left: 1px solid var(--border-subtle);
   display: flex;
   flex-direction: column;
   z-index: 10;
+  flex-shrink: 0;
+  height: 100%;
 }
 
 .panel-header {
   height: 36px;
+  min-height: 36px;
   display: flex;
   align-items: center;
+  justify-content: space-between;
   padding: 0 14px;
   border-bottom: 1px solid rgba(32, 38, 55, 0.4);
+  flex-shrink: 0;
 }
 
 .panel-title {
@@ -784,14 +854,11 @@
   background-color: var(--color-success);
 }
 
-.presence-dot.idle {
-  background-color: var(--color-warning);
-}
-
 .collaborator-info {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  min-width: 0;
 }
 
 .collaborator-name {
@@ -808,6 +875,7 @@
 
 .role-icon {
   color: var(--accent-primary);
+  flex-shrink: 0;
 }
 
 .collaborator-meta {
@@ -827,6 +895,7 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 .room-info {
@@ -874,6 +943,7 @@
    ========================================================= */
 .status-bar {
   height: 26px;
+  min-height: 26px;
   background-color: var(--bg-statusbar);
   border-top: 1px solid var(--border-subtle);
   display: flex;
@@ -884,13 +954,17 @@
   color: var(--text-muted);
   user-select: none;
   z-index: 20;
+  width: 100%;
+  max-width: 100vw;
+  box-sizing: border-box;
 }
 
 .status-bar-left,
 .status-bar-right {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
+  min-width: 0;
 }
 
 .status-item {
@@ -899,6 +973,7 @@
   gap: 5px;
   cursor: pointer;
   transition: color 0.12s ease;
+  white-space: nowrap;
 }
 
 .status-item:hover {
@@ -918,23 +993,28 @@
   font-weight: 600;
 }
 
+.status-sync-short {
+  display: none;
+}
+
 /* =========================================================
    TOAST NOTIFICATION
    ========================================================= */
 .toast-container {
   position: absolute;
-  bottom: 38px;
-  right: 20px;
+  bottom: 34px;
+  right: 16px;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
+  gap: 10px;
+  padding: 8px 12px;
   border-radius: 8px;
   background-color: var(--bg-surface);
   border: 1px solid var(--border-focus);
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
   z-index: 100;
   animation: slide-up 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  max-width: calc(100vw - 32px);
 }
 
 @keyframes slide-up {
@@ -952,12 +1032,16 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
 }
 
 .toast-message {
-  font-size: 12.5px;
+  font-size: 12px;
   color: var(--text-primary);
   font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .toast-close {
@@ -971,34 +1055,293 @@
   padding: 2px;
   border-radius: 4px;
   transition: color 0.12s ease;
+  flex-shrink: 0;
 }
 
 .toast-close:hover {
   color: var(--text-primary);
 }
 
-/* Responsive adjustments */
-@media (max-width: 768px) {
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideInRight {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+/* =========================================================
+   RESPONSIVE DESIGN BREAKPOINTS
+   ========================================================= */
+
+/* ---------------------------------------------------------
+   1. TABLET BREAKPOINT (768px to 1023px)
+   --------------------------------------------------------- */
+@media (max-width: 1023px) {
   .sidebar {
-    width: 200px;
+    width: 195px;
+    min-width: 180px;
   }
 
-  .connection-pill {
+  .collaborators-panel {
+    width: 210px;
+    min-width: 190px;
+  }
+
+  .divider-desktop {
     display: none;
   }
 
   .project-title {
-    max-width: 140px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    max-width: 100px;
+    font-size: 12px;
   }
 
-  .collaborators-panel {
-    position: absolute;
+  .navbar {
+    padding: 0 12px;
+  }
+
+  .navbar-left,
+  .navbar-right {
+    gap: 6px;
+  }
+
+  .btn {
+    padding: 5px 10px;
+  }
+}
+
+/* ---------------------------------------------------------
+   2. MOBILE BREAKPOINT (Below 768px)
+   --------------------------------------------------------- */
+@media (max-width: 767px) {
+  /* Show mobile sidebar toggle button in header */
+  .btn-sidebar-toggle {
+    display: flex;
+  }
+
+  .mobile-close-btn {
+    display: flex;
+  }
+
+  /* Make sidebar a slide-over mobile drawer */
+  .sidebar {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 250px;
+    max-width: 80vw;
+    z-index: 60;
+    background-color: var(--bg-sidebar);
+    border-right: 1px solid var(--border-focus);
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.65);
+    transform: translateX(-100%);
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.25s;
+    visibility: hidden;
+  }
+
+  .sidebar.mobile-open {
+    transform: translateX(0);
+    visibility: visible;
+  }
+
+  /* Mobile Backdrop Overlay */
+  .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    top: 0;
+    left: 0;
     right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(2px);
+    z-index: 55;
+    animation: fadeIn 0.2s ease;
+  }
+
+  /* Navbar on Mobile */
+  .navbar {
+    padding: 0 10px;
+  }
+
+  .navbar-left,
+  .navbar-right {
+    gap: 6px;
+  }
+
+  .divider-desktop,
+  .divider-tablet {
+    display: none;
+  }
+
+  /* Compact button styling - icons with accessible title/aria-label */
+  .btn-action {
+    padding: 6px;
+    min-width: 30px;
+    height: 30px;
+    justify-content: center;
+  }
+
+  .btn-action .btn-text {
+    display: none;
+  }
+
+  /* Shorten collaborator count */
+  .participant-count-text {
+    display: none;
+  }
+
+  .participant-count-short {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .collaborators-counter-btn {
+    padding: 5px 8px;
+    gap: 4px;
+  }
+
+  .project-title {
+    max-width: 90px;
+    font-size: 12px;
+  }
+
+  /* Collaborators panel becomes an overlay drawer */
+  .collaborators-panel {
+    position: fixed;
     top: 48px;
     bottom: 26px;
-    box-shadow: -8px 0 20px rgba(0, 0, 0, 0.5);
+    right: 0;
+    width: 250px;
+    max-width: 82vw;
+    z-index: 50;
+    box-shadow: -4px 0 24px rgba(0, 0, 0, 0.65);
+    border-left: 1px solid var(--border-focus);
+    animation: slideInRight 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  /* Status Bar on Mobile */
+  .status-bar-left,
+  .status-bar-right {
+    gap: 8px;
+  }
+
+  .status-item-branch,
+  .status-item-encoding {
+    display: none;
+  }
+
+  .status-sync-text {
+    display: none;
+  }
+
+  .status-sync-short {
+    display: inline;
+  }
+}
+
+/* ---------------------------------------------------------
+   3. MODERN PHONES BREAKPOINT (Below 480px)
+   --------------------------------------------------------- */
+@media (max-width: 480px) {
+  .navbar {
+    padding: 0 8px;
+  }
+
+  .navbar-left,
+  .navbar-right {
+    gap: 5px;
+  }
+
+  /* Hide project title on narrow phones to preserve action visibility */
+  .project-title-container {
+    display: none;
+  }
+
+  /* Hide peer avatars stack to save space (user can tap collaborator pill) */
+  .peer-avatars-stack {
+    display: none;
+  }
+
+  /* Compact connection pill: keep glowing dot, hide text */
+  .connection-pill {
+    padding: 4px;
+  }
+
+  .connection-pill .status-label {
+    display: none;
+  }
+
+  /* Compact room badge */
+  .room-badge {
+    padding: 3px 6px;
+    font-size: 11px;
+  }
+
+  .room-name {
+    max-width: 72px;
+  }
+
+  .room-input {
+    width: 65px;
+    font-size: 11px;
+  }
+
+  /* Status bar simplification */
+  .status-item-health {
+    display: none;
+  }
+
+  .status-item-cursor {
+    display: none;
+  }
+}
+
+/* ---------------------------------------------------------
+   4. SMALL PHONES BREAKPOINT (Below 375px)
+   --------------------------------------------------------- */
+@media (max-width: 375px) {
+  .navbar {
+    padding: 0 6px;
+  }
+
+  .navbar-left,
+  .navbar-right {
+    gap: 4px;
+  }
+
+  /* Hide brand name, keep recognizable CodeCollab brand icon */
+  .brand-name {
+    display: none;
+  }
+
+  .btn-sidebar-toggle {
+    width: 28px;
+    height: 28px;
+  }
+
+  .btn-action {
+    padding: 5px;
+    min-width: 28px;
+    height: 28px;
+  }
+
+  .collaborators-counter-btn {
+    padding: 4px 6px;
+  }
+
+  .user-avatar {
+    width: 24px;
+    height: 24px;
+    font-size: 10px;
+  }
+
+  .room-name {
+    max-width: 58px;
   }
 }
