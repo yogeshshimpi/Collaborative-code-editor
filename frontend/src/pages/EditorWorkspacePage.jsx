@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Eye, FolderCode, ArrowLeft } from 'lucide-react';
+import { Eye, FolderCode, ArrowLeft, Code2, Columns, Play } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import Sidebar from '../components/Sidebar';
 import TabBar from '../components/TabBar';
@@ -9,6 +9,8 @@ import StatusBar from '../components/StatusBar';
 import CollaboratorsPanel from '../components/CollaboratorsPanel';
 import CollaboratorsModal from '../components/CollaboratorsModal';
 import VersionHistoryModal from '../components/VersionHistoryModal';
+import LivePreview from '../components/LivePreview';
+import WorkspaceSplitDivider from '../components/WorkspaceSplitDivider';
 import Toast from '../components/Toast';
 import { useAuth } from '../context/useAuth';
 import { api } from '../services/api';
@@ -139,6 +141,41 @@ export default function EditorWorkspacePage() {
   const [isCollaboratorsOpen, setIsCollaboratorsOpen] = useState(false);
   // Version History Modal
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  // Live Preview Sandbox & Split Pane Workspace state
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [splitRatio, setSplitRatio] = useState(50); // percentage: 15% to 85%, default 50%
+  const [maximizedPane, setMaximizedPane] = useState('none'); // 'none' | 'editor' | 'preview'
+  const [isDraggingSplit, setIsDraggingSplit] = useState(false);
+  const [mobileWorkspaceView, setMobileWorkspaceView] = useState('split'); // 'editor' | 'split' | 'preview'
+  const [runTrigger, setRunTrigger] = useState(0);
+  const [isMobileWorkspace, setIsMobileWorkspace] = useState(
+    () => typeof window !== 'undefined' && window.innerWidth < 1024
+  );
+  const workspaceRowRef = useRef(null);
+
+  // Responsive workspace layout detection
+  useEffect(() => {
+    const handleResize = () => {
+      if (typeof window !== 'undefined') {
+        setIsMobileWorkspace(window.innerWidth < 1024);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const handleToggleMaximizePreview = useCallback(() => {
+    setMaximizedPane((prev) => (prev === 'preview' ? 'none' : 'preview'));
+  }, []);
+
+  const handleMaximizeEditor = useCallback(() => {
+    setMaximizedPane((prev) => (prev === 'editor' ? 'none' : 'editor'));
+  }, []);
+
+  const handleResetSplit = useCallback(() => {
+    setSplitRatio(50);
+    setMaximizedPane('none');
+  }, []);
   // Mobile sidebar drawer state (open/close)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   // Updated only from server acknowledgements
@@ -529,12 +566,28 @@ export default function EditorWorkspacePage() {
 
   // Action handlers
   const handleRun = () => {
-    if (isViewer) {
-      showToast(`Running "${activeFile}" in View-Only Sandbox Mode`, 'info');
-      return;
+    setIsPreviewOpen(true);
+    if (maximizedPane === 'editor') {
+      setMaximizedPane('none');
     }
-    console.log(`[CodeCollab] Running file "${activeFile}" in room "${roomId}" as ${currentUser.name}`);
-    showToast(`Execution started for "${activeFile}" (Sandbox Mode)`, 'success');
+    setRunTrigger((prev) => prev + 1);
+    if (isViewer) {
+      showToast('Running project in isolated Live Preview (Viewer mode)', 'info');
+    } else {
+      showToast('Running project in Live Preview split panel', 'success');
+    }
+  };
+
+  // Toggle Live Preview split panel from TabBar
+  const handleTogglePreview = () => {
+    setIsPreviewOpen((prev) => {
+      const next = !prev;
+      if (next && maximizedPane === 'editor') {
+        setMaximizedPane('none');
+      }
+      return next;
+    });
+    setRunTrigger((prev) => prev + 1);
   };
 
   const handleLogout = async () => {
@@ -643,6 +696,7 @@ export default function EditorWorkspacePage() {
         activeUsers={activeUsers}
         userRole={effectiveRole}
         onRun={handleRun}
+        isPreviewOpen={isPreviewOpen}
         onShare={() => setIsCollaboratorsOpen(true)}
         onOpenCollaborators={() => setIsCollaboratorsOpen(true)}
         onOpenHistory={() => setIsHistoryOpen(true)}
@@ -694,29 +748,161 @@ export default function EditorWorkspacePage() {
               onSelectTab={handleSelectFile}
               onCloseTab={handleCloseTab}
               onOpenHistory={() => setIsHistoryOpen(true)}
+              onTogglePreview={handleTogglePreview}
+              isPreviewOpen={isPreviewOpen}
             />
           )}
 
-          {activeFile && currentFileObj ? (
-            <EditorArea
-              content={currentFileObj.content}
-              language={currentLanguage}
-              onChange={handleEditorChange}
-              onCursorChange={setCursor}
-              onCursorActivity={handleCursorActivity}
-              layoutTrigger={isSidebarOpen || isRightPanelOpen}
-              readOnly={isViewer}
-              activeFile={activeFile}
-              remoteCursors={remoteCursors}
-            />
-          ) : (
-            <div className="no-editor-state">
-              <div className="no-editor-content">
-                <p>No open file</p>
-                <span>Select a file from the Explorer on the left to start editing</span>
-              </div>
+          {/* Mobile/Tablet Workspace View Switcher (when Preview is open on small screens) */}
+          {isPreviewOpen && isMobileWorkspace && (
+            <div className="mobile-workspace-switcher" role="tablist" aria-label="Workspace View Mode">
+              <button
+                type="button"
+                className={`mobile-view-btn ${mobileWorkspaceView === 'editor' ? 'active' : ''}`}
+                onClick={() => {
+                  setMobileWorkspaceView('editor');
+                  setMaximizedPane('editor');
+                }}
+              >
+                <Code2 size={13} />
+                <span>Code</span>
+              </button>
+              <button
+                type="button"
+                className={`mobile-view-btn ${mobileWorkspaceView === 'split' ? 'active' : ''}`}
+                onClick={() => {
+                  setMobileWorkspaceView('split');
+                  setMaximizedPane('none');
+                }}
+              >
+                <Columns size={13} />
+                <span>Split</span>
+              </button>
+              <button
+                type="button"
+                className={`mobile-view-btn ${mobileWorkspaceView === 'preview' ? 'active' : ''}`}
+                onClick={() => {
+                  setMobileWorkspaceView('preview');
+                  setMaximizedPane('preview');
+                }}
+              >
+                <Play size={13} fill="currentColor" />
+                <span>Preview</span>
+              </button>
             </div>
           )}
+
+          <div
+            ref={workspaceRowRef}
+            className={`workspace-editor-row ${isDraggingSplit ? 'is-dragging' : ''} ${
+              isPreviewOpen ? 'has-preview-open' : ''
+            } ${maximizedPane !== 'none' ? `maximized-${maximizedPane}` : ''} ${
+              isMobileWorkspace && mobileWorkspaceView === 'split' ? 'mobile-split-vertical' : ''
+            }`}
+          >
+            {/* Left Monaco Code Editor Pane */}
+            <div
+              className={`editor-pane ${
+                isPreviewOpen && maximizedPane === 'preview' ? 'pane-collapsed pane-hidden' : ''
+              }`}
+              style={{
+                width: isPreviewOpen
+                  ? isMobileWorkspace && mobileWorkspaceView === 'split'
+                    ? '100%'
+                    : maximizedPane === 'editor'
+                    ? '100%'
+                    : maximizedPane === 'preview'
+                    ? '0%'
+                    : `${splitRatio}%`
+                  : '100%',
+                height:
+                  isPreviewOpen && isMobileWorkspace && mobileWorkspaceView === 'split'
+                    ? `${splitRatio}%`
+                    : '100%',
+                flex: isPreviewOpen ? 'none' : '1'
+              }}
+            >
+              {activeFile && currentFileObj ? (
+                <EditorArea
+                  content={currentFileObj.content}
+                  language={currentLanguage}
+                  onChange={handleEditorChange}
+                  onCursorChange={setCursor}
+                  onCursorActivity={handleCursorActivity}
+                  layoutTrigger={
+                    isSidebarOpen ||
+                    isRightPanelOpen ||
+                    isPreviewOpen ||
+                    maximizedPane !== 'none' ||
+                    splitRatio ||
+                    isDraggingSplit ||
+                    mobileWorkspaceView
+                  }
+                  readOnly={isViewer}
+                  activeFile={activeFile}
+                  remoteCursors={remoteCursors}
+                />
+              ) : (
+                <div className="no-editor-state">
+                  <div className="no-editor-content">
+                    <p>No open file</p>
+                    <span>Select a file from the Explorer on the left to start editing</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Draggable Divider with Arrow Controls */}
+            {isPreviewOpen && (
+              <WorkspaceSplitDivider
+                containerRef={workspaceRowRef}
+                splitRatio={splitRatio}
+                onSplitChange={setSplitRatio}
+                maximizedPane={maximizedPane}
+                onMaximizeEditor={handleMaximizeEditor}
+                onMaximizePreview={handleToggleMaximizePreview}
+                onResetSplit={handleResetSplit}
+                isVertical={Boolean(isMobileWorkspace && mobileWorkspaceView === 'split')}
+                onDragStart={() => setIsDraggingSplit(true)}
+                onDragEnd={() => setIsDraggingSplit(false)}
+              />
+            )}
+
+            {/* Right Live Preview Sandbox Pane */}
+            {isPreviewOpen && (
+              <LivePreview
+                isOpen={isPreviewOpen}
+                onClose={() => {
+                  setIsPreviewOpen(false);
+                  setMaximizedPane('none');
+                }}
+                files={filesState}
+                activeFile={activeFile}
+                projectName={projectName}
+                roomId={activeRoomId}
+                userRole={effectiveRole}
+                isMaximized={maximizedPane === 'preview'}
+                onToggleMaximize={handleToggleMaximizePreview}
+                runTrigger={runTrigger}
+                style={{
+                  width:
+                    isMobileWorkspace && mobileWorkspaceView === 'split'
+                      ? '100%'
+                      : maximizedPane === 'preview'
+                      ? '100%'
+                      : maximizedPane === 'editor'
+                      ? '0%'
+                      : `${100 - splitRatio}%`,
+                  height:
+                    isMobileWorkspace && mobileWorkspaceView === 'split'
+                      ? `${100 - splitRatio}%`
+                      : '100%',
+                  display: maximizedPane === 'editor' ? 'none' : 'flex',
+                  flex: 'none'
+                }}
+              />
+            )}
+          </div>
         </main>
 
         {/* Right Collaborators Panel */}

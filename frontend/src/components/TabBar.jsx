@@ -1,12 +1,14 @@
 import { useRef, useEffect } from 'react';
-import { X, FileCode, FileText, Palette, History } from 'lucide-react';
+import { X, FileCode, FileText, Palette, History, Play } from 'lucide-react';
 
 export default function TabBar({
   openTabs = [],
   activeTab,
   onSelectTab,
   onCloseTab,
-  onOpenHistory
+  onOpenHistory,
+  onTogglePreview,
+  isPreviewOpen = false
 }) {
   const scrollContainerRef = useRef(null);
   const activeTabRef = useRef(null);
@@ -83,9 +85,22 @@ export default function TabBar({
         </div>
       </div>
 
-      {/* Zone 2: Fixed History button pinned on right */}
-      {onOpenHistory && (
-        <div className="tab-bar-actions">
+      {/* Zone 2: Fixed action buttons pinned on right */}
+      <div className="tab-bar-actions">
+        {onTogglePreview && (
+          <button
+            type="button"
+            className={`tab-action-btn ${isPreviewOpen ? 'active' : ''}`}
+            onClick={onTogglePreview}
+            title={isPreviewOpen ? 'Hide Live Preview' : 'Open Live Preview'}
+            aria-label={isPreviewOpen ? 'Hide Live Preview' : 'Open Live Preview'}
+          >
+            <Play size={13} fill={isPreviewOpen ? 'currentColor' : 'none'} />
+            <span className="tab-action-text">Preview</span>
+          </button>
+        )}
+
+        {onOpenHistory && (
           <button
             type="button"
             className="tab-action-btn"
@@ -97,8 +112,8 @@ export default function TabBar({
             <History size={13} />
             <span className="tab-action-text">History</span>
           </button>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

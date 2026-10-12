@@ -8,6 +8,7 @@ import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
 import ProjectsDashboardPage from './pages/ProjectsDashboardPage';
 import EditorWorkspacePage from './pages/EditorWorkspacePage';
+import StandalonePreviewPage from './pages/StandalonePreviewPage';
 import './App.css';
 
 // Root index redirect: Authenticated -> /projects, Unauthenticated -> /login
@@ -70,6 +71,10 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+
+          {/* Standalone Live Preview in Separate Browser Tab */}
+          <Route path="/preview/:roomId" element={<StandalonePreviewPage />} />
+          <Route path="/projects/:roomId/preview" element={<StandalonePreviewPage />} />
 
           {/* Fallback Catch-All */}
           <Route path="*" element={<Navigate to="/" replace />} />

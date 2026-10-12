@@ -10,7 +10,10 @@ export default function StatusBar({
   userRole = 'editor'
 }) {
   const getLanguageLabel = (lang) => {
+    if (!lang) return 'Plain Text';
     switch (lang.toLowerCase()) {
+      case 'live preview':
+        return 'Live Preview';
       case 'javascript':
         return 'JavaScript';
       case 'html':
@@ -101,10 +104,12 @@ export default function StatusBar({
       </div>
 
       <div className="status-bar-right">
-        {/* Cursor Ln/Col: hidden on very small phones */}
-        <div className="status-item status-item-cursor" title="Cursor Line and Column">
-          <span>Ln {cursor.line}, Col {cursor.column}</span>
-        </div>
+        {/* Cursor Ln/Col: hidden when preview tab active or on very small phones */}
+        {cursor && (
+          <div className="status-item status-item-cursor" title="Cursor Line and Column">
+            <span>Ln {cursor.line}, Col {cursor.column}</span>
+          </div>
+        )}
 
         {/* Encoding: hidden on mobile */}
         <div className="status-item status-item-encoding" title="File Encoding">

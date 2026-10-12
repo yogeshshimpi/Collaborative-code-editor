@@ -15,7 +15,6 @@ import {
   ChevronDown,
   Eye,
   ShieldCheck,
-  ShieldAlert,
   History
 } from 'lucide-react';
 
@@ -30,6 +29,7 @@ export default function Navbar({
   activeUsers = [],
   userRole = 'editor',
   onRun,
+  isPreviewOpen = false,
   onShare,
   onOpenCollaborators,
   onOpenHistory,
@@ -337,13 +337,13 @@ export default function Navbar({
 
         <button
           type="button"
-          className="btn btn-primary btn-action"
+          className={`btn btn-primary btn-action ${isPreviewOpen ? 'active-run' : ''}`}
           onClick={onRun}
-          title="Run Code"
+          title={isPreviewOpen ? "Re-run Live Preview" : "Run Code (Live Preview)"}
           aria-label="Run Code"
         >
           <Play size={15} fill="currentColor" />
-          <span className="btn-text">Run</span>
+          <span className="btn-text">{isPreviewOpen ? 'Re-Run' : 'Run'}</span>
         </button>
 
         <div className="divider-vertical divider-desktop" />
