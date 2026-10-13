@@ -1,0 +1,397 @@
+/* --------------------------------------------------------------------------
+   4.8. CODECOLLAB CODING SHORTCUT TOOLBAR (ALL SCREEN SIZES)
+   -------------------------------------------------------------------------- */
+.coding-shortcut-toolbar,
+.mobile-coding-toolbar {
+  height: 42px;
+  min-height: 42px;
+  background-color: var(--bg-sidebar);
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  z-index: 15;
+  user-select: none;
+  flex-shrink: 0;
+  box-shadow: 0 -3px 12px rgba(0, 0, 0, 0.3);
+  position: relative;
+}
+
+/* 1. Main Action / Control Section */
+.shortcut-toolbar-controls,
+.shortcut-toolbar-main-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 8px;
+  flex-shrink: 0;
+  z-index: 2;
+  background-color: var(--bg-sidebar);
+}
+
+.shortcut-action-btn {
+  height: 28px;
+  min-width: 30px;
+  padding: 0 9px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle);
+  border-radius: 5px;
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.14s ease;
+  white-space: nowrap;
+}
+
+.shortcut-action-btn:hover {
+  background: rgba(99, 102, 241, 0.12);
+  border-color: rgba(99, 102, 241, 0.35);
+  color: #e0e7ff;
+}
+
+.shortcut-action-btn:active {
+  background: rgba(99, 102, 241, 0.28);
+  border-color: var(--accent-primary);
+  color: #ffffff;
+  transform: scale(0.97);
+}
+
+.shortcut-action-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.shortcut-action-btn .action-icon {
+  flex-shrink: 0;
+}
+
+.shortcut-action-btn.btn-run {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.22), rgba(129, 140, 248, 0.12));
+  border-color: rgba(99, 102, 241, 0.45);
+  color: #c7d2fe;
+  font-weight: 600;
+}
+
+.shortcut-action-btn.btn-run:hover {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.35), rgba(129, 140, 248, 0.22));
+  border-color: #818cf8;
+  color: #ffffff;
+  box-shadow: 0 0 10px rgba(99, 102, 241, 0.35);
+}
+
+.shortcut-action-btn.btn-console:hover {
+  background: rgba(99, 102, 241, 0.15);
+  border-color: rgba(99, 102, 241, 0.4);
+  color: #ffffff;
+}
+
+/* Dividers */
+.shortcut-toolbar-divider {
+  width: 1px;
+  height: 18px;
+  background: var(--border-subtle);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+.shortcut-toolbar-divider.subtle {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* 2. Special Programming Shortcut Symbols Section with Horizontal Scrollbar */
+.shortcut-toolbar-symbols-scroll,
+.mobile-toolbar-scroll-container {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(129, 140, 248, 0.45) rgba(15, 23, 42, 0.45);
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+  padding: 2px 8px 5px 8px;
+  height: 100%;
+  flex: 1;
+  min-width: 0;
+}
+
+/* Chrome, Edge, Safari, WebKit Horizontal Scrollbar */
+.shortcut-toolbar-symbols-scroll::-webkit-scrollbar,
+.mobile-toolbar-scroll-container::-webkit-scrollbar {
+  height: 4px;
+  display: block;
+}
+
+.shortcut-toolbar-symbols-scroll::-webkit-scrollbar-track,
+.mobile-toolbar-scroll-container::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.45);
+  border-radius: 4px;
+  margin: 0 4px;
+}
+
+.shortcut-toolbar-symbols-scroll::-webkit-scrollbar-thumb,
+.mobile-toolbar-scroll-container::-webkit-scrollbar-thumb {
+  background: rgba(129, 140, 248, 0.45);
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.shortcut-toolbar-symbols-scroll::-webkit-scrollbar-thumb:hover,
+.mobile-toolbar-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(129, 140, 248, 0.85);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.shortcut-group,
+.shortcut-symbol-group,
+.mobile-toolbar-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: rgba(255, 255, 255, 0.02);
+  padding: 2px 4px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  flex-shrink: 0;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.shortcut-group:hover {
+  border-color: rgba(99, 102, 241, 0.25);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.shortcut-btn,
+.mobile-toolbar-btn {
+  height: 28px;
+  min-width: 30px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle);
+  border-radius: 5px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.shortcut-btn:hover,
+.mobile-toolbar-btn:hover {
+  background: rgba(99, 102, 241, 0.12);
+  color: #f1f5f9;
+  border-color: rgba(99, 102, 241, 0.35);
+}
+
+.shortcut-btn:active,
+.mobile-toolbar-btn:active {
+  background: rgba(109, 93, 252, 0.28);
+  border-color: var(--accent-primary);
+  color: #ffffff;
+  transform: scale(0.96);
+}
+
+.shortcut-btn.btn-tab,
+.mobile-toolbar-btn.btn-tab {
+  gap: 4px;
+  font-size: 11px;
+  font-family: var(--font-sans);
+  background: rgba(99, 102, 241, 0.08);
+  border-color: rgba(99, 102, 241, 0.25);
+  color: #a5b4fc;
+}
+
+.shortcut-btn.btn-tab:hover,
+.mobile-toolbar-btn.btn-tab:hover {
+  background: rgba(99, 102, 241, 0.18);
+  color: #ffffff;
+}
+
+.shortcut-btn.btn-tab .tab-glyph {
+  font-size: 13px;
+}
+
+.shortcut-btn.btn-icon-arrow,
+.mobile-toolbar-btn.btn-icon {
+  min-width: 28px;
+  width: 28px;
+  padding: 0;
+}
+
+.shortcut-btn.btn-symbol,
+.mobile-toolbar-btn.btn-symbol {
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+.shortcut-btn.btn-pair,
+.mobile-toolbar-btn.btn-pair {
+  color: #a5b4fc;
+  background: rgba(129, 140, 248, 0.08);
+  border-color: rgba(129, 140, 248, 0.22);
+}
+
+.shortcut-btn.btn-pair:hover,
+.mobile-toolbar-btn.btn-pair:hover {
+  background: rgba(129, 140, 248, 0.18);
+  border-color: rgba(129, 140, 248, 0.4);
+  color: #ffffff;
+}
+
+/* 3. Hide Toolbar Section */
+.shortcut-toolbar-dock-controls,
+.mobile-toolbar-dock-controls {
+  padding: 0 8px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  border-left: 1px solid var(--border-subtle);
+  background: var(--bg-sidebar);
+  flex-shrink: 0;
+  z-index: 2;
+}
+
+.shortcut-action-btn.btn-hide-toolbar,
+.mobile-toolbar-btn.btn-hide-toolbar {
+  gap: 5px;
+  height: 28px;
+  padding: 0 9px;
+  font-size: 11.5px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 5px;
+}
+
+.shortcut-action-btn.btn-hide-toolbar:hover,
+.mobile-toolbar-btn.btn-hide-toolbar:hover {
+  background: rgba(99, 102, 241, 0.12);
+  border-color: rgba(99, 102, 241, 0.35);
+  color: #e0e7ff;
+}
+
+.shortcut-action-btn.btn-hide-toolbar:active,
+.mobile-toolbar-btn.btn-hide-toolbar:active {
+  background: rgba(99, 102, 241, 0.28);
+  border-color: var(--accent-primary);
+  color: #ffffff;
+  transform: scale(0.97);
+}
+
+/* Floating Restore Pill when Toolbar is Hidden */
+.coding-toolbar-restore-wrap,
+.mobile-toolbar-restore-wrap {
+  position: absolute;
+  bottom: 8px;
+  right: 14px;
+  z-index: 25;
+  pointer-events: auto;
+  animation: fadeIn 0.18s ease-out;
+}
+
+.coding-toolbar-restore-pill,
+.mobile-toolbar-restore-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  background: rgba(15, 23, 42, 0.88);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--border-strong);
+  border-radius: 14px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+}
+
+.coding-toolbar-restore-pill:hover,
+.mobile-toolbar-restore-pill:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--accent-primary);
+}
+
+.coding-toolbar-restore-pill:active,
+.mobile-toolbar-restore-pill:active {
+  transform: scale(0.96);
+}
+
+.coding-toolbar-restore-pill .restore-icon,
+.mobile-toolbar-restore-pill .restore-icon {
+  color: var(--accent-primary);
+}
+
+/* Responsive Abbreviation on Mobile (< 640px) */
+@media (max-width: 640px) {
+  .shortcut-action-btn.btn-hide-toolbar .action-label {
+    display: none;
+  }
+  .shortcut-action-btn.btn-hide-toolbar {
+    min-width: 26px;
+    padding: 0 5px;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   4. KEYBOARD-AWARE TOOLBAR POSITIONING (TOUCHSCREEN & MOBILE/TABLET)
+   Positions the toolbar immediately above the software keyboard using the
+   Visual Viewport API and safe-area insets.
+   -------------------------------------------------------------------------- */
+@media (pointer: coarse), (max-width: 1024px) {
+  .coding-shortcut-toolbar.is-keyboard-docked,
+  .mobile-coding-toolbar.is-keyboard-docked {
+    position: fixed !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    bottom: calc(var(--keyboard-offset, 0px) + env(safe-area-inset-bottom, 0px)) !important;
+    z-index: 95 !important;
+    background-color: var(--bg-sidebar) !important;
+    border-top: 1px solid var(--border-strong) !important;
+    box-shadow: 0 -4px 18px rgba(0, 0, 0, 0.55) !important;
+    transition: bottom 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+    padding-bottom: 0 !important;
+  }
+
+  .coding-toolbar-restore-wrap.is-keyboard-docked,
+  .mobile-toolbar-restore-wrap.is-keyboard-docked {
+    position: fixed !important;
+    bottom: calc(var(--keyboard-offset, 0px) + 8px + env(safe-area-inset-bottom, 0px)) !important;
+    z-index: 95 !important;
+    transition: bottom 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+}
+
+/* Touch target comfort on coarse pointer devices */
+@media (pointer: coarse) {
+  .shortcut-btn,
+  .mobile-toolbar-btn {
+    min-width: 32px;
+    height: 30px;
+    font-size: 13.5px;
+  }
+  .shortcut-action-btn {
+    height: 30px;
+  }
+}
+
+

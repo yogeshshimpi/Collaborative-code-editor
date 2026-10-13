@@ -1,0 +1,98 @@
+/* --------------------------------------------------------------------------
+   6. BOTTOM STATUS BAR
+   -------------------------------------------------------------------------- */
+.status-bar {
+  height: calc(26px + var(--safe-bottom));
+  min-height: calc(26px + var(--safe-bottom));
+  background-color: var(--bg-statusbar);
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 max(10px, var(--safe-right)) max(2px, var(--safe-bottom)) max(10px, var(--safe-left));
+  font-size: 11px;
+  color: var(--text-muted);
+  user-select: none;
+  z-index: 20;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.status-bar-left,
+.status-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.status-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  line-height: 1;
+}
+
+.status-live {
+  color: var(--success);
+}
+
+.status-sync-short {
+  display: none;
+}
+
+.status-connecting-item {
+  color: var(--warning);
+}
+
+.status-save-success {
+  color: var(--success);
+}
+
+.status-role-item {
+  color: var(--text-secondary);
+}
+
+.status-role-viewer {
+  color: var(--warning);
+  font-weight: 600;
+}
+
+.status-role-owner {
+  color: var(--accent-hover);
+  font-weight: 600;
+}
+
+.language-badge {
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.text-success { color: var(--success) !important; }
+.text-warning { color: var(--warning) !important; }
+.text-danger  { color: var(--danger) !important; }
+.text-accent  { color: var(--accent-primary) !important; }
+
+
+
+/* Responsive media queries for StatusBar */
+@media (max-width: 1023px) {
+  .status-item-branch,
+  .status-item-health {
+    display: none;
+  }
+}
+
+@media (max-width: 767px) {
+  .status-sync-text {
+    display: none;
+  }
+  .status-sync-short {
+    display: inline;
+  }
+  .status-item-cursor,
+  .status-item-encoding {
+    display: none;
+  }
+}
+

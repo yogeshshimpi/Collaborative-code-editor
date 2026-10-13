@@ -1,0 +1,209 @@
+/* --------------------------------------------------------------------------
+   TOUCH SELECTION OVERLAY & ACTION BAR (MOBILE & TABLET TOUCHSCREENS)
+   -------------------------------------------------------------------------- */
+.touch-selection-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 60;
+  overflow: visible;
+}
+
+/* 1. Draggable Teardrop Selection Handles */
+.touch-selection-handle {
+  position: absolute;
+  pointer-events: none;
+  z-index: 75;
+}
+
+.touch-selection-handle .handle-caret-line {
+  width: 2px;
+  height: 100%;
+  background: #818cf8;
+  position: absolute;
+  left: 0;
+  top: 0;
+  box-shadow: 0 0 6px rgba(129, 140, 248, 0.65);
+  pointer-events: none;
+}
+
+/* Circular Teardrop Pin */
+.touch-selection-handle .handle-teardrop-pin {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #6366f1;
+  border: 2.5px solid #ffffff;
+  position: absolute;
+  left: -7px;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.5), 0 0 6px rgba(99, 102, 241, 0.45);
+  pointer-events: none;
+  transition: transform 0.1s ease;
+}
+
+.touch-selection-handle .handle-teardrop-pin.teardrop-top {
+  top: -16px;
+}
+
+.touch-selection-handle .handle-teardrop-pin.teardrop-bottom {
+  bottom: -16px;
+}
+
+.touch-selection-handle.is-dragging .handle-teardrop-pin {
+  transform: scale(1.22);
+  background: #4f46e5;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.65), 0 0 10px rgba(99, 102, 241, 0.8);
+}
+
+/* Minimum 44px accessible touch hit area */
+.touch-selection-handle .handle-touch-target {
+  position: absolute;
+  width: 44px;
+  height: 44px;
+  pointer-events: auto !important;
+  touch-action: none !important;
+  cursor: grab;
+  background: transparent;
+  -webkit-tap-highlight-color: transparent;
+  z-index: 80;
+}
+
+.touch-handle-start .handle-touch-target {
+  top: -24px;
+  left: -21px;
+}
+
+.touch-handle-end .handle-touch-target {
+  bottom: -24px;
+  left: -21px;
+}
+
+/* 2. Floating Touch Selection Action Bar */
+.touch-selection-action-bar {
+  position: absolute;
+  pointer-events: auto !important;
+  z-index: 98;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  transform: translateX(-50%);
+  animation: touchBarFadeIn 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+  max-width: 96vw;
+}
+
+.touch-selection-action-bar.is-docked-above-keyboard {
+  position: fixed !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+}
+
+/* Action Bar Buttons Capsule */
+.touch-action-buttons-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: rgba(15, 23, 42, 0.94);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(129, 140, 248, 0.35);
+  border-radius: 24px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55), 0 0 14px rgba(99, 102, 241, 0.25);
+  padding: 2px 4px;
+  overflow: hidden;
+}
+
+/* Action button with minimum 44px touch target */
+.touch-action-btn {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  color: #f1f5f9;
+  background: transparent;
+  border: none;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  white-space: nowrap;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.touch-action-btn:hover {
+  background: rgba(99, 102, 241, 0.16);
+  color: #ffffff;
+}
+
+.touch-action-btn:active {
+  background: rgba(99, 102, 241, 0.3);
+  color: #ffffff;
+  transform: scale(0.95);
+}
+
+.touch-action-btn:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.touch-action-btn.btn-cancel {
+  color: var(--text-muted);
+}
+
+.touch-action-btn.btn-cancel:hover {
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.14);
+}
+
+/* Feedback Notice Toast */
+.touch-selection-toast {
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(129, 140, 248, 0.35);
+  border-radius: 12px;
+  padding: 4px 12px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: #c7d2fe;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+  white-space: nowrap;
+  animation: toastFadeIn 0.15s ease-out;
+}
+
+@keyframes touchBarFadeIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) scale(1);
+  }
+}
+
+@keyframes toastFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Pure Desktop Isolation: Hide completely on mouse-driven desktop displays */
+@media (pointer: fine) and (min-width: 1025px) {
+  .touch-selection-overlay {
+    display: none !important;
+  }
+}

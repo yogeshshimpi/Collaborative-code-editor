@@ -1,0 +1,152 @@
+/* ProjectsModal.css */
+.projects-modal {
+  max-width: 620px;
+  width: 100%;
+}
+
+.projects-list-container {
+  max-height: 380px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-right: 4px;
+}
+
+.projects-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.project-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  transition: all 0.15s ease;
+}
+
+.project-item:hover {
+  background: var(--bg-surface-hover);
+  border-color: var(--border-strong);
+}
+
+.project-item.active {
+  border-color: var(--accent-primary);
+  background: var(--accent-subtle);
+}
+
+.project-item-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.project-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.project-name-text {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.current-badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--accent-primary);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.project-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.project-meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.project-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.project-edit-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.delete-confirm-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.new-project-card {
+  padding: 14px;
+  background: var(--bg-surface);
+  border: 1px dashed var(--border-strong);
+  border-radius: 8px;
+  margin-top: 12px;
+}
+
+.new-project-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.new-project-input-row {
+  display: flex;
+  gap: 8px;
+}
+
+.projects-empty-state {
+  text-align: center;
+  padding: 32px 16px;
+  color: var(--text-muted);
+}
+
+.empty-icon {
+  margin: 0 auto 12px;
+  opacity: 0.6;
+}
+
+.empty-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.empty-subtitle {
+  font-size: 12px;
+}
+
+.modal-footer-hint {
+  font-size: 11.5px;
+  color: var(--text-muted);
+}

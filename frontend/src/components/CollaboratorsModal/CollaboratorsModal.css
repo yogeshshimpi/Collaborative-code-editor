@@ -1,0 +1,490 @@
+/* Collaborators Modal Specifics */
+.collaborators-modal,
+.incoming-invites-modal {
+  width: 100%;
+  max-width: 560px;
+  max-height: 84vh;
+}
+
+.collaborators-share-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 20px;
+  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.share-bar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+}
+
+.share-bar-text {
+  font-weight: 500;
+}
+
+/* Owner Approval Mode Setting Card */
+.approval-mode-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px 20px;
+  background: rgba(245, 158, 11, 0.04);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.approval-mode-left {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  flex: 1;
+}
+
+.approval-mode-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-muted);
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.approval-mode-icon-wrap.active {
+  background: rgba(245, 158, 11, 0.16);
+  color: #f59e0b;
+}
+
+.approval-mode-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.approval-mode-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.approval-mode-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.approval-mode-desc {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  line-height: 1.35;
+}
+
+.status-badge-sm {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.badge-amber {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.badge-subtle {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-muted);
+  border: 1px solid var(--border-subtle);
+}
+
+.approval-toggle-btn {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--border-subtle);
+  cursor: pointer;
+  padding: 2px;
+  flex-shrink: 0;
+  transition: all 0.25s ease;
+  display: flex;
+  align-items: center;
+}
+
+.approval-toggle-btn.active {
+  background: #f59e0b;
+  border-color: #f59e0b;
+}
+
+.approval-toggle-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.toggle-switch-slider {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.approval-toggle-btn.active .toggle-switch-slider {
+  transform: translateX(20px);
+}
+
+.approval-role-indicator {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  font-style: italic;
+  white-space: nowrap;
+}
+
+.invite-form-card {
+  padding: 14px 20px;
+  background: rgba(109, 93, 252, 0.04);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.invite-form-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 10px;
+}
+
+.invite-icon {
+  color: var(--accent-primary);
+}
+
+.invite-inputs-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.role-select-wrap {
+  flex: 1;
+  min-width: 130px;
+}
+
+.modal-select {
+  cursor: pointer;
+  appearance: auto;
+  background-color: var(--bg-elevated);
+}
+
+.btn-invite-submit {
+  height: 36px;
+  padding: 0 14px;
+}
+
+.invite-hint {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 6px;
+}
+
+.collaborators-body {
+  padding: 16px 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  flex: 1;
+}
+
+.collaborators-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 32px 0;
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.count-badge {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 9999px;
+}
+
+.members-list,
+.invitations-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.member-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 7px;
+  gap: 10px;
+}
+
+.owner-row {
+  border-color: rgba(109, 93, 252, 0.25);
+  background: rgba(109, 93, 252, 0.04);
+}
+
+.member-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: #ffffff;
+  flex-shrink: 0;
+}
+
+.member-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.member-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.member-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.member-email {
+  font-size: 11px;
+  color: var(--text-muted);
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.member-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.role-change-select {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: 11.5px;
+  padding: 3px 6px;
+  border-radius: 5px;
+  cursor: pointer;
+  outline: none;
+}
+
+.role-change-select:focus {
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+}
+
+.invitation-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 12px;
+  background: var(--bg-elevated);
+  border: 1px dashed var(--border-subtle);
+  border-radius: 7px;
+  gap: 10px;
+}
+
+.invitation-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.invitation-email-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.invitation-icon {
+  color: var(--text-muted);
+}
+
+.invitation-email {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.invitation-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.btn-revoke-invite {
+  background: transparent;
+  border: 1px solid rgba(240, 96, 112, 0.3);
+  color: var(--danger);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.btn-revoke-invite:hover {
+  background: rgba(240, 96, 112, 0.15);
+  border-color: var(--danger);
+  color: #ffffff;
+}
+
+
+
+/* Responsive media queries for CollaboratorsModal */
+@media (max-width: 767px) {
+  /* Tablet Invite Form: clean two-row wrapping */
+  .invite-inputs-row {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .invite-inputs-row .flex-2 {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+  .invite-inputs-row .role-select-wrap {
+    flex: 1 1 calc(60% - 4px);
+    min-width: 140px;
+  }
+  .invite-inputs-row .btn-invite-submit {
+    flex: 1 1 calc(40% - 4px);
+    min-width: 110px;
+    height: var(--control-height-tablet, 36px);
+  }
+}
+
+@media (max-width: 639px) {
+  /* Collaborators & Invites Modals on Mobile */
+  .collaborators-modal,
+  .incoming-invites-modal {
+    width: 96vw;
+    max-width: 96vw;
+    max-height: 90dvh;
+  }
+  .invite-inputs-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .invite-inputs-row .flex-2,
+  .invite-inputs-row .role-select-wrap,
+  .btn-invite-submit {
+    width: 100%;
+  }
+  .btn-invite-submit {
+    min-height: 44px;
+    font-size: 14px;
+    border-radius: 8px;
+  }
+  .role-select {
+    height: 44px;
+    min-height: 44px;
+    font-size: 14px;
+    border-radius: 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  .collaborators-modal,
+  .incoming-invites-modal {
+    width: 100%;
+    max-width: 100vw;
+    height: 100%;
+    max-height: 100dvh;
+    border-radius: 0;
+  }
+  .member-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .member-controls {
+    width: 100%;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+  .auth-submit-btn,
+  .modal-submit-btn,
+  .btn-invite-submit {
+    height: 46px;
+    min-height: 46px;
+    font-size: 14.5px;
+    border-radius: 8px;
+  }
+  .role-select {
+    height: 44px;
+    min-height: 44px;
+    font-size: 14px;
+    border-radius: 8px;
+  }
+  .btn-revoke-invite {
+    min-height: 42px;
+    padding: 8px 14px;
+    font-size: 13px;
+    border-radius: 7px;
+  }
+}
+

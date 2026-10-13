@@ -169,6 +169,42 @@ export const api = {
     return request(`/api/projects/${encodeURIComponent(projectId)}/activity${queryString}`, {
       method: 'GET'
     });
+  },
+
+  // Owner Approval Mode
+  async toggleProjectApprovalMode(projectId, requiresApproval) {
+    return request(`/api/projects/${encodeURIComponent(projectId)}/approval-mode`, {
+      method: 'PUT',
+      body: JSON.stringify({ requiresApproval })
+    });
+  },
+
+  // Change Requests (Role-based permissions & Owner approval workflow)
+  async getChangeRequests(projectId, status = 'all') {
+    const query = status && status !== 'all' ? `?status=${encodeURIComponent(status)}` : '';
+    return request(`/api/projects/${encodeURIComponent(projectId)}/change-requests${query}`, {
+      method: 'GET'
+    });
+  },
+
+  async getChangeRequest(projectId, requestId) {
+    return request(`/api/projects/${encodeURIComponent(projectId)}/change-requests/${encodeURIComponent(requestId)}`, {
+      method: 'GET'
+    });
+  },
+
+  async createChangeRequest(projectId, data) {
+    return request(`/api/projects/${encodeURIComponent(projectId)}/change-requests`, {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  },
+
+  async reviewChangeRequest(projectId, requestId, { status, rejectionReason }) {
+    return request(`/api/projects/${encodeURIComponent(projectId)}/change-requests/${encodeURIComponent(requestId)}/review`, {
+      method: 'POST',
+      body: JSON.stringify({ status, rejectionReason })
+    });
   }
 };
 

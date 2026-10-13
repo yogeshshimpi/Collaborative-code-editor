@@ -1,0 +1,282 @@
+/* --------------------------------------------------------------------------
+   5.0.0. WORKSPACE SPLIT DIVIDER & ARROW CONTROLS
+   -------------------------------------------------------------------------- */
+.workspace-split-divider {
+  position: relative;
+  z-index: 25;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  background: transparent;
+  outline: none;
+  transition: background-color 0.15s ease;
+}
+
+.workspace-split-divider:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: -1px;
+}
+
+/* Horizontal split mode (vertical divider bar) */
+.workspace-split-divider.orientation-horizontal {
+  width: 10px;
+  min-width: 10px;
+  height: 100%;
+  cursor: col-resize;
+}
+
+/* Vertical split mode (horizontal divider bar on mobile/tablet) */
+.workspace-split-divider.orientation-vertical {
+  height: 12px;
+  min-height: 12px;
+  width: 100%;
+  cursor: row-resize;
+}
+
+/* Expanded invisible hit area for easy grabbing */
+.split-divider-hitbox {
+  position: absolute;
+  z-index: 1;
+}
+
+.workspace-split-divider.orientation-horizontal .split-divider-hitbox {
+  inset: 0 -6px;
+  cursor: col-resize;
+}
+
+.workspace-split-divider.orientation-vertical .split-divider-hitbox {
+  inset: -6px 0;
+  cursor: row-resize;
+}
+
+/* Visual divider line */
+.split-divider-line {
+  background-color: var(--border-subtle);
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
+  pointer-events: none;
+}
+
+.workspace-split-divider.orientation-horizontal .split-divider-line {
+  width: 1px;
+  height: 100%;
+}
+
+.workspace-split-divider.orientation-vertical .split-divider-line {
+  height: 1px;
+  width: 100%;
+}
+
+.workspace-split-divider:hover .split-divider-line,
+.workspace-split-divider.is-dragging .split-divider-line {
+  background-color: var(--accent-primary);
+  box-shadow: 0 0 8px rgba(109, 93, 252, 0.6);
+}
+
+/* Centered Arrow-Icon Controls Handle Pill */
+.split-controls-handle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 4px;
+  background-color: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: 9999px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.workspace-split-divider.orientation-vertical .split-controls-handle {
+  flex-direction: row;
+}
+
+.workspace-split-divider:hover .split-controls-handle,
+.workspace-split-divider.is-dragging .split-controls-handle {
+  border-color: var(--accent-primary);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.6), 0 0 12px rgba(109, 93, 252, 0.35);
+  transform: translate(-50%, -50%) scale(1.05);
+}
+
+.split-handle-btn {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.12s ease;
+  padding: 0;
+}
+
+.split-handle-btn:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.split-handle-btn:active {
+  transform: scale(0.92);
+  color: var(--accent-primary);
+}
+
+.split-handle-btn.btn-reset-split {
+  color: var(--text-muted);
+}
+
+.split-handle-btn.btn-reset-split:hover {
+  color: var(--accent-hover);
+}
+
+/* Docked Restore Rails (when a pane is collapsed/maximized) */
+.split-docked-rail {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 30;
+  width: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(9, 13, 22, 0.92);
+  backdrop-filter: blur(6px);
+  animation: fadeIn 0.15s ease-out;
+}
+
+.split-docked-rail.docked-right {
+  right: 0;
+  border-left: 1px solid var(--border-subtle);
+}
+
+.split-docked-rail.docked-left {
+  left: 0;
+  border-right: 1px solid var(--border-subtle);
+}
+
+.split-docked-rail.docked-bottom {
+  top: auto;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  height: 32px;
+  border-top: 1px solid var(--border-subtle);
+  border-left: none;
+}
+
+.split-docked-rail.docked-top {
+  top: 0;
+  bottom: auto;
+  left: 0;
+  right: 0;
+  width: 100%;
+  height: 32px;
+  border-bottom: 1px solid var(--border-subtle);
+  border-right: none;
+}
+
+.btn-docked-restore {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background-color: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.split-docked-rail.docked-right .btn-docked-restore,
+.split-docked-rail.docked-left .btn-docked-restore {
+  writing-mode: vertical-rl;
+  padding: 10px 4px;
+}
+
+.btn-docked-restore:hover {
+  background-color: var(--bg-hover);
+  color: var(--accent-hover);
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 12px rgba(109, 93, 252, 0.35);
+}
+
+.docked-icon {
+  flex-shrink: 0;
+}
+
+/* Mobile & Tablet Workspace View Switcher Bar */
+.mobile-workspace-switcher {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background-color: var(--bg-sidebar);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+  z-index: 12;
+}
+
+.mobile-view-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.mobile-view-btn:hover {
+  color: var(--text-primary);
+  background-color: var(--bg-hover);
+}
+
+.mobile-view-btn.active {
+  background-color: var(--bg-elevated);
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+
+
+
+/* Responsive media queries for WorkspaceSplitDivider */
+@media (max-width: 767px) {
+  .workspace-split-divider.orientation-vertical {
+    height: 14px;
+    min-height: 14px;
+  }
+  .split-controls-handle {
+    padding: 2px 5px;
+  }
+  .split-handle-btn {
+    width: 26px;
+    height: 26px;
+  }
+}
+
+@media (pointer: coarse) {
+  .split-handle-btn {
+    min-width: 32px;
+    min-height: 32px;
+  }
+}
+

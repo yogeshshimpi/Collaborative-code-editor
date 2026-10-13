@@ -17,7 +17,12 @@ export function useSocket({
   onFileError,
   onProjectInfo,
   onProjectRenamed,
-  onActivityLogEntry
+  onActivityLogEntry,
+  onApprovalModeUpdated,
+  onChangeRequestCreated,
+  onChangeRequestApproved,
+  onChangeRequestRejected,
+  onApprovalRequired
 }) {
   const [connectionStatus, setConnectionStatus] = useState('connecting'); // 'connecting' | 'connected' | 'disconnected'
   const [participantCount, setParticipantCount] = useState(1);
@@ -41,6 +46,11 @@ export function useSocket({
   const onProjectInfoRef = useRef(onProjectInfo);
   const onProjectRenamedRef = useRef(onProjectRenamed);
   const onActivityLogEntryRef = useRef(onActivityLogEntry);
+  const onApprovalModeUpdatedRef = useRef(onApprovalModeUpdated);
+  const onChangeRequestCreatedRef = useRef(onChangeRequestCreated);
+  const onChangeRequestApprovedRef = useRef(onChangeRequestApproved);
+  const onChangeRequestRejectedRef = useRef(onChangeRequestRejected);
+  const onApprovalRequiredRef = useRef(onApprovalRequired);
   const userRef = useRef(user);
 
   useEffect(() => {
@@ -98,6 +108,26 @@ export function useSocket({
   useEffect(() => {
     onActivityLogEntryRef.current = onActivityLogEntry;
   }, [onActivityLogEntry]);
+
+  useEffect(() => {
+    onApprovalModeUpdatedRef.current = onApprovalModeUpdated;
+  }, [onApprovalModeUpdated]);
+
+  useEffect(() => {
+    onChangeRequestCreatedRef.current = onChangeRequestCreated;
+  }, [onChangeRequestCreated]);
+
+  useEffect(() => {
+    onChangeRequestApprovedRef.current = onChangeRequestApproved;
+  }, [onChangeRequestApproved]);
+
+  useEffect(() => {
+    onChangeRequestRejectedRef.current = onChangeRequestRejected;
+  }, [onChangeRequestRejected]);
+
+  useEffect(() => {
+    onApprovalRequiredRef.current = onApprovalRequired;
+  }, [onApprovalRequired]);
 
   useEffect(() => {
     userRef.current = user;
@@ -284,6 +314,41 @@ export function useSocket({
       }
     });
 
+    // Approval mode updated by project owner
+    socket.on('approval-mode-updated', (data) => {
+      if (data && onApprovalModeUpdatedRef.current) {
+        onApprovalModeUpdatedRef.current(data);
+      }
+    });
+
+    // Change request created
+    socket.on('change-request-created', (data) => {
+      if (data && onChangeRequestCreatedRef.current) {
+        onChangeRequestCreatedRef.current(data);
+      }
+    });
+
+    // Change request approved by owner
+    socket.on('change-request-approved', (data) => {
+      if (data && onChangeRequestApprovedRef.current) {
+        onChangeRequestApprovedRef.current(data);
+      }
+    });
+
+    // Change request rejected by owner
+    socket.on('change-request-rejected', (data) => {
+      if (data && onChangeRequestRejectedRef.current) {
+        onChangeRequestRejectedRef.current(data);
+      }
+    });
+
+    // Direct edit/file operation requires approval
+    socket.on('approval-required', (data) => {
+      if (data && onApprovalRequiredRef.current) {
+        onApprovalRequiredRef.current(data);
+      }
+    });
+
     // Clean up on room change or unmount
     return () => {
       socket.off('connect');
@@ -307,6 +372,11 @@ export function useSocket({
       socket.off('cursor-change');
       socket.off('cursor-clear');
       socket.off('activity-log-entry');
+      socket.off('approval-mode-updated');
+      socket.off('change-request-created');
+      socket.off('change-request-approved');
+      socket.off('change-request-rejected');
+      socket.off('approval-required');
       socket.disconnect();
       socketRef.current = null;
       setRemoteCursors({});

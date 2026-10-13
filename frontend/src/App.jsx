@@ -1,15 +1,14 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { useAuth } from './context/useAuth';
-import ProtectedRoute from './components/ProtectedRoute';
-import PublicOnlyRoute from './components/PublicOnlyRoute';
-import LoadingScreen from './components/LoadingScreen';
-import LoginPage from './pages/LoginPage';
-import SignupPage from './pages/SignupPage';
-import ProjectsDashboardPage from './pages/ProjectsDashboardPage';
-import EditorWorkspacePage from './pages/EditorWorkspacePage';
-import StandalonePreviewPage from './pages/StandalonePreviewPage';
-import './App.css';
+import ProtectedRoute from './components/ProtectedRoute/ProtectedRoute';
+import PublicOnlyRoute from './components/PublicOnlyRoute/PublicOnlyRoute';
+import LoadingScreen from './components/LoadingScreen/LoadingScreen';
+import LoginPage from './pages/LoginPage/LoginPage';
+import SignupPage from './pages/SignupPage/SignupPage';
+import ProjectsDashboardPage from './pages/ProjectsDashboardPage/ProjectsDashboardPage';
+import EditorWorkspacePage from './pages/EditorWorkspacePage/EditorWorkspacePage';
+import StandalonePreviewPage from './pages/StandalonePreviewPage/StandalonePreviewPage';
 
 // Root index redirect: Authenticated -> /projects, Unauthenticated -> /login
 function IndexRedirect() {

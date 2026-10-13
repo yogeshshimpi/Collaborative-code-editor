@@ -1,0 +1,6 @@
+/* MobileCodingToolbar.css */
+@import '../CodingShortcutToolbar/CodingShortcutToolbar.css';
+
+.mobile-coding-toolbar {
+  width: 100%;
+}

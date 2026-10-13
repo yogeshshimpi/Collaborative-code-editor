@@ -1,0 +1,105 @@
+/* Incoming Invitations Modal Specifics */
+.incoming-invites-body {
+  padding: 16px 20px;
+  overflow-y: auto;
+  max-height: 440px;
+}
+
+.incoming-invites-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.incoming-invite-card {
+  padding: 12px 14px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: border-color 0.15s ease;
+}
+
+.incoming-invite-card:hover {
+  border-color: var(--border-strong);
+}
+
+.invite-project-title-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.invite-project-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.text-primary-accent {
+  color: var(--accent-primary);
+}
+
+.invite-details-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+
+.invite-from-badge,
+.invite-date-badge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-muted);
+}
+
+.invite-from-badge strong {
+  color: var(--text-primary);
+}
+
+.invite-card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+
+
+/* Responsive media queries for IncomingInvitationsModal */
+@media (max-width: 639px) {
+  /* Collaborators & Invites Modals on Mobile */
+  .collaborators-modal,
+  .incoming-invites-modal {
+    width: 96vw;
+    max-width: 96vw;
+    max-height: 90dvh;
+  }
+}
+
+@media (max-width: 480px) {
+  .collaborators-modal,
+  .incoming-invites-modal {
+    width: 100%;
+    max-width: 100vw;
+    height: 100%;
+    max-height: 100dvh;
+    border-radius: 0;
+  }
+  .invitation-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+}
+
