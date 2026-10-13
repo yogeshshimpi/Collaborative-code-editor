@@ -21,8 +21,6 @@ import {
 } from 'lucide-react';
 import { buildPreviewDocument } from '../utils/previewCompiler';
 
-export { buildPreviewDocument };
-
 export default function LivePreview({
   isOpen,
   onClose,
@@ -133,6 +131,7 @@ export default function LivePreview({
         copied = true;
       }
     } catch (_err) {
+      void _err;
       // Browser blocked async clipboard; proceed to textarea fallback
     }
 

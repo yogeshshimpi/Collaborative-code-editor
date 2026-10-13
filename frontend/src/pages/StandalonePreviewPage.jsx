@@ -22,18 +22,37 @@ import { buildPreviewDocument } from '../utils/previewCompiler';
 import { INITIAL_FILES, getLanguageFromFile } from '../data/initialFiles';
 import { api } from '../services/api';
 
-// The backend stores a workspace as { "index.html": "<html>..." }, while
-// Monaco and the preview compiler use { "index.html": { content: "..." } }.
-// Keep that conversion at this API boundary so a standalone production tab
-// renders the same files as the editor.
+// The backend returns workspace files as a dictionary of strings:
+// { "index.html": "<!DOCTYPE html>...", "styles.css": "...", "main.js": "..." }
+// Monaco editor and buildPreviewDocument() expect file objects:
+// { "index.html": { name: "index.html", language: "html", content: "..." } }
 function normalizeWorkspaceFiles(workspaceFiles) {
+  if (!workspaceFiles || typeof workspaceFiles !== 'object') {
+    return {};
+  }
   return Object.fromEntries(
-    Object.entries(workspaceFiles || {}).map(([name, file]) => [
-      name,
-      typeof file === 'string'
-        ? { name, language: getLanguageFromFile(name), content: file }
-        : { name, language: getLanguageFromFile(name), ...file }
-    ])
+    Object.entries(workspaceFiles).map(([name, file]) => {
+      const language = getLanguageFromFile(name);
+      if (typeof file === 'string') {
+        return [
+          name,
+          {
+            name,
+            language,
+            content: file
+          }
+        ];
+      }
+      return [
+        name,
+        {
+          name,
+          language: file?.language || language,
+          content: typeof file?.content === 'string' ? file.content : '',
+          ...file
+        }
+      ];
+    })
   );
 }
 
@@ -45,19 +64,20 @@ export default function StandalonePreviewPage() {
   const rawRoomId = (urlRoomId && decodeURIComponent(urlRoomId).trim()) || 'demo-room';
   const entryQuery = searchParams.get('entry');
 
+  // Keep localStorage only as a fast temporary cache while fresh files load from backend
   const [files, setFiles] = useState(() => {
     try {
       const cached = localStorage.getItem(`codecollab_preview_${rawRoomId}`);
       if (cached) {
         const parsed = JSON.parse(cached);
         if (parsed.files && typeof parsed.files === 'object') {
-          return parsed.files;
+          return normalizeWorkspaceFiles(parsed.files);
         }
       }
     } catch (e) {
       console.warn('Failed reading preview localStorage cache:', e);
     }
-    return rawRoomId === 'demo-room' ? INITIAL_FILES : {};
+    return {};
   });
 
   const [projectName, setProjectName] = useState(() => {
@@ -77,10 +97,11 @@ export default function StandalonePreviewPage() {
   const [isConsoleOpen, setIsConsoleOpen] = useState(false);
   const [consoleFilter, setConsoleFilter] = useState('all'); // 'all' | 'log' | 'warn' | 'error'
   const [renderNonce, setRenderNonce] = useState(0);
+  const [retryNonce, setRetryNonce] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
   const [isTopBarCollapsed, setIsTopBarCollapsed] = useState(false);
-  const [isLoading, setIsLoading] = useState(() => Object.keys(files).length === 0 && rawRoomId !== 'demo-room');
+  const [isLoading, setIsLoading] = useState(() => Object.keys(files).length === 0);
   const [loadError, setLoadError] = useState('');
 
   const iframeRef = useRef(null);
@@ -106,59 +127,101 @@ export default function StandalonePreviewPage() {
     }
   }, [files, entryQuery, htmlFiles, selectedHtmlFile]);
 
-  // Browser storage makes opening a preview feel instant, but it is only a
-  // cache. Fetch the saved workspace as well so a copied/deployed preview URL
-  // still works after a refresh or on another device.
+  // Fetch both project metadata and saved workspace files from backend on initial mount
   useEffect(() => {
-    if (rawRoomId === 'demo-room') {
-      setFiles(INITIAL_FILES);
-      setIsLoading(false);
-      return;
-    }
-
     let isMounted = true;
-    setIsLoading(true);
+    if (Object.keys(files).length === 0) {
+      setIsLoading(true);
+    }
     setLoadError('');
 
-    Promise.all([
+    Promise.allSettled([
       api.getProject(rawRoomId),
       api.getProjectWorkspace(rawRoomId)
     ])
-      .then(([projectResponse, workspaceResponse]) => {
+      .then(([projectResult, workspaceResult]) => {
         if (!isMounted) return;
 
-        if (!projectResponse?.project) {
-          throw new Error('Project not found.');
-        }
-        if (!workspaceResponse?.files || typeof workspaceResponse.files !== 'object') {
-          throw new Error('The saved project files could not be loaded.');
+        // If workspace files request failed, report the error UI
+        if (workspaceResult.status === 'rejected') {
+          // In local development demo-room mode, fall back to initial starter files if offline
+          if (rawRoomId === 'demo-room' && import.meta.env.DEV) {
+            setFiles(INITIAL_FILES);
+            setProjectName('Demo Room');
+            setIsLoading(false);
+            return;
+          }
+          const errMsg =
+            workspaceResult.reason?.message
+            || workspaceResult.reason?.data?.error
+            || 'Failed to load project workspace files from server.';
+          setLoadError(errMsg);
+          setIsLoading(false);
+          return;
         }
 
-        setProjectName(projectResponse.project.name || rawRoomId);
-        setFiles(normalizeWorkspaceFiles(workspaceResponse.files));
-        setIsLoading(false);
-      })
-      .catch((error) => {
-        if (isMounted) {
+        const workspaceData = workspaceResult.value;
+        const rawFiles = workspaceData?.files;
+
+        if (!rawFiles || typeof rawFiles !== 'object') {
+          setLoadError('The server returned an invalid workspace files format.');
           setIsLoading(false);
-          setLoadError(error.message || 'Unable to load the saved project files.');
+          return;
+        }
+
+        const convertedFiles = normalizeWorkspaceFiles(rawFiles);
+        if (Object.keys(convertedFiles).length === 0) {
+          setLoadError('No saved project files found in this workspace.');
+          setIsLoading(false);
+          return;
+        }
+
+        // Project metadata (if available)
+        let resolvedProjectName = rawRoomId;
+        if (projectResult.status === 'fulfilled' && projectResult.value?.project?.name) {
+          resolvedProjectName = projectResult.value.project.name;
+        }
+
+        setProjectName(resolvedProjectName);
+        setFiles(convertedFiles);
+        setLoadError('');
+        setIsLoading(false);
+
+        // Update fast temporary localStorage cache
+        try {
+          const cachePayload = {
+            files: convertedFiles,
+            projectName: resolvedProjectName,
+            roomId: rawRoomId,
+            timestamp: Date.now()
+          };
+          localStorage.setItem(`codecollab_preview_${rawRoomId}`, JSON.stringify(cachePayload));
+        } catch (_e) {}
+      })
+      .catch((err) => {
+        if (isMounted) {
+          setLoadError(err?.message || 'Unable to load saved project files.');
+          setIsLoading(false);
         }
       });
 
     return () => {
       isMounted = false;
     };
-  }, [rawRoomId]);
+  }, [rawRoomId, retryNonce]);
 
   // Listen to cross-tab updates via BroadcastChannel and window storage event
   useEffect(() => {
     const handleUpdate = (payload) => {
       if (payload && payload.files && typeof payload.files === 'object') {
-        setFiles(payload.files);
+        const normalized = normalizeWorkspaceFiles(payload.files);
+        setFiles(normalized);
         if (payload.projectName) setProjectName(payload.projectName);
         if (!entryQuery && payload.selectedHtmlFile) {
           setSelectedHtmlFile(payload.selectedHtmlFile);
         }
+        setLoadError('');
+        setIsLoading(false);
         setRenderNonce((n) => n + 1);
       }
     };
@@ -216,6 +279,7 @@ export default function StandalonePreviewPage() {
 
   const triggerRefresh = () => {
     setIsRefreshing(true);
+    setRetryNonce((n) => n + 1);
     setRenderNonce((n) => n + 1);
     setTimeout(() => setIsRefreshing(false), 500);
   };
@@ -428,11 +492,61 @@ export default function StandalonePreviewPage() {
             <div className="loading-spinner" />
             <p>Loading project preview...</p>
           </div>
-        ) : loadError && Object.keys(files).length === 0 ? (
-          <div className="standalone-loading-state" role="alert">
-            <AlertCircle size={24} className="text-danger" />
-            <p>Preview could not be loaded.</p>
-            <span>{loadError}</span>
+        ) : loadError ? (
+          <div className="standalone-loading-state standalone-error-state" role="alert">
+            <AlertCircle size={32} className="text-danger" />
+            <h3>Unable to load saved project files</h3>
+            <p className="error-description">{loadError}</p>
+            <div className="error-actions">
+              <button
+                type="button"
+                className="standalone-btn btn-retry"
+                onClick={() => {
+                  setLoadError('');
+                  setIsLoading(true);
+                  setRetryNonce((n) => n + 1);
+                }}
+              >
+                <RotateCw size={13} />
+                <span>Try Again</span>
+              </button>
+              <button
+                type="button"
+                className="standalone-btn btn-back-editor"
+                onClick={() => navigate(`/projects/${encodeURIComponent(rawRoomId)}`)}
+              >
+                <ArrowLeft size={13} />
+                <span>Back to Editor</span>
+              </button>
+            </div>
+          </div>
+        ) : Object.keys(files).length === 0 ? (
+          <div className="standalone-loading-state standalone-error-state" role="alert">
+            <AlertCircle size={32} className="text-warning" />
+            <h3>Unable to load saved project files</h3>
+            <p className="error-description">No project files found in saved workspace.</p>
+            <div className="error-actions">
+              <button
+                type="button"
+                className="standalone-btn btn-retry"
+                onClick={() => {
+                  setLoadError('');
+                  setIsLoading(true);
+                  setRetryNonce((n) => n + 1);
+                }}
+              >
+                <RotateCw size={13} />
+                <span>Try Again</span>
+              </button>
+              <button
+                type="button"
+                className="standalone-btn btn-back-editor"
+                onClick={() => navigate(`/projects/${encodeURIComponent(rawRoomId)}`)}
+              >
+                <ArrowLeft size={13} />
+                <span>Back to Editor</span>
+              </button>
+            </div>
           </div>
         ) : (
           <div className={`standalone-viewport-container viewport-${viewportMode}`}>

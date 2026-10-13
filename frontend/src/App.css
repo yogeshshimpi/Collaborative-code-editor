@@ -6568,6 +6568,56 @@
   font-size: 13px;
 }
 
+.standalone-error-state {
+  max-width: 480px;
+  padding: 32px 28px;
+  text-align: center;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
+}
+
+.standalone-error-state h3 {
+  margin: 4px 0 0;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.standalone-error-state .error-description {
+  margin: 8px 0 20px;
+  font-size: 13.5px;
+  color: var(--text-muted);
+  word-break: break-word;
+  line-height: 1.5;
+}
+
+.standalone-error-state .error-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.standalone-error-state .error-actions .standalone-btn {
+  padding: 8px 16px;
+  font-size: 12.5px;
+  font-weight: 500;
+  border-radius: 6px;
+  gap: 6px;
+}
+
+.standalone-error-state .btn-retry {
+  background: var(--accent-primary);
+  color: #ffffff;
+  border: 1px solid var(--accent-primary);
+}
+
+.standalone-error-state .btn-retry:hover {
+  background: var(--accent-hover);
+}
+
 .standalone-viewport-container {
   height: 100%;
   display: flex;
