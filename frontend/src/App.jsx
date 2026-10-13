@@ -73,8 +73,22 @@ export default function App() {
           />
 
           {/* Standalone Live Preview in Separate Browser Tab */}
-          <Route path="/preview/:roomId" element={<StandalonePreviewPage />} />
-          <Route path="/projects/:roomId/preview" element={<StandalonePreviewPage />} />
+          <Route
+            path="/preview/:roomId"
+            element={
+              <ProtectedRoute>
+                <StandalonePreviewPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/projects/:roomId/preview"
+            element={
+              <ProtectedRoute>
+                <StandalonePreviewPage />
+              </ProtectedRoute>
+            }
+          />
 
           {/* Fallback Catch-All */}
           <Route path="*" element={<Navigate to="/" replace />} />

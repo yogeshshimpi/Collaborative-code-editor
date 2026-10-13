@@ -103,6 +103,15 @@ export const api = {
     });
   },
 
+  // The project endpoint contains metadata only.  Use this endpoint whenever
+  // the actual saved editor files are required (for example, a standalone
+  // preview opened in a new browser tab).
+  async getProjectWorkspace(roomId) {
+    return request(`/api/projects/${encodeURIComponent(roomId)}/files`, {
+      method: 'GET'
+    });
+  },
+
   // Project Members & Collaborators
   async getProjectMembers(projectId) {
     return request(`/api/projects/${encodeURIComponent(projectId)}/members`, {

@@ -19,8 +19,23 @@ import {
   ShieldCheck
 } from 'lucide-react';
 import { buildPreviewDocument } from '../utils/previewCompiler';
-import { INITIAL_FILES } from '../data/initialFiles';
+import { INITIAL_FILES, getLanguageFromFile } from '../data/initialFiles';
 import { api } from '../services/api';
+
+// The backend stores a workspace as { "index.html": "<html>..." }, while
+// Monaco and the preview compiler use { "index.html": { content: "..." } }.
+// Keep that conversion at this API boundary so a standalone production tab
+// renders the same files as the editor.
+function normalizeWorkspaceFiles(workspaceFiles) {
+  return Object.fromEntries(
+    Object.entries(workspaceFiles || {}).map(([name, file]) => [
+      name,
+      typeof file === 'string'
+        ? { name, language: getLanguageFromFile(name), content: file }
+        : { name, language: getLanguageFromFile(name), ...file }
+    ])
+  );
+}
 
 export default function StandalonePreviewPage() {
   const { roomId: urlRoomId } = useParams();
@@ -66,6 +81,7 @@ export default function StandalonePreviewPage() {
   const [isCopied, setIsCopied] = useState(false);
   const [isTopBarCollapsed, setIsTopBarCollapsed] = useState(false);
   const [isLoading, setIsLoading] = useState(() => Object.keys(files).length === 0 && rawRoomId !== 'demo-room');
+  const [loadError, setLoadError] = useState('');
 
   const iframeRef = useRef(null);
 
@@ -90,40 +106,49 @@ export default function StandalonePreviewPage() {
     }
   }, [files, entryQuery, htmlFiles, selectedHtmlFile]);
 
-  // Fetch from API if files not found in localStorage cache
+  // Browser storage makes opening a preview feel instant, but it is only a
+  // cache. Fetch the saved workspace as well so a copied/deployed preview URL
+  // still works after a refresh or on another device.
   useEffect(() => {
-    if (Object.keys(files).length > 0) return;
     if (rawRoomId === 'demo-room') {
       setFiles(INITIAL_FILES);
+      setIsLoading(false);
       return;
     }
 
     let isMounted = true;
     setIsLoading(true);
+    setLoadError('');
 
-    api.getProject(rawRoomId)
-      .then((res) => {
+    Promise.all([
+      api.getProject(rawRoomId),
+      api.getProjectWorkspace(rawRoomId)
+    ])
+      .then(([projectResponse, workspaceResponse]) => {
         if (!isMounted) return;
-        setIsLoading(false);
-        if (res?.project) {
-          setProjectName(res.project.name || rawRoomId);
-          if (res.project.files && typeof res.project.files === 'object') {
-            setFiles(res.project.files);
-          }
+
+        if (!projectResponse?.project) {
+          throw new Error('Project not found.');
         }
+        if (!workspaceResponse?.files || typeof workspaceResponse.files !== 'object') {
+          throw new Error('The saved project files could not be loaded.');
+        }
+
+        setProjectName(projectResponse.project.name || rawRoomId);
+        setFiles(normalizeWorkspaceFiles(workspaceResponse.files));
+        setIsLoading(false);
       })
-      .catch((_err) => {
+      .catch((error) => {
         if (isMounted) {
           setIsLoading(false);
-          // Fallback to initial files if not found
-          setFiles(INITIAL_FILES);
+          setLoadError(error.message || 'Unable to load the saved project files.');
         }
       });
 
     return () => {
       isMounted = false;
     };
-  }, [rawRoomId, files]);
+  }, [rawRoomId]);
 
   // Listen to cross-tab updates via BroadcastChannel and window storage event
   useEffect(() => {
@@ -402,6 +427,12 @@ export default function StandalonePreviewPage() {
           <div className="standalone-loading-state">
             <div className="loading-spinner" />
             <p>Loading project preview...</p>
+          </div>
+        ) : loadError && Object.keys(files).length === 0 ? (
+          <div className="standalone-loading-state" role="alert">
+            <AlertCircle size={24} className="text-danger" />
+            <p>Preview could not be loaded.</p>
+            <span>{loadError}</span>
           </div>
         ) : (
           <div className={`standalone-viewport-container viewport-${viewportMode}`}>
