@@ -16,9 +16,7 @@ import {
   UserCheck,
   Move,
   FolderMinus,
-  Clock,
-  Sparkles,
-  Filter
+  Clock
 } from 'lucide-react';
 import { api } from '../services/api';
 

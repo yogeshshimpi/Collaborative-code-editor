@@ -1,0 +1,10 @@
+services:
+  # Frontend Static Site
+  - type: static
+    name: collaborative-code-editor-frontend
+    buildCommand: cd frontend && npm install && npm run build
+    staticPublishPath: frontend/dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
