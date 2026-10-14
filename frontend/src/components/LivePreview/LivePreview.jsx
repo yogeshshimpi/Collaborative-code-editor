@@ -26,7 +26,10 @@ import {
   Cpu,
   Copy,
   CornerDownLeft,
-  Code2
+  Code2,
+  MoreHorizontal,
+  FileText,
+  History
 } from 'lucide-react';
 import { buildPreviewDocument } from '../../utils/previewCompiler';
 
@@ -73,12 +76,57 @@ export default function LivePreview({
   const [consoleFilter, setConsoleFilter] = useState('all'); // 'all' | 'log' | 'warn' | 'error'
   const [renderNonce, setRenderNonce] = useState(0);
   const [isStdinOpen, setIsStdinOpen] = useState(() => Boolean(stdin && stdin.trim()));
+
+  // Auto-open stdin drawer when active file has standard input
+  useEffect(() => {
+    if (stdin && stdin.trim()) {
+      setIsStdinOpen(true);
+    }
+  }, [stdin, activeFile]);
+
   const [copiedOutput, setCopiedOutput] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [autoRunOnEdit, setAutoRunOnEdit] = useState(true);
   const [isCopied, setIsCopied] = useState(false);
 
   const iframeRef = useRef(null);
+  const headerRef = useRef(null);
+  const moreMenuRef = useRef(null);
+  const [headerWidth, setHeaderWidth] = useState(600);
+  const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
+
+  // ResizeObserver on header for responsive collapsing & dropdown groupings
+  useEffect(() => {
+    if (!headerRef.current) return;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.contentRect) {
+          setHeaderWidth(entry.contentRect.width);
+        }
+      }
+    });
+    observer.observe(headerRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  // Dismiss dropdown menu on outside click or Escape key
+  useEffect(() => {
+    if (!isMoreMenuOpen) return;
+    const handleClickOutside = (e) => {
+      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target)) {
+        setIsMoreMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') setIsMoreMenuOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isMoreMenuOpen]);
 
   const triggerRefreshAnimation = () => {
     setIsRefreshing(true);
@@ -301,6 +349,10 @@ export default function LivePreview({
     return true;
   });
 
+  const isWide = headerWidth >= 620;
+  const isMedium = headerWidth < 620 && headerWidth >= 440;
+  const isTight = headerWidth < 440;
+
   return (
     <aside
       className={`live-preview-container ${isMaximized ? 'maximized' : ''} ${className}`}
@@ -308,13 +360,18 @@ export default function LivePreview({
       aria-label="CodeCollab Live Preview & Execution"
     >
       {/* Preview Header Toolbar */}
-      <header className="preview-header">
+      <header
+        ref={headerRef}
+        className={`preview-header ${isTight ? 'mode-tight' : isMedium ? 'mode-medium' : 'mode-wide'}`}
+      >
         <div className="preview-header-left">
           <div className="preview-status-indicator" title="Safe Isolated Sandbox">
             <span className={`preview-status-dot ${isExecuting ? 'status-dot-pulsing' : ''}`} />
-            <span className="preview-title">
-              {activeTab === 'terminal' ? 'Code Execution' : 'Live Preview'}
-            </span>
+            {!isTight && (
+              <span className="preview-title">
+                {activeTab === 'terminal' ? 'Code Execution' : 'Live Preview'}
+              </span>
+            )}
           </div>
 
           {/* Segmented View Tabs (Preview vs Terminal Output vs Console) */}
@@ -328,7 +385,7 @@ export default function LivePreview({
               title="Interactive Web Sandbox Preview"
             >
               <Play size={12} fill="currentColor" />
-              <span>Preview</span>
+              {!isTight && <span className="tab-text">Preview</span>}
             </button>
 
             <button
@@ -340,7 +397,7 @@ export default function LivePreview({
               title="Sandboxed Multi-Language Output (Python, Java, C++, C, Node.js)"
             >
               <Code2 size={12} />
-              <span>Output</span>
+              {!isTight && <span className="tab-text">Output</span>}
               {isExecuting ? (
                 <span className="terminal-tab-running" title="Executing code...">
                   <Loader2 size={11} className="spinning" />
@@ -370,7 +427,7 @@ export default function LivePreview({
               title="Browser Virtual Console Telemetry"
             >
               <Terminal size={12} />
-              <span>Console</span>
+              {!isTight && <span className="tab-text">Console</span>}
               {consoleLogs.length > 0 && (
                 <span
                   className={`console-counter-badge ${
@@ -404,60 +461,68 @@ export default function LivePreview({
                   ) : (
                     <Play size={12} fill="currentColor" />
                   )}
-                  <span className="preview-btn-label">
-                    {isExecuting ? 'Running...' : 'Run'}
-                  </span>
+                  {!isTight && (
+                    <span className="preview-btn-label">
+                      {isExecuting ? 'Running...' : 'Run'}
+                    </span>
+                  )}
                 </button>
               )}
 
-              {/* Toggle Stdin Drawer */}
-              <button
-                type="button"
-                className={`preview-control-btn preview-btn-labeled btn-toggle-stdin ${
-                  isStdinOpen ? 'active' : ''
-                }`}
-                onClick={() => setIsStdinOpen((v) => !v)}
-                title="Toggle standard input (stdin) for programs that read user input"
-                aria-label="Standard Input"
-              >
-                <CornerDownLeft size={12} />
-                <span className="preview-btn-label">Stdin</span>
-                {stdin && stdin.trim() && <span className="stdin-active-dot" />}
-              </button>
-
-              {/* Copy Terminal Output */}
-              <button
-                type="button"
-                className={`preview-control-btn ${copiedOutput ? 'copied' : ''}`}
-                onClick={handleCopyOutput}
-                disabled={
-                  !executionResult ||
-                  (!executionResult.stdout &&
-                    !executionResult.stderr &&
-                    !executionResult.compileOutput)
-                }
-                title="Copy terminal output to clipboard"
-                aria-label="Copy Output"
-              >
-                {copiedOutput ? (
-                  <Check size={13} className="text-success" />
-                ) : (
-                  <Copy size={13} />
-                )}
-              </button>
-
-              {/* Clear Terminal Output */}
-              {onClearExecution && (
+              {/* Toggle Stdin Drawer (visible when not tight) */}
+              {!isTight && (
                 <button
                   type="button"
-                  className="preview-control-btn"
-                  onClick={onClearExecution}
-                  disabled={!executionResult && !isExecuting}
-                  title="Clear execution output"
-                  aria-label="Clear Output"
+                  className={`preview-control-btn preview-btn-labeled btn-toggle-stdin ${
+                    isStdinOpen ? 'active' : ''
+                  }`}
+                  onClick={() => setIsStdinOpen((v) => !v)}
+                  title="Toggle standard input (stdin) for programs that read user input"
+                  aria-label="Standard Input"
                 >
-                  <Trash2 size={13} />
+                  <CornerDownLeft size={12} />
+                  {isWide && <span className="preview-btn-label">Stdin</span>}
+                  {stdin && stdin.trim() && <span className="stdin-active-dot" />}
                 </button>
+              )}
+
+              {/* Copy Terminal Output (directly visible when wide) */}
+              {isWide && (
+                <>
+                  <button
+                    type="button"
+                    className={`preview-control-btn ${copiedOutput ? 'copied' : ''}`}
+                    onClick={handleCopyOutput}
+                    disabled={
+                      !executionResult ||
+                      (!executionResult.stdout &&
+                        !executionResult.stderr &&
+                        !executionResult.compileOutput)
+                    }
+                    title="Copy terminal output to clipboard"
+                    aria-label="Copy Output"
+                  >
+                    {copiedOutput ? (
+                      <Check size={13} className="text-success" />
+                    ) : (
+                      <Copy size={13} />
+                    )}
+                  </button>
+
+                  {/* Clear Terminal Output */}
+                  {onClearExecution && (
+                    <button
+                      type="button"
+                      className="preview-control-btn"
+                      onClick={onClearExecution}
+                      disabled={!executionResult && !isExecuting}
+                      title="Clear execution output"
+                      aria-label="Clear Output"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  )}
+                </>
               )}
             </>
           )}
@@ -465,39 +530,41 @@ export default function LivePreview({
           {/* PREVIEW CONTROLS */}
           {activeTab === 'preview' && (
             <>
-              {/* Viewport Width Controls */}
-              <div className="viewport-switcher-group" title="Preview Viewport Mode">
-                <button
-                  type="button"
-                  className={`viewport-btn ${viewportMode === 'responsive' ? 'active' : ''}`}
-                  onClick={() => setViewportMode('responsive')}
-                  title="Full Responsive Width (100%)"
-                  aria-label="Full Responsive Width"
-                >
-                  <Monitor size={13} />
-                </button>
-                <button
-                  type="button"
-                  className={`viewport-btn ${viewportMode === 'tablet' ? 'active' : ''}`}
-                  onClick={() => setViewportMode('tablet')}
-                  title="Tablet Viewport (768px)"
-                  aria-label="Tablet Viewport (768px)"
-                >
-                  <Tablet size={13} />
-                </button>
-                <button
-                  type="button"
-                  className={`viewport-btn ${viewportMode === 'mobile' ? 'active' : ''}`}
-                  onClick={() => setViewportMode('mobile')}
-                  title="Mobile Viewport (375px)"
-                  aria-label="Mobile Viewport (375px)"
-                >
-                  <Smartphone size={13} />
-                </button>
-              </div>
+              {/* Viewport Width Controls (directly visible when wide) */}
+              {isWide && (
+                <div className="viewport-switcher-group" title="Preview Viewport Mode">
+                  <button
+                    type="button"
+                    className={`viewport-btn ${viewportMode === 'responsive' ? 'active' : ''}`}
+                    onClick={() => setViewportMode('responsive')}
+                    title="Full Responsive Width (100%)"
+                    aria-label="Full Responsive Width"
+                  >
+                    <Monitor size={13} />
+                  </button>
+                  <button
+                    type="button"
+                    className={`viewport-btn ${viewportMode === 'tablet' ? 'active' : ''}`}
+                    onClick={() => setViewportMode('tablet')}
+                    title="Tablet Viewport (768px)"
+                    aria-label="Tablet Viewport (768px)"
+                  >
+                    <Tablet size={13} />
+                  </button>
+                  <button
+                    type="button"
+                    className={`viewport-btn ${viewportMode === 'mobile' ? 'active' : ''}`}
+                    onClick={() => setViewportMode('mobile')}
+                    title="Mobile Viewport (375px)"
+                    aria-label="Mobile Viewport (375px)"
+                  >
+                    <Smartphone size={13} />
+                  </button>
+                </div>
+              )}
 
-              {/* HTML Entry Selector (if multiple HTML files exist) */}
-              {htmlFiles.length > 1 && (
+              {/* HTML Entry Selector (directly visible when wide & multiple files) */}
+              {isWide && htmlFiles.length > 1 && (
                 <div className="entry-html-selector-wrap" title="Select entry HTML file">
                   <FileCode size={13} className="entry-icon" />
                   <select
@@ -515,7 +582,7 @@ export default function LivePreview({
                 </div>
               )}
 
-              {/* Refresh Button */}
+              {/* Refresh Button (always directly visible in preview mode) */}
               <button
                 type="button"
                 className="preview-control-btn btn-refresh"
@@ -526,36 +593,243 @@ export default function LivePreview({
                 <RotateCw size={13} className={isRefreshing ? 'spinning' : ''} />
               </button>
 
-              {/* Open in New Tab Button */}
-              <button
-                type="button"
-                className="preview-control-btn preview-btn-labeled btn-open-tab"
-                onClick={handleOpenNewTab}
-                title="Open preview in a separate browser tab"
-                aria-label="Open in New Tab"
-              >
-                <ExternalLink size={13} />
-                <span className="preview-btn-label">Open in New Tab</span>
-              </button>
+              {/* Open in New Tab Button (directly visible when wide) */}
+              {isWide && (
+                <>
+                  <button
+                    type="button"
+                    className="preview-control-btn preview-btn-labeled btn-open-tab"
+                    onClick={handleOpenNewTab}
+                    title="Open preview in a separate browser tab"
+                    aria-label="Open in New Tab"
+                  >
+                    <ExternalLink size={13} />
+                    <span className="preview-btn-label">Open in New Tab</span>
+                  </button>
 
-              {/* Copy Preview Link Button */}
-              <button
-                type="button"
-                className={`preview-control-btn preview-btn-labeled btn-copy-link ${
-                  isCopied ? 'copied' : ''
-                }`}
-                onClick={handleCopyLink}
-                title="Copy preview URL to clipboard"
-                aria-label="Copy Preview Link"
-              >
-                {isCopied ? <Check size={13} className="text-success" /> : <Link2 size={13} />}
-                <span className="preview-btn-label">{isCopied ? 'Copied!' : 'Copy Preview Link'}</span>
-              </button>
+                  {/* Copy Preview Link Button */}
+                  <button
+                    type="button"
+                    className={`preview-control-btn preview-btn-labeled btn-copy-link ${
+                      isCopied ? 'copied' : ''
+                    }`}
+                    onClick={handleCopyLink}
+                    title="Copy preview URL to clipboard"
+                    aria-label="Copy Preview Link"
+                  >
+                    {isCopied ? <Check size={13} className="text-success" /> : <Link2 size={13} />}
+                    <span className="preview-btn-label">{isCopied ? 'Copied!' : 'Copy Preview Link'}</span>
+                  </button>
+                </>
+              )}
             </>
           )}
 
-          {/* Maximize / Dock Toggle */}
-          {onToggleMaximize && (
+          {/* CONSOLE CONTROLS */}
+          {activeTab === 'console' && (
+            <button
+              type="button"
+              className="preview-control-btn"
+              onClick={handleClearConsole}
+              disabled={consoleLogs.length === 0}
+              title="Clear Virtual Console logs"
+              aria-label="Clear Console"
+            >
+              <Trash2 size={13} />
+            </button>
+          )}
+
+          {/* MORE OPTIONS DROPDOWN (Shown when not wide to collapse similar controls) */}
+          {!isWide && (
+            <div className="preview-more-menu-wrapper" ref={moreMenuRef}>
+              <button
+                type="button"
+                className={`preview-control-btn btn-preview-more ${isMoreMenuOpen ? 'active' : ''}`}
+                onClick={() => setIsMoreMenuOpen((v) => !v)}
+                title="More preview actions & view options"
+                aria-label="More Options"
+                aria-expanded={isMoreMenuOpen}
+                aria-haspopup="true"
+              >
+                <MoreHorizontal size={14} />
+              </button>
+
+              {isMoreMenuOpen && (
+                <div className="preview-dropdown-menu" role="menu">
+                  {/* PREVIEW TAB DROPDOWN OPTIONS */}
+                  {activeTab === 'preview' && (
+                    <>
+                      {/* Device Viewport Options */}
+                      <div className="preview-dropdown-section">
+                        <span className="preview-dropdown-section-title">Device View</span>
+                        <button
+                          type="button"
+                          className={`preview-dropdown-item ${viewportMode === 'responsive' ? 'active' : ''}`}
+                          onClick={() => {
+                            setViewportMode('responsive');
+                            setIsMoreMenuOpen(false);
+                          }}
+                        >
+                          <Monitor size={14} />
+                          <span>Desktop (100%)</span>
+                          {viewportMode === 'responsive' && <Check size={12} className="dropdown-check" />}
+                        </button>
+                        <button
+                          type="button"
+                          className={`preview-dropdown-item ${viewportMode === 'tablet' ? 'active' : ''}`}
+                          onClick={() => {
+                            setViewportMode('tablet');
+                            setIsMoreMenuOpen(false);
+                          }}
+                        >
+                          <Tablet size={14} />
+                          <span>Tablet (768px)</span>
+                          {viewportMode === 'tablet' && <Check size={12} className="dropdown-check" />}
+                        </button>
+                        <button
+                          type="button"
+                          className={`preview-dropdown-item ${viewportMode === 'mobile' ? 'active' : ''}`}
+                          onClick={() => {
+                            setViewportMode('mobile');
+                            setIsMoreMenuOpen(false);
+                          }}
+                        >
+                          <Smartphone size={14} />
+                          <span>Mobile (375px)</span>
+                          {viewportMode === 'mobile' && <Check size={12} className="dropdown-check" />}
+                        </button>
+                      </div>
+
+                      <div className="preview-dropdown-divider" />
+
+                      {/* Standalone Tab & Share Links */}
+                      <button
+                        type="button"
+                        className="preview-dropdown-item"
+                        onClick={() => {
+                          handleOpenNewTab();
+                          setIsMoreMenuOpen(false);
+                        }}
+                      >
+                        <ExternalLink size={14} />
+                        <span>Open in New Tab</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        className="preview-dropdown-item"
+                        onClick={() => {
+                          handleCopyLink();
+                          setIsMoreMenuOpen(false);
+                        }}
+                      >
+                        <Link2 size={14} />
+                        <span>{isCopied ? 'Link Copied!' : 'Copy Preview Link'}</span>
+                      </button>
+
+                      {/* Entry HTML Selector if multiple HTML files exist */}
+                      {htmlFiles.length > 1 && (
+                        <>
+                          <div className="preview-dropdown-divider" />
+                          <div className="preview-dropdown-section">
+                            <span className="preview-dropdown-section-title">Entry File</span>
+                            <select
+                              className="preview-dropdown-select"
+                              value={selectedHtmlFile || 'index.html'}
+                              onChange={(e) => {
+                                setSelectedHtmlFile(e.target.value);
+                                setIsMoreMenuOpen(false);
+                              }}
+                            >
+                              {htmlFiles.map((f) => (
+                                <option key={f} value={f}>
+                                  {f}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </>
+                      )}
+                    </>
+                  )}
+
+                  {/* TERMINAL TAB DROPDOWN OPTIONS */}
+                  {activeTab === 'terminal' && (
+                    <>
+                      {isTight && (
+                        <button
+                          type="button"
+                          className={`preview-dropdown-item ${isStdinOpen ? 'active' : ''}`}
+                          onClick={() => {
+                            setIsStdinOpen((v) => !v);
+                            setIsMoreMenuOpen(false);
+                          }}
+                        >
+                          <CornerDownLeft size={14} />
+                          <span>Standard Input (Stdin)</span>
+                          {stdin && stdin.trim() && <span className="dropdown-check">●</span>}
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        className="preview-dropdown-item"
+                        onClick={() => {
+                          handleCopyOutput();
+                          setIsMoreMenuOpen(false);
+                        }}
+                        disabled={
+                          !executionResult ||
+                          (!executionResult.stdout &&
+                            !executionResult.stderr &&
+                            !executionResult.compileOutput)
+                        }
+                      >
+                        <Copy size={14} />
+                        <span>{copiedOutput ? 'Output Copied!' : 'Copy Output'}</span>
+                      </button>
+
+                      {onClearExecution && (
+                        <button
+                          type="button"
+                          className="preview-dropdown-item text-danger"
+                          onClick={() => {
+                            onClearExecution();
+                            setIsMoreMenuOpen(false);
+                          }}
+                          disabled={!executionResult && !isExecuting}
+                        >
+                          <Trash2 size={14} />
+                          <span>Clear Output</span>
+                        </button>
+                      )}
+                    </>
+                  )}
+
+                  {/* Maximize option in dropdown when tight */}
+                  {isTight && onToggleMaximize && (
+                    <>
+                      <div className="preview-dropdown-divider" />
+                      <button
+                        type="button"
+                        className="preview-dropdown-item"
+                        onClick={() => {
+                          onToggleMaximize();
+                          setIsMoreMenuOpen(false);
+                        }}
+                      >
+                        {isMaximized ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+                        <span>{isMaximized ? 'Restore Split View' : 'Maximize Preview'}</span>
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Maximize / Dock Toggle (directly visible when not tight) */}
+          {!isTight && onToggleMaximize && (
             <button
               type="button"
               className="preview-control-btn btn-maximize"
@@ -567,7 +841,7 @@ export default function LivePreview({
             </button>
           )}
 
-          {/* Close Button */}
+          {/* Close Button (always visible) */}
           <button
             type="button"
             className="preview-control-btn preview-close-btn"
@@ -753,6 +1027,14 @@ export default function LivePreview({
                 </div>
               )}
 
+              {/* File Badge */}
+              {activeFile && (
+                <span className="terminal-meta-chip file-badge" title={`Execution output for: ${activeFile}`}>
+                  <FileText size={12} />
+                  <span>{activeFile}</span>
+                </span>
+              )}
+
               {/* Language Chip */}
               {(executionResult?.language || activeFile) && (
                 <span className="terminal-meta-chip lang-badge">
@@ -767,7 +1049,7 @@ export default function LivePreview({
               )}
             </div>
 
-            {/* Metrics Chips (Time, Memory) */}
+            {/* Metrics Chips (Time, Memory, Timestamp) */}
             {executionResult && !isExecuting && (
               <div className="terminal-metrics-group">
                 {executionResult.executionTimeMs !== undefined && (
@@ -783,6 +1065,21 @@ export default function LivePreview({
                       {executionResult.memoryKb > 1024
                         ? `${(executionResult.memoryKb / 1024).toFixed(1)} MB`
                         : `${executionResult.memoryKb} KB`}
+                    </span>
+                  </span>
+                )}
+                {executionResult.lastRunTimestamp && (
+                  <span
+                    className="terminal-metric-chip"
+                    title={`Last run at ${new Date(executionResult.lastRunTimestamp).toLocaleString()}`}
+                  >
+                    <History size={11} />
+                    <span>
+                      {new Date(executionResult.lastRunTimestamp).toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit'
+                      })}
                     </span>
                   </span>
                 )}

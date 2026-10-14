@@ -72,6 +72,22 @@ export default function EditorArea({
       }
     });
 
+    // Bind Shift+Alt+F to format document
+    editor.addCommand(monaco.KeyMod.Shift | monaco.KeyMod.Alt | monaco.KeyCode.KeyF, () => {
+      const formatAction = editor.getAction('editor.action.formatDocument');
+      if (formatAction) {
+        formatAction.run();
+      }
+    });
+
+    // Bind Ctrl+H / Cmd+H to open Find and Replace widget
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyH, () => {
+      const replaceAction = editor.getAction('editor.action.startFindReplaceAction');
+      if (replaceAction) {
+        replaceAction.run();
+      }
+    });
+
     // Track focus state for mobile virtual keyboard awareness
     editor.onDidFocusEditorText(() => {
       setIsEditorFocused(true);

@@ -33,18 +33,19 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 10px;
-  gap: 8px;
+  padding: 0 8px;
+  gap: 6px;
   user-select: none;
-  z-index: 5;
+  z-index: 25;
   flex-shrink: 0;
-  overflow: hidden;
+  overflow: visible; /* Allows dropdown menu to float above iframe */
+  min-width: 0;
 }
 
 .preview-header-left {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
   flex-shrink: 1;
 }
@@ -57,6 +58,25 @@
   font-weight: 600;
   color: var(--text-primary);
   flex-shrink: 0;
+}
+
+/* Responsive mode modifiers triggered by container width ResizeObserver */
+.preview-header.mode-tight .preview-title {
+  display: none !important;
+}
+
+.preview-header.mode-tight .preview-tab-btn span.tab-text {
+  display: none !important;
+}
+
+.preview-header.mode-tight .preview-tab-btn {
+  padding: 3px 6px;
+  gap: 3px;
+}
+
+.preview-header.mode-tight {
+  padding: 0 6px;
+  gap: 4px;
 }
 
 @container (max-width: 760px) {
@@ -296,6 +316,139 @@
   background: rgba(16, 185, 129, 0.15);
   border-color: rgba(16, 185, 129, 0.45);
   color: #34d399;
+}
+
+/* More Options Dropdown in Preview Header */
+.preview-more-menu-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.preview-control-btn.btn-preview-more {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 5px;
+}
+
+.preview-control-btn.btn-preview-more.active {
+  background: var(--bg-hover);
+  border-color: var(--accent-primary);
+  color: #c7d2fe;
+}
+
+.preview-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 5px);
+  right: 0;
+  min-width: 195px;
+  background: var(--bg-surface, #1e2029);
+  border: 1px solid var(--border-strong, #3b3f54);
+  border-radius: 8px;
+  box-shadow: 0 10px 25px -4px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  padding: 6px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  animation: previewDropdownFadeIn 0.15s ease-out;
+}
+
+@keyframes previewDropdownFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.preview-dropdown-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.preview-dropdown-section-title {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 700;
+  color: var(--text-muted, #7c829d);
+  padding: 4px 8px 2px;
+}
+
+.preview-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--text-secondary, #b4b8cc);
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  width: 100%;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.preview-dropdown-item:hover:not(:disabled) {
+  background: var(--bg-hover, rgba(255, 255, 255, 0.08));
+  color: var(--text-primary, #ffffff);
+}
+
+.preview-dropdown-item.active {
+  background: rgba(99, 102, 241, 0.15);
+  color: var(--accent-hover, #818cf8);
+  font-weight: 600;
+}
+
+.preview-dropdown-item:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.preview-dropdown-item.text-danger {
+  color: var(--danger, #f43f5e);
+}
+
+.preview-dropdown-item.text-danger:hover:not(:disabled) {
+  background: rgba(244, 63, 94, 0.12);
+  color: #fb7185;
+}
+
+.preview-dropdown-item .dropdown-check {
+  margin-left: auto;
+  color: var(--accent-hover, #818cf8);
+}
+
+.preview-dropdown-divider {
+  height: 1px;
+  background: var(--border-subtle, #2b2e3d);
+  margin: 4px 0;
+}
+
+.preview-dropdown-select {
+  width: 100%;
+  background: var(--bg-elevated, #252836);
+  border: 1px solid var(--border-subtle, #33374b);
+  border-radius: 5px;
+  color: var(--text-primary, #ffffff);
+  font-family: var(--font-mono, monospace);
+  font-size: 11.5px;
+  padding: 5px 8px;
+  outline: none;
+  cursor: pointer;
 }
 
 .preview-inline-toast {
@@ -783,6 +936,16 @@
   color: #a5b4fc;
   background: rgba(99, 102, 241, 0.1);
   border-color: rgba(99, 102, 241, 0.25);
+}
+
+.terminal-meta-chip.file-badge {
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.1);
+  border-color: rgba(56, 189, 248, 0.25);
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .terminal-metrics-group {

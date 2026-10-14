@@ -21,7 +21,8 @@ import {
   GitPullRequest,
   RotateCcw,
   Trash2,
-  FilePlus
+  FilePlus,
+  MoreHorizontal
 } from 'lucide-react';
 
 export default function Navbar({
@@ -63,6 +64,9 @@ export default function Navbar({
   const [isApprovalMenuOpen, setIsApprovalMenuOpen] = useState(false);
   const approvalMenuRef = useRef(null);
 
+  const [isMobileToolsOpen, setIsMobileToolsOpen] = useState(false);
+  const mobileToolsRef = useRef(null);
+
   // Sync inputs when props change externally
   useEffect(() => {
     setRoomInput(roomId);
@@ -72,7 +76,7 @@ export default function Navbar({
     setTitleInput(projectName);
   }, [projectName]);
 
-  // Close dropdowns on click outside
+  // Close dropdowns on click outside or Escape
   useEffect(() => {
     function handleClickOutside(event) {
       if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
@@ -81,14 +85,26 @@ export default function Navbar({
       if (approvalMenuRef.current && !approvalMenuRef.current.contains(event.target)) {
         setIsApprovalMenuOpen(false);
       }
+      if (mobileToolsRef.current && !mobileToolsRef.current.contains(event.target)) {
+        setIsMobileToolsOpen(false);
+      }
     }
-    if (isUserMenuOpen || isApprovalMenuOpen) {
+    function handleKeyDown(event) {
+      if (event.key === 'Escape') {
+        setIsUserMenuOpen(false);
+        setIsApprovalMenuOpen(false);
+        setIsMobileToolsOpen(false);
+      }
+    }
+    if (isUserMenuOpen || isApprovalMenuOpen || isMobileToolsOpen) {
       document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleKeyDown);
     }
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isUserMenuOpen, isApprovalMenuOpen]);
+  }, [isUserMenuOpen, isApprovalMenuOpen, isMobileToolsOpen]);
 
   const handleRoomSubmit = (e) => {
     e?.preventDefault?.();
@@ -278,7 +294,7 @@ export default function Navbar({
 
         {/* Peer Collaborator Avatars Stack */}
         {peerUsers.length > 0 && (
-          <div className="peer-avatars-stack" title={`${peerUsers.length} peer(s) in room`}>
+          <div className="peer-avatars-stack navbar-desktop-only" title={`${peerUsers.length} peer(s) in room`}>
             {peerUsers.slice(0, 3).map((peer) => {
               const initials = peer.name ? peer.name.replace(/[^0-9a-zA-Z]/g, '').slice(-2) : 'G';
               return (
@@ -300,11 +316,11 @@ export default function Navbar({
           </div>
         )}
 
-        {/* My Projects shortcut button when logged in */}
+        {/* My Projects shortcut button when logged in (Desktop) */}
         {isAuthenticated && (
           <button
             type="button"
-            className="btn btn-secondary btn-action"
+            className="btn btn-secondary btn-action navbar-desktop-only"
             onClick={onOpenProjects}
             title="Manage Projects"
             aria-label="Manage Projects"
@@ -314,11 +330,11 @@ export default function Navbar({
           </button>
         )}
 
-        {/* Sign In CTA when in guest mode */}
+        {/* Sign In CTA when in guest mode (Desktop) */}
         {!isAuthenticated && (
           <button
             type="button"
-            className="btn btn-secondary btn-action btn-auth"
+            className="btn btn-secondary btn-action btn-auth navbar-desktop-only"
             onClick={() => onOpenAuth && onOpenAuth('login')}
             title="Sign in to save projects"
             aria-label="Sign In"
@@ -328,11 +344,11 @@ export default function Navbar({
           </button>
         )}
 
-        {/* Version History action button */}
+        {/* Version History action button (Desktop) */}
         {onOpenHistory && (
           <button
             type="button"
-            className="btn btn-secondary btn-action"
+            className="btn btn-secondary btn-action navbar-desktop-only"
             onClick={onOpenHistory}
             title="View per-file version history & restore previous versions"
             aria-label="Version History"
@@ -342,9 +358,9 @@ export default function Navbar({
           </button>
         )}
 
-        {/* Dedicated Owner Approval System Control in Navbar */}
+        {/* Dedicated Owner Approval System Control in Navbar (Desktop) */}
         {userRole === 'owner' && onOpenChangeRequests && (
-          <div className="navbar-approval-wrapper" ref={approvalMenuRef}>
+          <div className="navbar-approval-wrapper navbar-desktop-only" ref={approvalMenuRef}>
             <div className={`navbar-approval-control ${requiresApproval ? 'is-active' : 'is-inactive'}`} title="Approval System: Protect project from unapproved code edits, file deletions, and version restores">
               <button
                 type="button"
@@ -478,11 +494,11 @@ export default function Navbar({
           </div>
         )}
 
-        {/* Change Requests / Approvals button for Collaborators (Editors & Viewers) */}
+        {/* Change Requests / Approvals button for Collaborators (Desktop) */}
         {userRole !== 'owner' && onOpenChangeRequests && (
           <button
             type="button"
-            className={`btn btn-secondary btn-action btn-cr-action ${requiresApproval ? 'approval-active-editor' : ''}`}
+            className={`btn btn-secondary btn-action btn-cr-action navbar-desktop-only ${requiresApproval ? 'approval-active-editor' : ''}`}
             onClick={onOpenChangeRequests}
             title={requiresApproval ? "Approval Mode Active: Changes require owner approval" : "View Change Requests"}
             aria-label="Change Requests"
@@ -495,11 +511,11 @@ export default function Navbar({
           </button>
         )}
 
-        {/* Project Activity Log action button */}
+        {/* Project Activity Log action button (Desktop) */}
         {onOpenActivity && (
           <button
             type="button"
-            className={`btn btn-secondary btn-action ${isActivityOpen ? 'active-action' : ''}`}
+            className={`btn btn-secondary btn-action navbar-desktop-only ${isActivityOpen ? 'active-action' : ''}`}
             onClick={onOpenActivity}
             title={isActivityOpen ? "Close Project Activity Log" : "View project activity log & timeline"}
             aria-label="Project Activity"
@@ -510,9 +526,10 @@ export default function Navbar({
           </button>
         )}
 
+        {/* Share Button (Desktop) */}
         <button
           type="button"
-          className="btn btn-secondary btn-action"
+          className="btn btn-secondary btn-action navbar-desktop-only"
           onClick={onOpenCollaborators || onShare}
           title={userRole === 'owner' ? "Invite collaborators & manage permissions" : "Share project & view collaborators"}
           aria-label="Share Project"
@@ -520,6 +537,191 @@ export default function Navbar({
           <Share2 size={15} />
           <span className="btn-text">{userRole === 'owner' ? 'Share & Invite' : 'Share'}</span>
         </button>
+
+        {/* MOBILE TOOLS DROPDOWN TRIGGER (Mobile Only: < 768px) */}
+        <div className="navbar-mobile-tools-wrapper" ref={mobileToolsRef}>
+          <button
+            type="button"
+            className={`btn btn-secondary btn-action btn-mobile-tools ${
+              isMobileToolsOpen ? 'active' : ''
+            }`}
+            onClick={() => setIsMobileToolsOpen((v) => !v)}
+            title="Project Tools & Collaboration Menu"
+            aria-label="Project Tools"
+            aria-expanded={isMobileToolsOpen}
+            aria-haspopup="true"
+          >
+            <MoreHorizontal size={16} />
+            {pendingRequestsCount > 0 && (
+              <span className="navbar-cr-badge pulse">{pendingRequestsCount}</span>
+            )}
+          </button>
+
+          {/* MOBILE TOOLS DROPDOWN MENU */}
+          {isMobileToolsOpen && (
+            <div className="navbar-mobile-tools-dropdown" role="menu">
+              {/* Group 1: Project & File History */}
+              <div className="tools-dropdown-section">
+                <span className="tools-dropdown-header">Project & History</span>
+                {isAuthenticated && onOpenProjects && (
+                  <button
+                    type="button"
+                    className="tools-dropdown-item"
+                    onClick={() => {
+                      setIsMobileToolsOpen(false);
+                      onOpenProjects();
+                    }}
+                  >
+                    <FolderCode size={15} />
+                    <span>My Projects</span>
+                  </button>
+                )}
+                {onOpenHistory && (
+                  <button
+                    type="button"
+                    className="tools-dropdown-item"
+                    onClick={() => {
+                      setIsMobileToolsOpen(false);
+                      onOpenHistory();
+                    }}
+                  >
+                    <History size={15} />
+                    <span>Version History</span>
+                  </button>
+                )}
+                {onOpenActivity && (
+                  <button
+                    type="button"
+                    className={`tools-dropdown-item ${isActivityOpen ? 'active' : ''}`}
+                    onClick={() => {
+                      setIsMobileToolsOpen(false);
+                      onOpenActivity();
+                    }}
+                  >
+                    <Activity size={15} />
+                    <span>Activity Log</span>
+                  </button>
+                )}
+              </div>
+
+              <div className="tools-dropdown-divider" />
+
+              {/* Group 2: Collaboration & Approvals */}
+              <div className="tools-dropdown-section">
+                <span className="tools-dropdown-header">Collaboration & Access</span>
+                <button
+                  type="button"
+                  className="tools-dropdown-item"
+                  onClick={() => {
+                    setIsMobileToolsOpen(false);
+                    if (onOpenCollaborators) onOpenCollaborators();
+                    else if (onShare) onShare();
+                  }}
+                >
+                  <Share2 size={15} />
+                  <span>{userRole === 'owner' ? 'Share & Invite' : 'Share Project'}</span>
+                </button>
+
+                {/* Owner Approvals workflow */}
+                {userRole === 'owner' && (
+                  <>
+                    {onToggleApprovalMode && (
+                      <div className="tools-dropdown-toggle-item">
+                        <div className="tools-toggle-left">
+                          <ShieldCheck
+                            size={15}
+                            className={requiresApproval ? 'text-amber' : 'text-muted'}
+                          />
+                          <span>Strict Review Mode</span>
+                        </div>
+                        <button
+                          type="button"
+                          className={`navbar-approval-quick-toggle ${
+                            requiresApproval ? 'active' : ''
+                          }`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onToggleApprovalMode(!requiresApproval);
+                          }}
+                          title={
+                            requiresApproval
+                              ? 'Disable strict review mode'
+                              : 'Enable strict review mode'
+                          }
+                        >
+                          <span className="quick-toggle-slider" />
+                        </button>
+                      </div>
+                    )}
+
+                    {onOpenChangeRequests && (
+                      <button
+                        type="button"
+                        className="tools-dropdown-item"
+                        onClick={() => {
+                          setIsMobileToolsOpen(false);
+                          onOpenChangeRequests();
+                        }}
+                      >
+                        <GitPullRequest
+                          size={15}
+                          className={pendingRequestsCount > 0 ? 'text-amber' : ''}
+                        />
+                        <span>Change Requests</span>
+                        {pendingRequestsCount > 0 && (
+                          <span className="navbar-cr-badge">{pendingRequestsCount}</span>
+                        )}
+                      </button>
+                    )}
+                  </>
+                )}
+
+                {/* Collaborator Approvals workflow */}
+                {userRole !== 'owner' && onOpenChangeRequests && (
+                  <button
+                    type="button"
+                    className="tools-dropdown-item"
+                    onClick={() => {
+                      setIsMobileToolsOpen(false);
+                      onOpenChangeRequests();
+                    }}
+                  >
+                    <GitPullRequest
+                      size={15}
+                      className={
+                        pendingRequestsCount > 0 || requiresApproval ? 'text-amber' : ''
+                      }
+                    />
+                    <span>{requiresApproval ? 'Approvals & Requests' : 'Change Requests'}</span>
+                    {pendingRequestsCount > 0 && (
+                      <span className="navbar-cr-badge">{pendingRequestsCount}</span>
+                    )}
+                  </button>
+                )}
+              </div>
+
+              {/* Group 3: Sign In CTA if guest */}
+              {!isAuthenticated && onOpenAuth && (
+                <>
+                  <div className="tools-dropdown-divider" />
+                  <div className="tools-dropdown-section">
+                    <button
+                      type="button"
+                      className="tools-dropdown-item"
+                      onClick={() => {
+                        setIsMobileToolsOpen(false);
+                        onOpenAuth('login');
+                      }}
+                    >
+                      <LogIn size={15} />
+                      <span>Sign In</span>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
 
         <button
           type="button"

@@ -201,10 +201,90 @@ export default function EditorWorkspacePage() {
   const [isDraggingSplit, setIsDraggingSplit] = useState(false);
   const [mobileWorkspaceView, setMobileWorkspaceView] = useState('split'); // 'editor' | 'split' | 'preview'
   const [runTrigger, setRunTrigger] = useState(0);
-  // Sandboxed Code Execution State
+
+  // Stable key for per-file execution UI state: projectId + filePath
+  const getFileExecKey = useCallback((projId, filePath) => {
+    const safeProj = projId || 'default';
+    return `${safeProj}:${filePath || ''}`;
+  }, []);
+
+  // Per-file Execution UI state dictionary: { [fileKey]: { stdin, stdout, stderr, compileOutput, status, exitCode, executionTime, executionTimeMs, selectedLanguage, lastRunTimestamp } }
+  const [fileExecutionMap, setFileExecutionMap] = useState(() => {
+    try {
+      const saved = localStorage.getItem('codecollab_file_executions');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  // Sandboxed Code Execution State (active file projection)
   const [executionResult, setExecutionResult] = useState(null);
   const [isExecuting, setIsExecuting] = useState(false);
   const [executionStdin, setExecutionStdin] = useState('');
+  const executionStdinRef = useRef(executionStdin);
+  executionStdinRef.current = executionStdin;
+
+  // Synchronize execution result and stdin when switching activeFile
+  const prevActiveFileRef = useRef(activeFile);
+  useEffect(() => {
+    const prevFile = prevActiveFileRef.current;
+    const currentProjId = currentProject?.id || matchedInContext?.id || activeRoomId || 'default';
+
+    // If changing files, save current stdin into prevFile's execution map entry
+    if (prevFile && prevFile !== activeFile) {
+      const prevKey = getFileExecKey(currentProjId, prevFile);
+      setFileExecutionMap((prev) => {
+        const existing = prev[prevKey] || {};
+        const updated = {
+          ...prev,
+          [prevKey]: {
+            ...existing,
+            stdin: executionStdinRef.current
+          }
+        };
+        try {
+          localStorage.setItem('codecollab_file_executions', JSON.stringify(updated));
+        } catch {}
+        return updated;
+      });
+    }
+
+    // Now restore target file's execution state
+    if (activeFile) {
+      const nextKey = getFileExecKey(currentProjId, activeFile);
+      const targetState = fileExecutionMap[nextKey];
+      if (targetState) {
+        setExecutionStdin(targetState.stdin || '');
+        if (targetState.status || targetState.stdout || targetState.stderr || targetState.compileOutput) {
+          setExecutionResult({
+            success: targetState.status === 'Accepted',
+            status: targetState.status || 'Finished',
+            stdout: targetState.stdout || '',
+            stderr: targetState.stderr || '',
+            compileOutput: targetState.compileOutput || '',
+            exitCode: targetState.exitCode ?? null,
+            executionTime: targetState.executionTime ?? targetState.executionTimeMs ?? null,
+            executionTimeMs: targetState.executionTimeMs ?? targetState.executionTime ?? null,
+            language: targetState.selectedLanguage || getLanguageFromFile(activeFile),
+            selectedLanguage: targetState.selectedLanguage || getLanguageFromFile(activeFile),
+            lastRunTimestamp: targetState.lastRunTimestamp || null
+          });
+        } else {
+          setExecutionResult(null);
+        }
+      } else {
+        setExecutionStdin('');
+        setExecutionResult(null);
+      }
+    } else {
+      setExecutionStdin('');
+      setExecutionResult(null);
+    }
+
+    prevActiveFileRef.current = activeFile;
+  }, [activeFile, currentProject?.id, matchedInContext?.id, activeRoomId, getFileExecKey]);
+
   const [isMobileWorkspace, setIsMobileWorkspace] = useState(
     () => typeof window !== 'undefined' && window.innerWidth < 1024
   );
@@ -758,6 +838,28 @@ export default function EditorWorkspacePage() {
     emitCodeChange(activeFile, cleanContent);
   };
 
+  // Handlers for Per-File Stdin & Execution
+  const handleStdinChange = useCallback((newStdin) => {
+    setExecutionStdin(newStdin);
+    if (!activeFile) return;
+    const currentProjId = currentProject?.id || matchedInContext?.id || activeRoomId || 'default';
+    const fileKey = getFileExecKey(currentProjId, activeFile);
+    setFileExecutionMap((prev) => {
+      const existing = prev[fileKey] || {};
+      const updated = {
+        ...prev,
+        [fileKey]: {
+          ...existing,
+          stdin: newStdin
+        }
+      };
+      try {
+        localStorage.setItem('codecollab_file_executions', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  }, [activeFile, currentProject?.id, matchedInContext?.id, activeRoomId, getFileExecKey]);
+
   // Action handlers
   const handleExecuteCode = useCallback(async (customStdin) => {
     if (!activeFile) {
@@ -786,7 +888,10 @@ export default function EditorWorkspacePage() {
     }
 
     const projId = currentProject?.id || matchedInContext?.id || activeRoomId;
+    const currentProjId = projId || 'default';
+    const fileKey = getFileExecKey(currentProjId, activeFile);
     const stdinToPass = customStdin !== undefined ? customStdin : executionStdin;
+    const timestamp = Date.now();
 
     try {
       const res = await api.executeCode({
@@ -799,7 +904,37 @@ export default function EditorWorkspacePage() {
 
       const executionData = res?.result || res;
       if (executionData && typeof executionData === 'object') {
-        setExecutionResult(executionData);
+        const fileStateObj = {
+          stdin: stdinToPass,
+          stdout: executionData.stdout || '',
+          stderr: executionData.stderr || '',
+          compileOutput: executionData.compileOutput || '',
+          status: executionData.status || 'Finished',
+          exitCode: executionData.exitCode ?? null,
+          executionTime: executionData.executionTimeMs ?? null,
+          executionTimeMs: executionData.executionTimeMs ?? null,
+          selectedLanguage: executionData.language || lang,
+          lastRunTimestamp: timestamp
+        };
+
+        const resultObj = {
+          ...executionData,
+          ...fileStateObj,
+          success: executionData.status === 'Accepted'
+        };
+
+        setExecutionResult(resultObj);
+        setFileExecutionMap((prev) => {
+          const updated = {
+            ...prev,
+            [fileKey]: fileStateObj
+          };
+          try {
+            localStorage.setItem('codecollab_file_executions', JSON.stringify(updated));
+          } catch {}
+          return updated;
+        });
+
         if (executionData.status === 'Accepted') {
           showToast(`Execution finished (${executionData.executionTimeMs}ms)`, 'success');
         } else if (executionData.compileOutput) {
@@ -817,14 +952,45 @@ export default function EditorWorkspacePage() {
     } catch (err) {
       console.error('Code execution failed:', err);
       const errMsg = err.response?.data?.error || err.message || 'Execution error';
-      setExecutionResult({
+      const fileErrState = {
+        stdin: stdinToPass,
+        stdout: '',
+        stderr: errMsg,
+        compileOutput: '',
+        status: 'Error',
+        exitCode: 1,
+        executionTime: 0,
+        executionTimeMs: 0,
+        selectedLanguage: lang,
+        lastRunTimestamp: timestamp
+      };
+
+      const errResult = {
         success: false,
         status: 'Error',
         statusDescription: errMsg,
         stderr: errMsg,
+        stdout: '',
+        compileOutput: '',
+        exitCode: 1,
         executionTimeMs: 0,
+        executionTime: 0,
         language: lang,
-        provider: 'sandbox'
+        selectedLanguage: lang,
+        provider: 'sandbox',
+        lastRunTimestamp: timestamp
+      };
+
+      setExecutionResult(errResult);
+      setFileExecutionMap((prev) => {
+        const updated = {
+          ...prev,
+          [fileKey]: fileErrState
+        };
+        try {
+          localStorage.setItem('codecollab_file_executions', JSON.stringify(updated));
+        } catch {}
+        return updated;
       });
       showToast(`Execution failed: ${errMsg}`, 'error');
     } finally {
@@ -838,12 +1004,80 @@ export default function EditorWorkspacePage() {
     activeRoomId,
     executionStdin,
     maximizedPane,
+    getFileExecKey,
     showToast
   ]);
 
   const handleClearExecution = useCallback(() => {
     setExecutionResult(null);
+    if (!activeFile) return;
+    const currentProjId = currentProject?.id || matchedInContext?.id || activeRoomId || 'default';
+    const fileKey = getFileExecKey(currentProjId, activeFile);
+    setFileExecutionMap((prev) => {
+      const existing = prev[fileKey] || {};
+      const updated = {
+        ...prev,
+        [fileKey]: {
+          ...existing,
+          stdout: '',
+          stderr: '',
+          compileOutput: '',
+          status: '',
+          exitCode: null,
+          executionTime: null,
+          executionTimeMs: null,
+          lastRunTimestamp: null
+        }
+      };
+      try {
+        localStorage.setItem('codecollab_file_executions', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  }, [activeFile, currentProject?.id, matchedInContext?.id, activeRoomId, getFileExecKey]);
+
+  // Editor Find action (Ctrl+F)
+  const handleFind = useCallback(() => {
+    if (editorRef.current) {
+      editorRef.current.focus();
+      const findAction = editorRef.current.getAction('actions.find');
+      if (findAction) {
+        findAction.run();
+      }
+    }
   }, []);
+
+  // Editor Replace action (Ctrl+H)
+  const handleReplace = useCallback(() => {
+    if (editorRef.current) {
+      editorRef.current.focus();
+      const replaceAction = editorRef.current.getAction('editor.action.startFindReplaceAction');
+      if (replaceAction) {
+        replaceAction.run();
+      }
+    }
+  }, []);
+
+  // Editor Format Document action (Shift+Alt+F)
+  const handleFormatDocument = useCallback(async () => {
+    if (!editorRef.current) return;
+    if (isViewer || isEditorRestricted) {
+      showToast('Cannot format: file is read-only', 'warning');
+      return;
+    }
+    const formatAction = editorRef.current.getAction('editor.action.formatDocument');
+    if (formatAction) {
+      try {
+        await formatAction.run();
+        showToast('Document formatted', 'success');
+      } catch (err) {
+        console.warn('Formatting failed:', err);
+        showToast('Could not format document', 'info');
+      }
+    } else {
+      showToast(`No formatter available for ${activeFile || 'file'}`, 'info');
+    }
+  }, [isViewer, isEditorRestricted, activeFile, showToast]);
 
   const handleRun = useCallback(() => {
     if (maximizedPane === 'editor') {
@@ -1177,75 +1411,6 @@ export default function EditorWorkspacePage() {
 
         {/* Center Code Editor Area */}
         <main className="editor-workspace">
-          {/* Read-Only Notice Banner for Viewers */}
-          {isViewer && (
-            <div className="view-only-banner">
-              <Eye size={14} className="banner-icon" />
-              <span>
-                <strong>View-Only Mode:</strong> You can view all files in real time. Code editing and cloud saving are restricted to editors and the owner.
-              </span>
-            </div>
-          )}
-
-          {/* Protected File Notice Banner for Editors */}
-          {isEditorRestricted && (
-            <div className="protected-file-banner">
-              <div className="protected-file-banner-left">
-                <Lock size={14} className="banner-icon" />
-                <span>
-                  <strong>Protected File:</strong> This file is protected by the project owner.
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* Strict Review Mode Notice Banner for Editors */}
-          {!isViewer && effectiveRole === 'editor' && projectRequiresApproval && (
-            <div className="approval-mode-banner">
-              <div className="approval-mode-banner-left">
-                <GitPullRequest size={14} className="banner-icon" />
-                <span>
-                  <strong>Strict review mode is enabled. Your code changes require owner approval.</strong>
-                </span>
-              </div>
-              <button
-                type="button"
-                className="approval-mode-banner-btn"
-                onClick={() => {
-                  setChangeRequestsInitialCreate(true);
-                  setIsChangeRequestsOpen(true);
-                }}
-              >
-                <GitPullRequest size={12} />
-                <span>Request Review</span>
-              </button>
-            </div>
-          )}
-
-          {openTabs.length > 0 && (
-            <TabBar
-              openTabs={openTabs}
-              activeTab={activeFile}
-              onSelectTab={handleSelectFile}
-              onCloseTab={handleCloseTab}
-              onConsole={handleOpenConsole}
-              onUndo={handleUndo}
-              onRedo={handleRedo}
-              onRun={handleRun}
-              readOnly={isViewer || isEditorRestricted}
-              requiresApproval={projectRequiresApproval}
-              userRole={effectiveRole}
-              onRequestReview={() => {
-                setChangeRequestsInitialCreate(true);
-                setIsChangeRequestsOpen(true);
-              }}
-              onSubmitForReview={() => {
-                setChangeRequestsInitialCreate(true);
-                setIsChangeRequestsOpen(true);
-              }}
-            />
-          )}
-
           {/* Mobile/Tablet Workspace View Switcher (when Preview is open on small screens) */}
           {isPreviewOpen && isMobileWorkspace && (
             <div className="mobile-workspace-switcher" role="tablist" aria-label="Workspace View Mode">
@@ -1315,6 +1480,79 @@ export default function EditorWorkspacePage() {
                 flex: isPreviewOpen ? 'none' : '1'
               }}
             >
+              {/* Read-Only Notice Banner for Viewers */}
+              {isViewer && (
+                <div className="view-only-banner">
+                  <Eye size={14} className="banner-icon" />
+                  <span>
+                    <strong>View-Only Mode:</strong> You can view all files in real time. Code editing and cloud saving are restricted to editors and the owner.
+                  </span>
+                </div>
+              )}
+
+              {/* Protected File Notice Banner for Editors */}
+              {isEditorRestricted && (
+                <div className="protected-file-banner">
+                  <div className="protected-file-banner-left">
+                    <Lock size={14} className="banner-icon" />
+                    <span>
+                      <strong>Protected File:</strong> This file is protected by the project owner.
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Strict Review Mode Notice Banner for Editors */}
+              {!isViewer && effectiveRole === 'editor' && projectRequiresApproval && (
+                <div className="approval-mode-banner">
+                  <div className="approval-mode-banner-left">
+                    <GitPullRequest size={14} className="banner-icon" />
+                    <span>
+                      <strong>Strict review mode is enabled. Your code changes require owner approval.</strong>
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className="approval-mode-banner-btn"
+                    onClick={() => {
+                      setChangeRequestsInitialCreate(true);
+                      setIsChangeRequestsOpen(true);
+                    }}
+                  >
+                    <GitPullRequest size={12} />
+                    <span>Request Review</span>
+                  </button>
+                </div>
+              )}
+
+              {/* Code Editor Tab Bar with Responsive Dropdown & Grouped Tools */}
+              {openTabs.length > 0 && (
+                <TabBar
+                  openTabs={openTabs}
+                  activeTab={activeFile}
+                  onSelectTab={handleSelectFile}
+                  onCloseTab={handleCloseTab}
+                  onConsole={handleOpenConsole}
+                  onUndo={handleUndo}
+                  onRedo={handleRedo}
+                  onRun={handleRun}
+                  onFind={handleFind}
+                  onReplace={handleReplace}
+                  onFormatDocument={handleFormatDocument}
+                  readOnly={isViewer || isEditorRestricted}
+                  requiresApproval={projectRequiresApproval}
+                  userRole={effectiveRole}
+                  onRequestReview={() => {
+                    setChangeRequestsInitialCreate(true);
+                    setIsChangeRequestsOpen(true);
+                  }}
+                  onSubmitForReview={() => {
+                    setChangeRequestsInitialCreate(true);
+                    setIsChangeRequestsOpen(true);
+                  }}
+                />
+              )}
+
               {activeFile && currentFileObj ? (
                 <EditorArea
                   content={currentFileObj.content}
@@ -1386,7 +1624,7 @@ export default function EditorWorkspacePage() {
                 isExecuting={isExecuting}
                 onExecuteCode={handleExecuteCode}
                 stdin={executionStdin}
-                onStdinChange={setExecutionStdin}
+                onStdinChange={handleStdinChange}
                 onClearExecution={handleClearExecution}
                 style={{
                   width:
