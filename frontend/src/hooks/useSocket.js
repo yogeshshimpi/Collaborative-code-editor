@@ -24,7 +24,16 @@ export function useSocket({
   onChangeRequestRejected,
   onApprovalRequired,
   onProtectedFilesUpdated,
-  onActivityNotification
+  onActivityNotification,
+  // Collaboration Chat, Comments, and Notifications callbacks
+  onNewChatMessage,
+  onChatMessageEdited,
+  onChatMessageDeleted,
+  onNewComment,
+  onCommentReply,
+  onCommentResolved,
+  onCommentDeleted,
+  onNotification
 }) {
   const [connectionStatus, setConnectionStatus] = useState('connecting'); // 'connecting' | 'connected' | 'disconnected'
   const [participantCount, setParticipantCount] = useState(1);
@@ -55,7 +64,49 @@ export function useSocket({
   const onApprovalRequiredRef = useRef(onApprovalRequired);
   const onProtectedFilesUpdatedRef = useRef(onProtectedFilesUpdated);
   const onActivityNotificationRef = useRef(onActivityNotification);
+
+  const onNewChatMessageRef = useRef(onNewChatMessage);
+  const onChatMessageEditedRef = useRef(onChatMessageEdited);
+  const onChatMessageDeletedRef = useRef(onChatMessageDeleted);
+  const onNewCommentRef = useRef(onNewComment);
+  const onCommentReplyRef = useRef(onCommentReply);
+  const onCommentResolvedRef = useRef(onCommentResolved);
+  const onCommentDeletedRef = useRef(onCommentDeleted);
+  const onNotificationRef = useRef(onNotification);
+
   const userRef = useRef(user);
+
+  useEffect(() => {
+    onNewChatMessageRef.current = onNewChatMessage;
+  }, [onNewChatMessage]);
+
+  useEffect(() => {
+    onChatMessageEditedRef.current = onChatMessageEdited;
+  }, [onChatMessageEdited]);
+
+  useEffect(() => {
+    onChatMessageDeletedRef.current = onChatMessageDeleted;
+  }, [onChatMessageDeleted]);
+
+  useEffect(() => {
+    onNewCommentRef.current = onNewComment;
+  }, [onNewComment]);
+
+  useEffect(() => {
+    onCommentReplyRef.current = onCommentReply;
+  }, [onCommentReply]);
+
+  useEffect(() => {
+    onCommentResolvedRef.current = onCommentResolved;
+  }, [onCommentResolved]);
+
+  useEffect(() => {
+    onCommentDeletedRef.current = onCommentDeleted;
+  }, [onCommentDeleted]);
+
+  useEffect(() => {
+    onNotificationRef.current = onNotification;
+  }, [onNotification]);
 
   useEffect(() => {
     onProtectedFilesUpdatedRef.current = onProtectedFilesUpdated;
@@ -361,6 +412,57 @@ export function useSocket({
       }
     });
 
+    // Real-time Collaboration Chat Events
+    socket.on('chat:new-message', (data) => {
+      if (data && onNewChatMessageRef.current) {
+        onNewChatMessageRef.current(data);
+      }
+    });
+
+    socket.on('chat:message-edited', (data) => {
+      if (data && onChatMessageEditedRef.current) {
+        onChatMessageEditedRef.current(data);
+      }
+    });
+
+    socket.on('chat:message-deleted', (data) => {
+      if (data && onChatMessageDeletedRef.current) {
+        onChatMessageDeletedRef.current(data);
+      }
+    });
+
+    // Real-time Code Comments Events
+    socket.on('comment:new', (data) => {
+      if (data && onNewCommentRef.current) {
+        onNewCommentRef.current(data);
+      }
+    });
+
+    socket.on('comment:reply-added', (data) => {
+      if (data && onCommentReplyRef.current) {
+        onCommentReplyRef.current(data);
+      }
+    });
+
+    socket.on('comment:status-changed', (data) => {
+      if (data && onCommentResolvedRef.current) {
+        onCommentResolvedRef.current(data);
+      }
+    });
+
+    socket.on('comment:deleted', (data) => {
+      if (data && onCommentDeletedRef.current) {
+        onCommentDeletedRef.current(data);
+      }
+    });
+
+    // Direct In-App Notifications (mentions, comments, reviews)
+    socket.on('notification:new', (data) => {
+      if (data && onNotificationRef.current) {
+        onNotificationRef.current(data.notification || data);
+      }
+    });
+
     // Clean up on room change or unmount
     return () => {
       socket.off('connect');
@@ -389,6 +491,14 @@ export function useSocket({
       socket.off('change-request-approved');
       socket.off('change-request-rejected');
       socket.off('approval-required');
+      socket.off('chat:new-message');
+      socket.off('chat:message-edited');
+      socket.off('chat:message-deleted');
+      socket.off('comment:new');
+      socket.off('comment:reply-added');
+      socket.off('comment:status-changed');
+      socket.off('comment:deleted');
+      socket.off('notification:new');
       socket.disconnect();
       socketRef.current = null;
       setRemoteCursors({});
@@ -496,12 +606,63 @@ export function useSocket({
     }
   }, [roomId]);
 
+  // Real-time Chat Emit Helpers
+  const emitSendChatMessage = useCallback((message) => {
+    if (socketRef.current && socketRef.current.connected && message) {
+      socketRef.current.emit('chat:send-message', { roomId, message });
+    }
+  }, [roomId]);
+
+  const emitEditChatMessage = useCallback((messageId, message) => {
+    if (socketRef.current && socketRef.current.connected && messageId && message) {
+      socketRef.current.emit('chat:edit-message', { roomId, messageId, message });
+    }
+  }, [roomId]);
+
+  const emitDeleteChatMessage = useCallback((messageId) => {
+    if (socketRef.current && socketRef.current.connected && messageId) {
+      socketRef.current.emit('chat:delete-message', { roomId, messageId });
+    }
+  }, [roomId]);
+
+  const emitChatTyping = useCallback((isTyping) => {
+    if (socketRef.current && socketRef.current.connected) {
+      socketRef.current.emit('chat:typing', { roomId, isTyping });
+    }
+  }, [roomId]);
+
+  // Real-time Code Comments Emit Helpers
+  const emitCreateComment = useCallback((payload) => {
+    if (socketRef.current && socketRef.current.connected && payload) {
+      socketRef.current.emit('comment:create', { roomId, ...payload });
+    }
+  }, [roomId]);
+
+  const emitReplyComment = useCallback((commentId, content) => {
+    if (socketRef.current && socketRef.current.connected && commentId && content) {
+      socketRef.current.emit('comment:reply', { roomId, commentId, content });
+    }
+  }, [roomId]);
+
+  const emitResolveComment = useCallback((commentId, isResolved) => {
+    if (socketRef.current && socketRef.current.connected && commentId) {
+      socketRef.current.emit('comment:resolve', { roomId, commentId, isResolved });
+    }
+  }, [roomId]);
+
+  const emitDeleteComment = useCallback((commentId) => {
+    if (socketRef.current && socketRef.current.connected && commentId) {
+      socketRef.current.emit('comment:delete', { roomId, commentId });
+    }
+  }, [roomId]);
+
   return {
     connectionStatus,
     participantCount,
     activeUsers,
     role,
     remoteCursors,
+    socket: socketRef.current,
     emitCodeChange,
     emitCursorChange,
     emitCursorClear,
@@ -511,6 +672,14 @@ export function useSocket({
     emitRenameFolder,
     emitDeleteFile,
     emitDeleteFolder,
-    emitMoveItem
+    emitMoveItem,
+    emitSendChatMessage,
+    emitEditChatMessage,
+    emitDeleteChatMessage,
+    emitChatTyping,
+    emitCreateComment,
+    emitReplyComment,
+    emitResolveComment,
+    emitDeleteComment
   };
 }

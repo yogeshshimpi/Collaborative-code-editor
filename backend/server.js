@@ -22,6 +22,9 @@ import invitationRoutes from './routes/invitationRoutes.js';
 import activityRoutes from './routes/activityRoutes.js';
 import healthRoutes from './routes/healthRoutes.js';
 import executionRoutes from './routes/executionRoutes.js';
+import chatRoutes from './routes/chatRoutes.js';
+import commentRoutes from './routes/commentRoutes.js';
+import notificationRoutes from './routes/notificationRoutes.js';
 
 const app = express();
 const server = http.createServer(app);
@@ -50,6 +53,9 @@ app.use('/api/projects', projectRoutes);
 app.use('/api/projects', workspaceRoutes);
 app.use('/api/projects', versionRoutes);
 app.use('/api/projects', activityRoutes);
+app.use('/api/projects', chatRoutes);
+app.use('/api/projects', commentRoutes);
+app.use('/api/notifications', notificationRoutes);
 app.use('/api/invitations', invitationRoutes);
 app.use('/api/execute', executionRoutes);
 app.get('/api/rooms/:roomId', getLegacyRoom);
@@ -59,7 +65,7 @@ app.use(notFoundHandler);
 app.use(errorHandler);
 
 // Start server
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
   logger.info(`🚀 CodeCollab Backend running on http://localhost:${PORT}`);
   logger.info(`📡 Socket.IO listening with CORS allowed for: ${Array.from(allowedOriginsSet).join(', ')}`);
 });

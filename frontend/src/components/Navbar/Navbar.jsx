@@ -22,8 +22,11 @@ import {
   RotateCcw,
   Trash2,
   FilePlus,
-  MoreHorizontal
+  MoreHorizontal,
+  MessageSquare,
+  MessageCircle
 } from 'lucide-react';
+import NotificationBell from '../Notifications/NotificationBell';
 
 export default function Navbar({
   projectName = 'Untitled Project',
@@ -52,7 +55,19 @@ export default function Navbar({
   isAuthenticated = false,
   onOpenAuth,
   onOpenProjects,
-  onLogout
+  onLogout,
+  // Collaboration Chat, Comments, and Notifications
+  onToggleChat,
+  isChatOpen = false,
+  unreadChatCount = 0,
+  onToggleComments,
+  isCommentsOpen = false,
+  openCommentsCount = 0,
+  notifications = [],
+  unreadNotificationsCount = 0,
+  onMarkNotificationRead,
+  onMarkAllNotificationsRead,
+  onNavigateNotification
 }) {
   const [isEditingRoom, setIsEditingRoom] = useState(false);
   const [roomInput, setRoomInput] = useState(roomId);
@@ -538,6 +553,51 @@ export default function Navbar({
           <span className="btn-text">{userRole === 'owner' ? 'Share & Invite' : 'Share'}</span>
         </button>
 
+        {/* Code Comments button (Desktop) */}
+        {onToggleComments && (
+          <button
+            type="button"
+            className={`btn btn-secondary btn-action navbar-desktop-only ${isCommentsOpen ? 'active-action' : ''}`}
+            onClick={onToggleComments}
+            title={isCommentsOpen ? 'Close Code Comments' : 'View Code Comments'}
+            aria-label="Code Comments"
+            aria-pressed={isCommentsOpen}
+          >
+            <MessageCircle size={14} />
+            <span className="btn-text">Comments</span>
+            {openCommentsCount > 0 && (
+              <span className="navbar-badge navbar-comment-badge">{openCommentsCount}</span>
+            )}
+          </button>
+        )}
+
+        {/* Team Chat button (Desktop) */}
+        {onToggleChat && (
+          <button
+            type="button"
+            className={`btn btn-secondary btn-action navbar-desktop-only ${isChatOpen ? 'active-action' : ''}`}
+            onClick={onToggleChat}
+            title={isChatOpen ? 'Close Team Chat' : 'Open Team Chat'}
+            aria-label="Team Chat"
+            aria-pressed={isChatOpen}
+          >
+            <MessageSquare size={14} />
+            <span className="btn-text">Chat</span>
+            {unreadChatCount > 0 && (
+              <span className="navbar-badge navbar-chat-badge">{unreadChatCount > 99 ? '99+' : unreadChatCount}</span>
+            )}
+          </button>
+        )}
+
+        {/* Notification Bell (Desktop & Mobile) */}
+        <NotificationBell
+          notifications={notifications}
+          unreadCount={unreadNotificationsCount}
+          onMarkRead={onMarkNotificationRead}
+          onMarkAllRead={onMarkAllNotificationsRead}
+          onNavigateNotification={onNavigateNotification}
+        />
+
         {/* MOBILE TOOLS DROPDOWN TRIGGER (Mobile Only: < 768px) */}
         <div className="navbar-mobile-tools-wrapper" ref={mobileToolsRef}>
           <button
@@ -552,8 +612,10 @@ export default function Navbar({
             aria-haspopup="true"
           >
             <MoreHorizontal size={16} />
-            {pendingRequestsCount > 0 && (
-              <span className="navbar-cr-badge pulse">{pendingRequestsCount}</span>
+            {(pendingRequestsCount > 0 || unreadChatCount > 0) && (
+              <span className="navbar-cr-badge pulse">
+                {(pendingRequestsCount || 0) + (unreadChatCount || 0)}
+              </span>
             )}
           </button>
 
@@ -621,6 +683,42 @@ export default function Navbar({
                   <Share2 size={15} />
                   <span>{userRole === 'owner' ? 'Share & Invite' : 'Share Project'}</span>
                 </button>
+
+                {/* Team Chat mobile item */}
+                {onToggleChat && (
+                  <button
+                    type="button"
+                    className={`tools-dropdown-item ${isChatOpen ? 'active' : ''}`}
+                    onClick={() => {
+                      setIsMobileToolsOpen(false);
+                      onToggleChat();
+                    }}
+                  >
+                    <MessageSquare size={15} />
+                    <span>Team Chat</span>
+                    {unreadChatCount > 0 && (
+                      <span className="navbar-badge navbar-chat-badge">{unreadChatCount}</span>
+                    )}
+                  </button>
+                )}
+
+                {/* Code Comments mobile item */}
+                {onToggleComments && (
+                  <button
+                    type="button"
+                    className={`tools-dropdown-item ${isCommentsOpen ? 'active' : ''}`}
+                    onClick={() => {
+                      setIsMobileToolsOpen(false);
+                      onToggleComments();
+                    }}
+                  >
+                    <MessageCircle size={15} />
+                    <span>Code Comments</span>
+                    {openCommentsCount > 0 && (
+                      <span className="navbar-badge navbar-comment-badge">{openCommentsCount}</span>
+                    )}
+                  </button>
+                )}
 
                 {/* Owner Approvals workflow */}
                 {userRole === 'owner' && (

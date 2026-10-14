@@ -291,6 +291,69 @@ export async function initDatabase() {
 
         CREATE INDEX IF NOT EXISTS idx_activity_logs_room ON project_activity_logs(room_id, created_at DESC);
         CREATE INDEX IF NOT EXISTS idx_activity_logs_project ON project_activity_logs(project_id, created_at DESC);
+
+        -- Project real-time chat messages table
+        CREATE TABLE IF NOT EXISTS project_chat_messages (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
+          room_id VARCHAR(64) NOT NULL,
+          sender_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+          sender_name VARCHAR(100) NOT NULL,
+          sender_color VARCHAR(30) DEFAULT '#6366f1',
+          message TEXT NOT NULL,
+          is_edited BOOLEAN NOT NULL DEFAULT FALSE,
+          edited_at TIMESTAMPTZ,
+          is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+          deleted_at TIMESTAMPTZ,
+          mentions JSONB DEFAULT '[]'::jsonb,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_chat_project ON project_chat_messages(project_id, created_at ASC);
+        CREATE INDEX IF NOT EXISTS idx_chat_room ON project_chat_messages(room_id, created_at ASC);
+
+        -- Project line-level code comments and threads table
+        CREATE TABLE IF NOT EXISTS project_code_comments (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
+          room_id VARCHAR(64) NOT NULL,
+          file_path VARCHAR(255) NOT NULL,
+          line_number INTEGER NOT NULL,
+          line_content TEXT,
+          author_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+          author_name VARCHAR(100) NOT NULL,
+          author_color VARCHAR(30) DEFAULT '#6366f1',
+          content TEXT NOT NULL,
+          is_resolved BOOLEAN NOT NULL DEFAULT FALSE,
+          resolved_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+          resolved_at TIMESTAMPTZ,
+          parent_id UUID REFERENCES project_code_comments(id) ON DELETE CASCADE,
+          mentions JSONB DEFAULT '[]'::jsonb,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_code_comments_file ON project_code_comments(project_id, file_path, line_number);
+        CREATE INDEX IF NOT EXISTS idx_code_comments_room ON project_code_comments(room_id);
+        CREATE INDEX IF NOT EXISTS idx_code_comments_parent ON project_code_comments(parent_id);
+
+        -- User in-app notifications (@mentions, comments, reviews) table
+        CREATE TABLE IF NOT EXISTS user_notifications (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
+          room_id VARCHAR(64) NOT NULL,
+          type VARCHAR(50) NOT NULL,
+          title VARCHAR(150) NOT NULL,
+          body TEXT NOT NULL,
+          reference_id VARCHAR(64),
+          metadata JSONB DEFAULT '{}'::jsonb,
+          is_read BOOLEAN NOT NULL DEFAULT FALSE,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON user_notifications(user_id, is_read, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_notifications_project ON user_notifications(project_id);
       `);
       dbConnected = true;
       logger.info('Connected to Neon PostgreSQL database and verified tables.');

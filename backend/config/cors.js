@@ -47,7 +47,7 @@ export const corsOriginValidator = (origin, callback) => {
 export const corsOptions = {
   origin: corsOriginValidator,
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']
 };
 
 export default corsOptions;

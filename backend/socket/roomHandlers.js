@@ -19,6 +19,9 @@ export async function handleJoinRoom(io, socket, roomUsers, payload) {
 
   // Determine user identity: Use authenticated user if session cookie is present, else guest identity
   const authUser = socket.user || socket.data.authenticatedUser;
+  if (authUser?.id) {
+    socket.join(`user:${authUser.id}`);
+  }
   const initialActiveFile = typeof rawUser?.activeFile === 'string' && isValidFilePath(rawUser.activeFile) ? rawUser.activeFile : 'main.js';
   const sanitizedUser = authUser
     ? {

@@ -15,6 +15,9 @@ import ChangeRequestsModal from '../../components/ChangeRequestsModal/ChangeRequ
 import LivePreview from '../../components/LivePreview/LivePreview';
 import WorkspaceSplitDivider from '../../components/WorkspaceSplitDivider/WorkspaceSplitDivider';
 import Toast from '../../components/Toast/Toast';
+import ChatPanel from '../../components/ChatPanel/ChatPanel';
+import CodeCommentsDrawer from '../../components/CodeComments/CodeCommentsDrawer';
+import AddCommentModal from '../../components/CodeComments/AddCommentModal';
 import { useAuth } from '../../context/useAuth';
 import { api } from '../../services/api';
 import { INITIAL_FILES, getLanguageFromFile } from '../../data/initialFiles';
@@ -59,6 +62,25 @@ export default function EditorWorkspacePage() {
   const [projectNotFound, setProjectNotFound] = useState(false);
   const [toast, setToast] = useState(null);
 
+  // Real-time Collaboration Chat State
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
+  const [chatMessages, setChatMessages] = useState([]);
+
+  // Real-time Code Comments State
+  const [isCommentsOpen, setIsCommentsOpen] = useState(false);
+  const [codeComments, setCodeComments] = useState([]);
+  const [addCommentModal, setAddCommentModal] = useState({
+    isOpen: false,
+    filePath: '',
+    lineNumber: 1,
+    codeSnippet: ''
+  });
+
+  // User In-App Notifications State
+  const [notifications, setNotifications] = useState([]);
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
+
   // Sync approval mode and protected files when project state changes
   useEffect(() => {
     if (currentProject?.requires_approval !== undefined) {
@@ -81,6 +103,42 @@ export default function EditorWorkspacePage() {
       })
       .catch(() => {});
   }, [currentProject?.id, matchedInContext?.id, roomId]);
+
+  // Load Project Chat Messages and Code Comments
+  useEffect(() => {
+    const projId = currentProject?.id || matchedInContext?.id || roomId;
+    if (!projId || projId === 'demo-room') return;
+
+    api.getProjectChat(projId)
+      .then((res) => {
+        if (Array.isArray(res?.messages)) {
+          setChatMessages(res.messages);
+        }
+      })
+      .catch(() => {});
+
+    api.getCodeComments(projId)
+      .then((res) => {
+        if (Array.isArray(res?.comments)) {
+          setCodeComments(res.comments);
+        }
+      })
+      .catch(() => {});
+  }, [currentProject?.id, matchedInContext?.id, roomId]);
+
+  // Load In-App User Notifications
+  useEffect(() => {
+    api.getNotifications()
+      .then((res) => {
+        if (Array.isArray(res?.notifications)) {
+          setNotifications(res.notifications);
+          setUnreadNotificationsCount(
+            res.unreadCount ?? res.notifications.filter((n) => !n.isRead).length
+          );
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Show notification
   const showToast = useCallback((message, type = 'info') => {
@@ -539,6 +597,7 @@ export default function EditorWorkspacePage() {
     activeUsers,
     role,
     remoteCursors,
+    socket,
     emitCodeChange,
     emitCursorChange,
     emitCursorClear,
@@ -642,6 +701,68 @@ export default function EditorWorkspacePage() {
         message || 'Approval Mode is active. Direct edits require owner approval.',
         'warning'
       );
+    },
+    // Real-time Chat Events
+    onNewChatMessage: (msg) => {
+      setChatMessages((prev) => {
+        if (prev.some((m) => m.id === msg.id)) return prev;
+        return [...prev, msg];
+      });
+      setIsChatOpen((open) => {
+        if (!open) {
+          setUnreadChatCount((c) => c + 1);
+        }
+        return open;
+      });
+    },
+    onChatMessageEdited: (updated) => {
+      setChatMessages((prev) =>
+        prev.map((m) => (m.id === updated.id ? { ...m, ...updated } : m))
+      );
+    },
+    onChatMessageDeleted: (deleted) => {
+      setChatMessages((prev) =>
+        prev.map((m) =>
+          m.id === deleted.id
+            ? { ...m, message: 'This message was deleted.', isDeleted: true }
+            : m
+        )
+      );
+    },
+    // Real-time Code Comments Events
+    onNewComment: (comment) => {
+      setCodeComments((prev) => {
+        if (prev.some((c) => c.id === comment.id)) return prev;
+        return [comment, ...prev];
+      });
+      showToast(`New code comment on ${comment.filePath}:${comment.lineNumber}`, 'info');
+    },
+    onCommentReply: ({ commentId, reply }) => {
+      setCodeComments((prev) =>
+        prev.map((c) => {
+          if (c.id === commentId) {
+            const replies = Array.isArray(c.replies) ? c.replies : [];
+            return { ...c, replies: [...replies, reply] };
+          }
+          return c;
+        })
+      );
+    },
+    onCommentResolved: ({ commentId, status }) => {
+      setCodeComments((prev) =>
+        prev.map((c) =>
+          c.id === commentId ? { ...c, isResolved: status === 'resolved', status } : c
+        )
+      );
+    },
+    onCommentDeleted: ({ commentId }) => {
+      setCodeComments((prev) => prev.filter((c) => c.id !== commentId));
+    },
+    // In-App User Notifications
+    onNotification: (notif) => {
+      setNotifications((prev) => [notif, ...prev]);
+      setUnreadNotificationsCount((c) => c + 1);
+      showToast(`🔔 ${notif.title || 'New notification'}: ${notif.body || ''}`, 'info');
     }
   });
 
@@ -686,6 +807,198 @@ export default function EditorWorkspacePage() {
   const isViewer = effectiveRole === 'viewer';
   const isProtectedActiveFile = Boolean(activeFile && protectedFiles.includes(activeFile));
   const isEditorRestricted = isProtectedActiveFile && !isOwner;
+
+  // Real-time Collaboration Chat & Code Comments Handlers
+  const openCommentsCount = codeComments.filter((c) => !c.isResolved).length;
+
+  const handleToggleChat = useCallback(() => {
+    setIsChatOpen((prev) => {
+      const next = !prev;
+      if (next) {
+        setUnreadChatCount(0);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleSendChatMessage = useCallback(
+    async (text) => {
+      const projId = currentProject?.id || matchedInContext?.id || roomId;
+      if (!projId) return;
+      const res = await api.sendChatMessage(projId, {
+        message: typeof text === 'string' ? text : text?.message,
+        senderColor: currentUser?.color || '#6366f1'
+      });
+      if (res?.message) {
+        setChatMessages((prev) => {
+          if (prev.some((m) => m.id === res.message.id)) return prev;
+          return [...prev, res.message];
+        });
+      }
+      return res;
+    },
+    [currentProject?.id, matchedInContext?.id, roomId, currentUser?.color]
+  );
+
+  const handleEditChatMessage = useCallback(
+    async (messageId, text) => {
+      const projId = currentProject?.id || matchedInContext?.id || roomId;
+      if (!projId) return;
+      const res = await api.editChatMessage(projId, messageId, {
+        message: typeof text === 'string' ? text : text?.message
+      });
+      if (res?.message) {
+        setChatMessages((prev) =>
+          prev.map((m) => (m.id === res.message.id ? { ...m, ...res.message } : m))
+        );
+      }
+      return res;
+    },
+    [currentProject?.id, matchedInContext?.id, roomId]
+  );
+
+  const handleDeleteChatMessage = useCallback(
+    async (messageId) => {
+      const projId = currentProject?.id || matchedInContext?.id || roomId;
+      if (!projId) return;
+      const res = await api.deleteChatMessage(projId, messageId);
+      setChatMessages((prev) =>
+        prev.map((m) =>
+          m.id === messageId
+            ? { ...m, message: 'This message was deleted.', isDeleted: true }
+            : m
+        )
+      );
+      return res;
+    },
+    [currentProject?.id, matchedInContext?.id, roomId]
+  );
+
+  const handleToggleComments = useCallback(() => {
+    setIsCommentsOpen((prev) => !prev);
+  }, []);
+
+  const handleGutterCommentClick = useCallback(
+    (line, file) => {
+      const targetFile = file || activeFile;
+      const hasComments = codeComments.some(
+        (c) => c.filePath === targetFile && Number(c.lineNumber) === Number(line)
+      );
+      if (hasComments) {
+        setIsCommentsOpen(true);
+      } else {
+        const fileContent = filesState[targetFile]?.content || '';
+        const lines = fileContent.split('\n');
+        const codeSnippet = lines[line - 1] || '';
+        setAddCommentModal({
+          isOpen: true,
+          filePath: targetFile,
+          lineNumber: line,
+          codeSnippet: codeSnippet.trim()
+        });
+      }
+    },
+    [activeFile, codeComments, filesState]
+  );
+
+  const handleAddCommentAtLine = useCallback(
+    (line, file) => {
+      const targetFile = file || activeFile;
+      const fileContent = filesState[targetFile]?.content || '';
+      const lines = fileContent.split('\n');
+      const codeSnippet = lines[line - 1] || '';
+      setAddCommentModal({
+        isOpen: true,
+        filePath: targetFile,
+        lineNumber: line,
+        codeSnippet: codeSnippet.trim()
+      });
+    },
+    [activeFile, filesState]
+  );
+
+  const handleSubmitNewComment = useCallback(
+    async ({ filePath, lineNumber, content, selectedText }) => {
+      const projId = currentProject?.id || matchedInContext?.id || roomId;
+      if (!projId) return;
+      const res = await api.createCodeComment(projId, {
+        filePath,
+        lineNumber,
+        content,
+        selectedText
+      });
+      if (res?.comment) {
+        setCodeComments((prev) => [res.comment, ...prev]);
+        showToast('Comment posted successfully', 'success');
+      }
+    },
+    [currentProject?.id, matchedInContext?.id, roomId, showToast]
+  );
+
+  const handleReplyComment = useCallback(
+    async (commentId, content) => {
+      const projId = currentProject?.id || matchedInContext?.id || roomId;
+      if (!projId) return;
+      const res = await api.replyCodeComment(projId, commentId, content);
+      if (res?.reply) {
+        setCodeComments((prev) =>
+          prev.map((c) => {
+            if (c.id === commentId) {
+              const replies = Array.isArray(c.replies) ? c.replies : [];
+              return { ...c, replies: [...replies, res.reply] };
+            }
+            return c;
+          })
+        );
+      }
+    },
+    [currentProject?.id, matchedInContext?.id, roomId]
+  );
+
+  const handleResolveComment = useCallback(
+    async (commentId, isResolved) => {
+      const projId = currentProject?.id || matchedInContext?.id || roomId;
+      if (!projId) return;
+      const res = await api.resolveCodeComment(projId, commentId, isResolved);
+      if (res?.comment) {
+        setCodeComments((prev) =>
+          prev.map((c) =>
+            c.id === commentId ? { ...c, isResolved, status: isResolved ? 'resolved' : 'open' } : c
+          )
+        );
+      }
+    },
+    [currentProject?.id, matchedInContext?.id, roomId]
+  );
+
+  const handleDeleteComment = useCallback(
+    async (commentId) => {
+      const projId = currentProject?.id || matchedInContext?.id || roomId;
+      if (!projId) return;
+      await api.deleteCodeComment(projId, commentId);
+      setCodeComments((prev) => prev.filter((c) => c.id !== commentId));
+      showToast('Comment deleted', 'info');
+    },
+    [currentProject?.id, matchedInContext?.id, roomId, showToast]
+  );
+
+  const handleMarkNotificationRead = useCallback(async (notifId) => {
+    try {
+      await api.markNotificationRead(notifId);
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === notifId ? { ...n, isRead: true } : n))
+      );
+      setUnreadNotificationsCount((c) => Math.max(0, c - 1));
+    } catch {}
+  }, []);
+
+  const handleMarkAllNotificationsRead = useCallback(async () => {
+    try {
+      await api.markAllNotificationsRead();
+      setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+      setUnreadNotificationsCount(0);
+    } catch {}
+  }, []);
 
   // Undo and Redo actions for TabBar and coding controls
   const handleUndo = useCallback(() => {
@@ -774,7 +1087,7 @@ export default function EditorWorkspacePage() {
   }, [isOwner, currentProject?.id, matchedInContext?.id, activeRoomId, protectedFiles, showToast]);
 
   // Switch active file from sidebar or tabs
-  const handleSelectFile = (fileName) => {
+  const handleSelectFile = useCallback((fileName) => {
     if (fileName !== activeFile) {
       if (cursorThrottleTimerRef.current) {
         clearTimeout(cursorThrottleTimerRef.current);
@@ -789,7 +1102,38 @@ export default function EditorWorkspacePage() {
     }
     setActiveFile(fileName);
     setIsSidebarOpen(false);
-  };
+  }, [activeFile, openTabs, emitCursorClear]);
+
+  const handleJumpToCommentLine = useCallback(
+    (targetFilePath, lineNumber) => {
+      if (targetFilePath && targetFilePath !== activeFile) {
+        handleSelectFile(targetFilePath);
+      }
+      setTimeout(() => {
+        if (editorRef.current && lineNumber) {
+          editorRef.current.revealLineInCenter(lineNumber);
+          editorRef.current.setPosition({ lineNumber, column: 1 });
+          editorRef.current.focus();
+        }
+      }, 100);
+    },
+    [activeFile, handleSelectFile]
+  );
+
+  const handleNavigateNotification = useCallback(
+    (notif) => {
+      if (!notif) return;
+      if (notif.type === 'chat_mention') {
+        setIsChatOpen(true);
+      } else if (notif.type === 'code_comment' || notif.type === 'comment_mention') {
+        if (notif.metadata?.filePath) {
+          handleJumpToCommentLine(notif.metadata.filePath, notif.metadata.lineNumber || 1);
+        }
+        setIsCommentsOpen(true);
+      }
+    },
+    [handleJumpToCommentLine]
+  );
 
   // Close an open tab
   const handleCloseTab = (fileName) => {
@@ -1382,6 +1726,17 @@ export default function EditorWorkspacePage() {
         isAuthenticated={true}
         onOpenProjects={() => navigate('/projects')}
         onLogout={handleLogout}
+        onToggleChat={handleToggleChat}
+        isChatOpen={isChatOpen}
+        unreadChatCount={unreadChatCount}
+        onToggleComments={handleToggleComments}
+        isCommentsOpen={isCommentsOpen}
+        openCommentsCount={openCommentsCount}
+        notifications={notifications}
+        unreadNotificationsCount={unreadNotificationsCount}
+        onMarkNotificationRead={handleMarkNotificationRead}
+        onMarkAllNotificationsRead={handleMarkAllNotificationsRead}
+        onNavigateNotification={handleNavigateNotification}
       />
 
       {/* Main Workspace */}
@@ -1575,6 +1930,9 @@ export default function EditorWorkspacePage() {
                   onRun={handleRun}
                   onOpenConsole={handleOpenConsole}
                   editorRef={editorRef}
+                  codeComments={codeComments}
+                  onGutterCommentClick={handleGutterCommentClick}
+                  onAddCommentAtLine={handleAddCommentAtLine}
                 />
               ) : (
                 <div className="no-editor-state">
@@ -1782,6 +2140,48 @@ export default function EditorWorkspacePage() {
           onClose={() => setToast(null)}
         />
       )}
+
+      {/* Real-time Team Collaboration Chat Panel */}
+      <ChatPanel
+        isOpen={isChatOpen}
+        onClose={() => setIsChatOpen(false)}
+        projectId={currentProject?.id || matchedInContext?.id || activeRoomId}
+        roomId={activeRoomId}
+        currentUser={currentUser}
+        userRole={effectiveRole}
+        activeUsers={activeUsers}
+        messages={chatMessages}
+        onSendMessage={handleSendChatMessage}
+        onEditMessage={handleEditChatMessage}
+        onDeleteMessage={handleDeleteChatMessage}
+        socket={socket}
+      />
+
+      {/* Code Comments Drawer */}
+      <CodeCommentsDrawer
+        isOpen={isCommentsOpen}
+        onClose={() => setIsCommentsOpen(false)}
+        comments={codeComments}
+        activeFile={activeFile}
+        currentUser={currentUser}
+        userRole={effectiveRole}
+        onReply={handleReplyComment}
+        onResolve={handleResolveComment}
+        onDelete={handleDeleteComment}
+        onJumpToLine={handleJumpToCommentLine}
+      />
+
+      {/* Add Code Comment Modal */}
+      <AddCommentModal
+        isOpen={addCommentModal.isOpen}
+        onClose={() => setAddCommentModal((prev) => ({ ...prev, isOpen: false }))}
+        filePath={addCommentModal.filePath}
+        lineNumber={addCommentModal.lineNumber}
+        codeSnippet={addCommentModal.codeSnippet}
+        activeUsers={activeUsers}
+        onSubmit={handleSubmitNewComment}
+        isViewer={isViewer}
+      />
     </div>
   );
 }

@@ -10,6 +10,18 @@ import {
   handleMoveItem
 } from './fileHandlers.js';
 import { handleCursorChange, handleCursorClear } from './presenceHandlers.js';
+import {
+  handleChatMessage,
+  handleEditChatMessage,
+  handleDeleteChatMessage,
+  handleChatTyping
+} from './chatHandlers.js';
+import {
+  handleCreateComment,
+  handleReplyComment,
+  handleResolveComment,
+  handleDeleteComment
+} from './commentHandlers.js';
 import { logger } from '../utils/logger.js';
 
 export function registerSocketHandlers(io) {
@@ -37,6 +49,18 @@ export function registerSocketHandlers(io) {
     // Collaborator cursor & presence
     socket.on('cursor-change', (data) => handleCursorChange(io, socket, roomUsers, data));
     socket.on('cursor-clear', (data) => handleCursorClear(socket, data));
+
+    // Real-time Project Chat
+    socket.on('chat:send-message', (data) => handleChatMessage(io, socket, data));
+    socket.on('chat:edit-message', (data) => handleEditChatMessage(io, socket, data));
+    socket.on('chat:delete-message', (data) => handleDeleteChatMessage(io, socket, data));
+    socket.on('chat:typing', (data) => handleChatTyping(io, socket, data));
+
+    // Real-time Code Comments
+    socket.on('comment:create', (data) => handleCreateComment(io, socket, data));
+    socket.on('comment:reply', (data) => handleReplyComment(io, socket, data));
+    socket.on('comment:resolve', (data) => handleResolveComment(io, socket, data));
+    socket.on('comment:delete', (data) => handleDeleteComment(io, socket, data));
 
     // Disconnect events
     socket.on('disconnecting', () => handleDisconnecting(io, socket, roomUsers));

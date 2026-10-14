@@ -85,3 +85,32 @@
   pointer-events: none;
 }
 
+/* --------------------------------------------------------------------------
+   Monaco Code Comments Glyph Margin & Line Highlights
+   -------------------------------------------------------------------------- */
+.monaco-comment-glyph-indicator {
+  background-color: #0ea5e9;
+  border-radius: 50%;
+  width: 9px !important;
+  height: 9px !important;
+  margin-left: 6px;
+  margin-top: 5px;
+  cursor: pointer;
+  box-shadow: 0 0 6px rgba(14, 165, 233, 0.7);
+  transition: transform 0.15s ease, background-color 0.15s ease;
+}
+
+.monaco-comment-glyph-indicator:hover {
+  transform: scale(1.35);
+  background-color: #38bdf8;
+}
+
+.monaco-comment-glyph-indicator.resolved {
+  background-color: #10b981;
+  box-shadow: 0 0 5px rgba(16, 185, 129, 0.6);
+}
+
+.monaco-comment-line-highlight {
+  background: rgba(14, 165, 233, 0.08) !important;
+}
+

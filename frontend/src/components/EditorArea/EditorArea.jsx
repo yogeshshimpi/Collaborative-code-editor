@@ -34,18 +34,37 @@ export default function EditorArea({
   remoteCursors = {},
   onRun,
   onOpenConsole,
-  editorRef: externalEditorRef
+  editorRef: externalEditorRef,
+  codeComments = [],
+  onGutterCommentClick,
+  onAddCommentAtLine
 }) {
   const internalEditorRef = useRef(null);
   const editorRef = externalEditorRef || internalEditorRef;
   const monacoRef = useRef(null);
   const decorationsRef = useRef([]);
+  const commentDecorationsRef = useRef([]);
   const [isEditorReady, setIsEditorReady] = useState(false);
   const onRunRef = useRef(onRun);
+  const onGutterCommentClickRef = useRef(onGutterCommentClick);
+  const onAddCommentAtLineRef = useRef(onAddCommentAtLine);
+  const activeFileRef = useRef(activeFile);
 
   useEffect(() => {
     onRunRef.current = onRun;
   }, [onRun]);
+
+  useEffect(() => {
+    onGutterCommentClickRef.current = onGutterCommentClick;
+  }, [onGutterCommentClick]);
+
+  useEffect(() => {
+    onAddCommentAtLineRef.current = onAddCommentAtLine;
+  }, [onAddCommentAtLine]);
+
+  useEffect(() => {
+    activeFileRef.current = activeFile;
+  }, [activeFile]);
 
   // Mobile virtual keyboard & touchscreen states
   const [keyboardOffset, setKeyboardOffset] = useState(0);
@@ -85,6 +104,33 @@ export default function EditorArea({
       const replaceAction = editor.getAction('editor.action.startFindReplaceAction');
       if (replaceAction) {
         replaceAction.run();
+      }
+    });
+
+    // Handle gutter clicks for Code Comments
+    editor.onMouseDown((e) => {
+      if (e.target && e.target.type === monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN) {
+        const line = e.target.position?.lineNumber;
+        if (line) {
+          if (onGutterCommentClickRef.current) {
+            onGutterCommentClickRef.current(line, activeFileRef.current);
+          }
+        }
+      }
+    });
+
+    // Add Code Comment context menu action
+    editor.addAction({
+      id: 'add-code-comment',
+      label: '💬 Add Code Comment',
+      keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyMod.Alt | monaco.KeyCode.KeyM],
+      contextMenuGroupId: 'navigation',
+      contextMenuOrder: 1.5,
+      run: (ed) => {
+        const pos = ed.getPosition();
+        if (pos && onAddCommentAtLineRef.current) {
+          onAddCommentAtLineRef.current(pos.lineNumber, activeFileRef.current);
+        }
       }
     });
 
@@ -228,11 +274,65 @@ export default function EditorArea({
     decorationsRef.current = editor.deltaDecorations(decorationsRef.current, newDecorations);
   }, [remoteCursors, activeFile, isEditorReady]);
 
+  // Render Monaco glyph margin comment indicators and line highlights
+  useEffect(() => {
+    const editor = editorRef.current;
+    const monaco = monacoRef.current;
+    if (!editor || !monaco || !isEditorReady) return;
+
+    const model = editor.getModel();
+    if (!model) return;
+
+    const maxLine = model.getLineCount();
+    const fileComments = (codeComments || []).filter((c) => c.filePath === activeFile);
+
+    // Group comments by line number so one glyph per line with combined details
+    const commentsByLine = new Map();
+    fileComments.forEach((c) => {
+      const line = Math.min(Math.max(1, Number(c.lineNumber) || 1), maxLine);
+      if (!commentsByLine.has(line)) {
+        commentsByLine.set(line, []);
+      }
+      commentsByLine.get(line).push(c);
+    });
+
+    const newCommentDecorations = [];
+    commentsByLine.forEach((list, line) => {
+      const hasOpen = list.some((c) => !c.isResolved);
+      const isResolved = !hasOpen;
+      const authors = list.map((c) => c.authorName || 'User').join(', ');
+      const previewText = list.map((c) => `• ${c.authorName || 'User'}: ${c.content}`).join('\n');
+
+      newCommentDecorations.push({
+        range: new monaco.Range(line, 1, line, 1),
+        options: {
+          isWholeLine: false,
+          glyphMarginClassName: `monaco-comment-glyph-indicator ${isResolved ? 'resolved' : 'open'}`,
+          glyphMarginHoverMessage: {
+            value: `💬 **Comment${list.length > 1 ? 's' : ''} on Line ${line}** (${isResolved ? 'Resolved' : 'Active'})\nBy: ${authors}\n\n${previewText}`
+          },
+          className: hasOpen ? 'monaco-comment-line-highlight' : ''
+        }
+      });
+    });
+
+    commentDecorationsRef.current = editor.deltaDecorations(
+      commentDecorationsRef.current,
+      newCommentDecorations
+    );
+  }, [codeComments, activeFile, isEditorReady]);
+
   // Clean up decorations and styles on file change or unmount
   useEffect(() => {
     return () => {
       if (editorRef.current && decorationsRef.current.length > 0) {
         decorationsRef.current = editorRef.current.deltaDecorations(decorationsRef.current, []);
+      }
+      if (editorRef.current && commentDecorationsRef.current.length > 0) {
+        commentDecorationsRef.current = editorRef.current.deltaDecorations(
+          commentDecorationsRef.current,
+          []
+        );
       }
       const styleEl = document.getElementById('monaco-remote-cursor-styles');
       if (styleEl) {
@@ -425,7 +525,7 @@ export default function EditorArea({
             },
             lineNumbers: 'on',
             lineNumbersMinChars: isMobileScreen ? 2 : 3,
-            glyphMargin: false,
+            glyphMargin: true,
             folding: !isMobileScreen,
             automaticLayout: true,
             scrollBeyondLastLine: false,

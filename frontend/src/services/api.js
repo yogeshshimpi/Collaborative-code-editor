@@ -5,12 +5,27 @@
 // Authentication and REST APIs must use the backend origin. Socket.IO already
 // uses VITE_SOCKET_SERVER_URL, so use it as a safe fallback when a separate
 // VITE_API_URL was not configured during the Vite build.
-const API_BASE = (
-  import.meta.env.VITE_API_URL
-  || import.meta.env.VITE_BACKEND_URL
-  || (import.meta.env.DEV ? '' : import.meta.env.VITE_SOCKET_SERVER_URL)
-  || ''
-).replace(/\/$/, '');
+const resolveApiBase = () => {
+  const configured = import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL;
+  if (configured) {
+    if (typeof window !== 'undefined' && window.location.hostname && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      try {
+        const u = new URL(configured);
+        if (u.hostname === 'localhost' || u.hostname === '127.0.0.1') {
+          u.hostname = window.location.hostname;
+          return u.origin;
+        }
+      } catch {}
+    }
+    return configured.replace(/\/$/, '');
+  }
+  if (typeof window !== 'undefined' && window.location.hostname && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+    return `${window.location.protocol}//${window.location.hostname}:5000`;
+  }
+  return (import.meta.env.DEV ? '' : (import.meta.env.VITE_SOCKET_SERVER_URL || '')).replace(/\/$/, '');
+};
+
+const API_BASE = resolveApiBase();
 
 export const apiUrl = (endpoint) => `${API_BASE}${endpoint}`;
 
@@ -233,6 +248,94 @@ export const api = {
   async getExecutionLanguages() {
     return request('/api/execute/languages', {
       method: 'GET'
+    });
+  },
+
+  // Project Real-Time Chat
+  async getProjectChat(projectId, limit = 100) {
+    return request(`/api/projects/${encodeURIComponent(projectId)}/chat?limit=${limit}`, {
+      method: 'GET'
+    });
+  },
+
+  async sendChatMessage(projectId, payload) {
+    const data = typeof payload === 'string' ? { message: payload } : (payload || {});
+    return request(`/api/projects/${encodeURIComponent(projectId)}/chat`, {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  },
+
+  async editChatMessage(projectId, messageId, payload) {
+    const data = typeof payload === 'string' ? { message: payload } : (payload || {});
+    return request(`/api/projects/${encodeURIComponent(projectId)}/chat/${encodeURIComponent(messageId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data)
+    });
+  },
+
+  async deleteChatMessage(projectId, messageId) {
+    return request(`/api/projects/${encodeURIComponent(projectId)}/chat/${encodeURIComponent(messageId)}`, {
+      method: 'DELETE'
+    });
+  },
+
+  // Project Code Comments
+  async getCodeComments(projectId, filePath = null) {
+    const query = filePath ? `?file=${encodeURIComponent(filePath)}` : '';
+    return request(`/api/projects/${encodeURIComponent(projectId)}/comments${query}`, {
+      method: 'GET'
+    });
+  },
+
+  async createCodeComment(projectId, payload) {
+    const data = typeof payload === 'string' ? { content: payload } : (payload || {});
+    if (data.selectedText && !data.lineContent) {
+      data.lineContent = data.selectedText;
+    }
+    return request(`/api/projects/${encodeURIComponent(projectId)}/comments`, {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  },
+
+  async replyCodeComment(projectId, commentId, payload) {
+    const data = typeof payload === 'string' ? { content: payload } : (payload || {});
+    return request(`/api/projects/${encodeURIComponent(projectId)}/comments/${encodeURIComponent(commentId)}/replies`, {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  },
+
+  async resolveCodeComment(projectId, commentId, isResolved) {
+    return request(`/api/projects/${encodeURIComponent(projectId)}/comments/${encodeURIComponent(commentId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ isResolved })
+    });
+  },
+
+  async deleteCodeComment(projectId, commentId) {
+    return request(`/api/projects/${encodeURIComponent(projectId)}/comments/${encodeURIComponent(commentId)}`, {
+      method: 'DELETE'
+    });
+  },
+
+  // In-App Notifications
+  async getNotifications(limit = 50) {
+    return request(`/api/notifications?limit=${limit}`, {
+      method: 'GET'
+    });
+  },
+
+  async markNotificationRead(id) {
+    return request(`/api/notifications/${encodeURIComponent(id)}/read`, {
+      method: 'PATCH'
+    });
+  },
+
+  async markAllNotificationsRead() {
+    return request('/api/notifications/read-all', {
+      method: 'PATCH'
     });
   }
 };
