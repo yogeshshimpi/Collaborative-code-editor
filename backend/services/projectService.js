@@ -8,7 +8,8 @@ import {
   getProjectMembers as dbGetProjectMembers,
   updateProjectMemberRole,
   removeProjectMember,
-  updateProjectApprovalMode
+  updateProjectApprovalMode,
+  updateProjectProtectedFiles
 } from '../db/projects.js';
 import { getRoomFiles } from '../db/workspace.js';
 import { getProjectInvitations } from '../db/invitations.js';
@@ -154,6 +155,23 @@ export async function setApprovalMode(projectIdOrRoomId, requiresApproval, userI
   return { project: updated };
 }
 
+export async function setProtectedFiles(projectIdOrRoomId, protectedFiles, userId) {
+  const project = await getProjectById(projectIdOrRoomId, userId);
+  if (!project) throw new ApiError(404, 'Project not found.');
+
+  const role = await getProjectRole(projectIdOrRoomId, userId);
+  if (role !== 'owner' && project.owner_id !== userId) {
+    throw new ApiError(403, 'Only the project owner can update protected files.');
+  }
+
+  const updated = await updateProjectProtectedFiles(projectIdOrRoomId, protectedFiles, userId);
+  if (!updated) {
+    throw new ApiError(500, 'Failed to update protected files.');
+  }
+
+  return { project: updated };
+}
+
 export default {
   listUserProjects,
   createNewProject,
@@ -163,5 +181,6 @@ export default {
   getProjectCollaborators,
   changeMemberRole,
   removeMemberFromProject,
-  setApprovalMode
+  setApprovalMode,
+  setProtectedFiles
 };

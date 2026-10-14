@@ -1,7 +1,7 @@
 import './EditorWorkspacePage.css';
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Eye, FolderCode, ArrowLeft, Code2, Columns, Play, GitPullRequest } from 'lucide-react';
+import { Eye, FolderCode, ArrowLeft, Code2, Columns, Play, GitPullRequest, Lock, RotateCcw, Trash2, X } from 'lucide-react';
 import Navbar from '../../components/Navbar/Navbar';
 import Sidebar from '../../components/Sidebar/Sidebar';
 import TabBar from '../../components/TabBar/TabBar';
@@ -47,6 +47,11 @@ export default function EditorWorkspacePage() {
   const [projectRequiresApproval, setProjectRequiresApproval] = useState(
     Boolean(matchedInContext?.requires_approval)
   );
+  const [protectedFiles, setProtectedFiles] = useState(
+    Array.isArray(matchedInContext?.protected_files) ? matchedInContext.protected_files : []
+  );
+  const [undoDeleteInfo, setUndoDeleteInfo] = useState(null);
+  const undoTimerRef = useRef(null);
   const [isChangeRequestsOpen, setIsChangeRequestsOpen] = useState(false);
   const [changeRequestsInitialCreate, setChangeRequestsInitialCreate] = useState(false);
   const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
@@ -54,12 +59,15 @@ export default function EditorWorkspacePage() {
   const [projectNotFound, setProjectNotFound] = useState(false);
   const [toast, setToast] = useState(null);
 
-  // Sync approval mode when project state changes
+  // Sync approval mode and protected files when project state changes
   useEffect(() => {
     if (currentProject?.requires_approval !== undefined) {
       setProjectRequiresApproval(Boolean(currentProject.requires_approval));
     }
-  }, [currentProject?.requires_approval]);
+    if (Array.isArray(currentProject?.protected_files)) {
+      setProtectedFiles(currentProject.protected_files);
+    }
+  }, [currentProject?.requires_approval, currentProject?.protected_files]);
 
   // Load pending change requests counter
   useEffect(() => {
@@ -104,6 +112,9 @@ export default function EditorWorkspacePage() {
           if (res.project.requires_approval !== undefined) {
             setProjectRequiresApproval(Boolean(res.project.requires_approval));
           }
+          if (Array.isArray(res.project.protected_files)) {
+            setProtectedFiles(res.project.protected_files);
+          }
           setIsProjectLoading(false);
           setProjectNotFound(false);
         }
@@ -131,6 +142,9 @@ export default function EditorWorkspacePage() {
       }));
       if (info.requires_approval !== undefined) {
         setProjectRequiresApproval(Boolean(info.requires_approval));
+      }
+      if (Array.isArray(info.protected_files)) {
+        setProtectedFiles(info.protected_files);
       }
     }
   }, []);
@@ -187,6 +201,10 @@ export default function EditorWorkspacePage() {
   const [isDraggingSplit, setIsDraggingSplit] = useState(false);
   const [mobileWorkspaceView, setMobileWorkspaceView] = useState('split'); // 'editor' | 'split' | 'preview'
   const [runTrigger, setRunTrigger] = useState(0);
+  // Sandboxed Code Execution State
+  const [executionResult, setExecutionResult] = useState(null);
+  const [isExecuting, setIsExecuting] = useState(false);
+  const [executionStdin, setExecutionStdin] = useState('');
   const [isMobileWorkspace, setIsMobileWorkspace] = useState(
     () => typeof window !== 'undefined' && window.innerWidth < 1024
   );
@@ -470,13 +488,36 @@ export default function EditorWorkspacePage() {
     onActivityLogEntry: (entry) => {
       setLiveActivityEntry(entry);
     },
+    onProtectedFilesUpdated: ({ protectedFiles: nextProtected }) => {
+      const list = Array.isArray(nextProtected) ? nextProtected : [];
+      setProtectedFiles(list);
+      setCurrentProject((prev) => (prev ? { ...prev, protected_files: list } : prev));
+      showToast('Protected files list updated by project owner.', 'info');
+    },
+    onActivityNotification: (notif) => {
+      if (notif?.userName && notif.userName !== currentUser?.name) {
+        const actionMap = {
+          file_create: 'created file',
+          folder_create: 'created folder',
+          file_rename: 'renamed file',
+          folder_rename: 'renamed folder',
+          file_delete: 'deleted file',
+          folder_delete: 'deleted folder',
+          file_move: 'moved item',
+          version_restore: 'restored version on',
+          review_requested: 'requested code review for'
+        };
+        const verb = actionMap[notif.action] || notif.action;
+        showToast(`${notif.userName} ${verb} "${notif.targetName || ''}"`, 'info');
+      }
+    },
     onApprovalModeUpdated: ({ requiresApproval }) => {
       setProjectRequiresApproval(Boolean(requiresApproval));
       setCurrentProject((prev) => (prev ? { ...prev, requires_approval: Boolean(requiresApproval) } : prev));
       showToast(
         requiresApproval
-          ? 'Project Owner has enabled Approval Mode. Editor changes now require approval.'
-          : 'Project Owner has disabled Approval Mode. Direct editing is now active.',
+          ? 'Strict review mode enabled: Editor code changes require owner approval.'
+          : 'Strict review mode disabled: Direct editing is active.',
         'info'
       );
     },
@@ -487,7 +528,7 @@ export default function EditorWorkspacePage() {
     onChangeRequestApproved: ({ changeRequest, appliedResult }) => {
       setPendingRequestsCount((prev) => Math.max(0, prev - 1));
       showToast(`Change request "${changeRequest?.title || 'Untitled'}" was approved and applied!`, 'success');
-      if (appliedResult?.type === 'code_change' && appliedResult?.filePath) {
+      if ((appliedResult?.type === 'code_change' || appliedResult?.type === 'version_restore') && appliedResult?.filePath) {
         setFilesState((prev) => ({
           ...prev,
           [appliedResult.filePath]: {
@@ -495,6 +536,21 @@ export default function EditorWorkspacePage() {
             content: appliedResult.content
           }
         }));
+      } else if (appliedResult?.type === 'file_create' && appliedResult?.filePath) {
+        setFilesState((prev) => ({
+          ...prev,
+          [appliedResult.filePath]: {
+            name: appliedResult.filePath,
+            content: appliedResult.content || '',
+            language: getLanguageFromFile(appliedResult.filePath)
+          }
+        }));
+      } else if (appliedResult?.type === 'file_delete' && appliedResult?.filePath) {
+        setFilesState((prev) => {
+          const next = { ...prev };
+          delete next[appliedResult.filePath];
+          return next;
+        });
       }
     },
     onChangeRequestRejected: ({ changeRequest }) => {
@@ -540,8 +596,16 @@ export default function EditorWorkspacePage() {
   );
 
   // Effective role in project workspace
-  const effectiveRole = role || currentProject?.role || matchedInContext?.role || 'editor';
+  const isOwner = Boolean(
+    role === 'owner' ||
+    (user?.id && (currentProject?.owner_id === user.id || matchedInContext?.owner_id === user.id)) ||
+    currentProject?.role === 'owner' ||
+    matchedInContext?.role === 'owner'
+  );
+  const effectiveRole = isOwner ? 'owner' : (role || currentProject?.role || matchedInContext?.role || 'editor');
   const isViewer = effectiveRole === 'viewer';
+  const isProtectedActiveFile = Boolean(activeFile && protectedFiles.includes(activeFile));
+  const isEditorRestricted = isProtectedActiveFile && !isOwner;
 
   // Undo and Redo actions for TabBar and coding controls
   const handleUndo = useCallback(() => {
@@ -601,6 +665,33 @@ export default function EditorWorkspacePage() {
     setProjectRequiresApproval(nextValue);
     setCurrentProject((prev) => (prev ? { ...prev, requires_approval: nextValue } : prev));
   };
+
+  // Toggle protected file (Owner only)
+  const handleToggleProtectFile = useCallback(async (filePath) => {
+    if (!isOwner) {
+      showToast('Only the project owner can change file protection status.', 'error');
+      return;
+    }
+    const targetId = currentProject?.id || matchedInContext?.id || activeRoomId;
+    const isCurrentlyProtected = protectedFiles.includes(filePath);
+    const nextList = isCurrentlyProtected
+      ? protectedFiles.filter((p) => p !== filePath)
+      : [...protectedFiles, filePath];
+
+    try {
+      await api.updateProtectedFiles(targetId, nextList);
+      setProtectedFiles(nextList);
+      setCurrentProject((prev) => (prev ? { ...prev, protected_files: nextList } : prev));
+      showToast(
+        isCurrentlyProtected
+          ? `Unprotected "${filePath}". Editors can now modify it.`
+          : `Protected "${filePath}". Editors cannot edit, rename, or delete it.`,
+        'success'
+      );
+    } catch (err) {
+      showToast(err.message || 'Failed to update file protection.', 'error');
+    }
+  }, [isOwner, currentProject?.id, matchedInContext?.id, activeRoomId, protectedFiles, showToast]);
 
   // Switch active file from sidebar or tabs
   const handleSelectFile = (fileName) => {
@@ -668,19 +759,114 @@ export default function EditorWorkspacePage() {
   };
 
   // Action handlers
-  const handleRun = useCallback(() => {
+  const handleExecuteCode = useCallback(async (customStdin) => {
+    if (!activeFile) {
+      showToast('Please select a file to execute', 'warning');
+      return;
+    }
+
+    const lang = getLanguageFromFile(activeFile);
+    const supportedLangs = ['javascript', 'python', 'java', 'cpp', 'c'];
+    if (!supportedLangs.includes(lang)) {
+      showToast(`Direct execution is not supported for "${activeFile}".`, 'info');
+      return;
+    }
+
+    const code = filesState[activeFile]?.content || '';
+    if (!code.trim()) {
+      showToast('File is empty, nothing to run.', 'warning');
+      return;
+    }
+
+    setIsExecuting(true);
     setIsPreviewOpen(true);
-    setPreviewActiveTab('preview');
+    setPreviewActiveTab('terminal');
     if (maximizedPane === 'editor') {
       setMaximizedPane('none');
     }
-    setRunTrigger((prev) => prev + 1);
-    if (isViewer) {
-      showToast('Running project in isolated Live Preview (Viewer mode)', 'info');
-    } else {
-      showToast('Running project in Live Preview split panel', 'success');
+
+    const projId = currentProject?.id || matchedInContext?.id || activeRoomId;
+    const stdinToPass = customStdin !== undefined ? customStdin : executionStdin;
+
+    try {
+      const res = await api.executeCode({
+        projectId: projId,
+        language: lang,
+        fileName: activeFile,
+        code,
+        stdin: stdinToPass
+      });
+
+      const executionData = res?.result || res;
+      if (executionData && typeof executionData === 'object') {
+        setExecutionResult(executionData);
+        if (executionData.status === 'Accepted') {
+          showToast(`Execution finished (${executionData.executionTimeMs}ms)`, 'success');
+        } else if (executionData.compileOutput) {
+          showToast(`Compilation error in ${activeFile}`, 'error');
+        } else if (executionData.status === 'Time Limit Exceeded') {
+          showToast('Execution timed out (> 10s)', 'warning');
+        } else if (executionData.stderr) {
+          showToast(`Runtime error in ${activeFile}`, 'warning');
+        } else {
+          showToast(`Execution finished: ${executionData.status || 'OK'}`, 'info');
+        }
+      } else {
+        throw new Error(res?.error || 'Invalid execution response');
+      }
+    } catch (err) {
+      console.error('Code execution failed:', err);
+      const errMsg = err.response?.data?.error || err.message || 'Execution error';
+      setExecutionResult({
+        success: false,
+        status: 'Error',
+        statusDescription: errMsg,
+        stderr: errMsg,
+        executionTimeMs: 0,
+        language: lang,
+        provider: 'sandbox'
+      });
+      showToast(`Execution failed: ${errMsg}`, 'error');
+    } finally {
+      setIsExecuting(false);
     }
-  }, [maximizedPane, isViewer, showToast]);
+  }, [
+    activeFile,
+    filesState,
+    currentProject,
+    matchedInContext,
+    activeRoomId,
+    executionStdin,
+    maximizedPane,
+    showToast
+  ]);
+
+  const handleClearExecution = useCallback(() => {
+    setExecutionResult(null);
+  }, []);
+
+  const handleRun = useCallback(() => {
+    if (maximizedPane === 'editor') {
+      setMaximizedPane('none');
+    }
+
+    const fileLang = activeFile ? getLanguageFromFile(activeFile) : null;
+    const isBackendLang = fileLang && ['python', 'java', 'cpp', 'c'].includes(fileLang);
+    const isJsInTerminal = fileLang === 'javascript' && previewActiveTab === 'terminal';
+
+    if (isBackendLang || isJsInTerminal) {
+      handleExecuteCode();
+    } else {
+      setIsPreviewOpen(true);
+      setPreviewActiveTab('preview');
+      setRunTrigger((prev) => prev + 1);
+      if (isViewer) {
+        showToast('Running project in isolated Live Preview (Viewer mode)', 'info');
+      } else {
+        showToast('Running project in Live Preview split panel', 'success');
+      }
+    }
+  }, [maximizedPane, activeFile, previewActiveTab, handleExecuteCode, isViewer, showToast]);
 
   const handleOpenConsole = useCallback(() => {
     setIsPreviewOpen(true);
@@ -725,38 +911,152 @@ export default function EditorWorkspacePage() {
     [showToast]
   );
 
-  // Virtual file & folder actions
+  // Virtual file & folder actions - Immediate for Owner and Editor without approval
   const handleCreateFile = useCallback((path, content) => {
+    if (isViewer) {
+      showToast('View-only access: creating files is disabled.', 'error');
+      return;
+    }
     emitCreateFile(path, content);
     setOpenTabs((prev) => (prev.includes(path) ? prev : [...prev, path]));
     setActiveFile(path);
     showToast(`Creating "${path}"...`, 'info');
-  }, [emitCreateFile, showToast]);
+  }, [emitCreateFile, showToast, isViewer]);
 
   const handleCreateFolder = useCallback((path) => {
+    if (isViewer) {
+      showToast('View-only access: creating folders is disabled.', 'error');
+      return;
+    }
     emitCreateFolder(path);
     showToast(`Creating folder "${path}"...`, 'info');
-  }, [emitCreateFolder, showToast]);
+  }, [emitCreateFolder, showToast, isViewer]);
 
   const handleRenameFile = useCallback((oldPath, newPath) => {
+    if (isViewer) {
+      showToast('View-only access: renaming files is disabled.', 'error');
+      return;
+    }
+    if (!isOwner && protectedFiles.includes(oldPath)) {
+      showToast(`File "${oldPath}" is protected by the project owner and cannot be renamed.`, 'error');
+      return;
+    }
     emitRenameFile(oldPath, newPath);
-  }, [emitRenameFile]);
+  }, [emitRenameFile, isViewer, isOwner, protectedFiles, showToast]);
 
   const handleRenameFolder = useCallback((oldFolder, newFolder) => {
+    if (isViewer) {
+      showToast('View-only access: renaming folders is disabled.', 'error');
+      return;
+    }
+    if (!isOwner && protectedFiles.some((pf) => pf === oldFolder || pf.startsWith(`${oldFolder}/`))) {
+      showToast(`Folder "${oldFolder}" contains protected files and cannot be renamed by editors.`, 'error');
+      return;
+    }
     emitRenameFolder(oldFolder, newFolder);
-  }, [emitRenameFolder]);
+  }, [emitRenameFolder, isViewer, isOwner, protectedFiles, showToast]);
 
+  // Safe delete experience: applies immediately with 10-second Undo toast
   const handleDeleteFile = useCallback((path) => {
+    if (isViewer) {
+      showToast('View-only access: deleting files is disabled.', 'error');
+      return;
+    }
+    if (!isOwner && protectedFiles.includes(path)) {
+      showToast(`File "${path}" is protected by the project owner and cannot be deleted.`, 'error');
+      return;
+    }
+
+    const currentContent = filesState[path]?.content || '';
+    if (undoTimerRef.current) {
+      clearTimeout(undoTimerRef.current);
+    }
+
+    setUndoDeleteInfo({
+      type: 'file',
+      path,
+      content: currentContent,
+      timestamp: Date.now()
+    });
+
+    undoTimerRef.current = setTimeout(() => {
+      setUndoDeleteInfo(null);
+    }, 10000);
+
     emitDeleteFile(path);
-  }, [emitDeleteFile]);
+  }, [emitDeleteFile, isViewer, isOwner, protectedFiles, filesState, showToast]);
 
   const handleDeleteFolder = useCallback((path) => {
+    if (isViewer) {
+      showToast('View-only access: deleting folders is disabled.', 'error');
+      return;
+    }
+    if (!isOwner && protectedFiles.some((pf) => pf === path || pf.startsWith(`${path}/`))) {
+      showToast(`Folder "${path}" contains protected files and cannot be deleted by editors.`, 'error');
+      return;
+    }
+
+    const childFiles = Object.entries(filesState)
+      .filter(([k]) => k.startsWith(`${path}/`))
+      .map(([k, v]) => ({ path: k, content: v?.content || '' }));
+    const childFolders = foldersState.filter((f) => f === path || f.startsWith(`${path}/`));
+
+    if (undoTimerRef.current) {
+      clearTimeout(undoTimerRef.current);
+    }
+
+    setUndoDeleteInfo({
+      type: 'folder',
+      path,
+      files: childFiles,
+      folders: childFolders,
+      timestamp: Date.now()
+    });
+
+    undoTimerRef.current = setTimeout(() => {
+      setUndoDeleteInfo(null);
+    }, 10000);
+
     emitDeleteFolder(path);
-  }, [emitDeleteFolder]);
+  }, [emitDeleteFolder, isViewer, isOwner, protectedFiles, filesState, foldersState, showToast]);
+
+  // Restore deleted file or folder when Undo is clicked
+  const handlePerformUndoDelete = useCallback(() => {
+    if (!undoDeleteInfo) return;
+    if (undoTimerRef.current) {
+      clearTimeout(undoTimerRef.current);
+      undoTimerRef.current = null;
+    }
+
+    if (undoDeleteInfo.type === 'file') {
+      emitCreateFile(undoDeleteInfo.path, undoDeleteInfo.content);
+      setOpenTabs((prev) => (prev.includes(undoDeleteInfo.path) ? prev : [...prev, undoDeleteInfo.path]));
+      setActiveFile(undoDeleteInfo.path);
+      showToast(`Restored "${undoDeleteInfo.path}"`, 'success');
+    } else if (undoDeleteInfo.type === 'folder') {
+      emitCreateFolder(undoDeleteInfo.path);
+      for (const folder of undoDeleteInfo.folders || []) {
+        if (folder !== undoDeleteInfo.path) {
+          emitCreateFolder(folder);
+        }
+      }
+      for (const file of undoDeleteInfo.files || []) {
+        emitCreateFile(file.path, file.content);
+      }
+      showToast(`Restored folder "${undoDeleteInfo.path}" and its contents`, 'success');
+    }
+
+    setUndoDeleteInfo(null);
+  }, [undoDeleteInfo, emitCreateFile, emitCreateFolder, showToast]);
 
   const handleMoveItem = useCallback((itemType, oldPath, targetParentFolder) => {
+    if (isViewer) return;
+    if (!isOwner && protectedFiles.some((pf) => pf === oldPath || pf.startsWith(`${oldPath}/`))) {
+      showToast(`Protected file/folder cannot be moved by editors.`, 'error');
+      return;
+    }
     emitMoveItem(itemType, oldPath, targetParentFolder);
-  }, [emitMoveItem]);
+  }, [emitMoveItem, isViewer, isOwner, protectedFiles, showToast]);
 
   const handleToggleActivity = useCallback(() => {
     setIsActivityLogOpen((prev) => {
@@ -840,6 +1140,8 @@ export default function EditorWorkspacePage() {
           setIsChangeRequestsOpen(true);
         }}
         pendingRequestsCount={pendingRequestsCount}
+        requiresApproval={projectRequiresApproval}
+        onToggleApprovalMode={handleToggleApprovalMode}
         isRightPanelOpen={isRightPanelOpen}
         toggleRightPanel={handleToggleCollaborators}
         onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
@@ -864,9 +1166,13 @@ export default function EditorWorkspacePage() {
           onDeleteFolder={handleDeleteFolder}
           onMoveItem={handleMoveItem}
           userRole={effectiveRole}
+          requiresApproval={projectRequiresApproval}
           projectName={projectName}
           isOpen={isSidebarOpen}
           onClose={() => setIsSidebarOpen(false)}
+          protectedFiles={protectedFiles}
+          isOwner={isOwner}
+          onToggleProtectFile={handleToggleProtectFile}
         />
 
         {/* Center Code Editor Area */}
@@ -881,13 +1187,25 @@ export default function EditorWorkspacePage() {
             </div>
           )}
 
-          {/* Approval Mode Notice Banner for Editors */}
+          {/* Protected File Notice Banner for Editors */}
+          {isEditorRestricted && (
+            <div className="protected-file-banner">
+              <div className="protected-file-banner-left">
+                <Lock size={14} className="banner-icon" />
+                <span>
+                  <strong>Protected File:</strong> This file is protected by the project owner.
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Strict Review Mode Notice Banner for Editors */}
           {!isViewer && effectiveRole === 'editor' && projectRequiresApproval && (
             <div className="approval-mode-banner">
               <div className="approval-mode-banner-left">
                 <GitPullRequest size={14} className="banner-icon" />
                 <span>
-                  <strong>Approval Mode Active:</strong> Direct edits do not overwrite project files. Submit changes for owner approval.
+                  <strong>Strict review mode is enabled. Your code changes require owner approval.</strong>
                 </span>
               </div>
               <button
@@ -899,7 +1217,7 @@ export default function EditorWorkspacePage() {
                 }}
               >
                 <GitPullRequest size={12} />
-                <span>Submit for Review</span>
+                <span>Request Review</span>
               </button>
             </div>
           )}
@@ -914,9 +1232,13 @@ export default function EditorWorkspacePage() {
               onUndo={handleUndo}
               onRedo={handleRedo}
               onRun={handleRun}
-              readOnly={isViewer}
+              readOnly={isViewer || isEditorRestricted}
               requiresApproval={projectRequiresApproval}
               userRole={effectiveRole}
+              onRequestReview={() => {
+                setChangeRequestsInitialCreate(true);
+                setIsChangeRequestsOpen(true);
+              }}
               onSubmitForReview={() => {
                 setChangeRequestsInitialCreate(true);
                 setIsChangeRequestsOpen(true);
@@ -1009,7 +1331,7 @@ export default function EditorWorkspacePage() {
                     isDraggingSplit ||
                     mobileWorkspaceView
                   }
-                  readOnly={isViewer}
+                  readOnly={isViewer || isEditorRestricted}
                   activeFile={activeFile}
                   remoteCursors={remoteCursors}
                   onRun={handleRun}
@@ -1060,6 +1382,12 @@ export default function EditorWorkspacePage() {
                 runTrigger={runTrigger}
                 previewTab={previewActiveTab}
                 onTabChange={setPreviewActiveTab}
+                executionResult={executionResult}
+                isExecuting={isExecuting}
+                onExecuteCode={handleExecuteCode}
+                stdin={executionStdin}
+                onStdinChange={setExecutionStdin}
+                onClearExecution={handleClearExecution}
                 style={{
                   width:
                     isMobileWorkspace && mobileWorkspaceView === 'split'
@@ -1150,8 +1478,13 @@ export default function EditorWorkspacePage() {
         isOpen={isHistoryOpen}
         onClose={() => setIsHistoryOpen(false)}
         roomId={activeRoomId}
+        projectId={currentProject?.id || matchedInContext?.id || activeRoomId}
         fileName={activeFile || 'main.js'}
         userRole={effectiveRole}
+        requiresApproval={projectRequiresApproval}
+        protectedFiles={protectedFiles}
+        currentUser={currentUser}
+        currentContent={filesState[activeFile]?.content || ''}
         onRestore={handleVersionRestored}
         onShowToast={showToast}
       />
@@ -1167,6 +1500,40 @@ export default function EditorWorkspacePage() {
           liveActivityEntry={liveActivityEntry}
           isSidebar={false}
         />
+      )}
+
+      {/* Safe Delete 10s Undo Toast */}
+      {undoDeleteInfo && (
+        <div className="undo-delete-toast" role="alert">
+          <div className="undo-toast-left">
+            <Trash2 size={16} className="undo-toast-icon" />
+            <span>
+              Deleted {undoDeleteInfo.type === 'folder' ? 'folder' : 'file'} <strong>{undoDeleteInfo.path}</strong>
+            </span>
+          </div>
+          <div className="undo-toast-actions">
+            <button
+              type="button"
+              className="btn-undo-action"
+              onClick={handlePerformUndoDelete}
+            >
+              <RotateCcw size={13} />
+              <span>Undo</span>
+            </button>
+            <button
+              type="button"
+              className="btn-undo-dismiss"
+              onClick={() => {
+                if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+                setUndoDeleteInfo(null);
+              }}
+              aria-label="Dismiss undo notification"
+            >
+              <X size={14} />
+            </button>
+          </div>
+          <div className="undo-toast-progress-bar" />
+        </div>
       )}
 
       {/* Feedback Toast */}

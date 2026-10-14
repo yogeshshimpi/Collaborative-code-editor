@@ -41,6 +41,11 @@ export default function EditorArea({
   const monacoRef = useRef(null);
   const decorationsRef = useRef([]);
   const [isEditorReady, setIsEditorReady] = useState(false);
+  const onRunRef = useRef(onRun);
+
+  useEffect(() => {
+    onRunRef.current = onRun;
+  }, [onRun]);
 
   // Mobile virtual keyboard & touchscreen states
   const [keyboardOffset, setKeyboardOffset] = useState(0);
@@ -59,6 +64,13 @@ export default function EditorArea({
     }
     monacoRef.current = monaco;
     setIsEditorReady(true);
+
+    // Bind Ctrl+Enter / Cmd+Enter to run code / project
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
+      if (onRunRef.current) {
+        onRunRef.current();
+      }
+    });
 
     // Track focus state for mobile virtual keyboard awareness
     editor.onDidFocusEditorText(() => {

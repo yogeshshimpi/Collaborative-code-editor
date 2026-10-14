@@ -10,7 +10,8 @@ import {
   revokeInvitation,
   updateMemberRole,
   removeMember,
-  toggleApprovalMode
+  toggleApprovalMode,
+  updateProtectedFiles
 } from '../controllers/projectController.js';
 import {
   getChangeRequests,
@@ -32,6 +33,10 @@ router.delete('/:id', deleteProject);
 
 // Project Owner Approval Mode
 router.put('/:id/approval-mode', toggleApprovalMode);
+
+// Project Owner Protected Files
+router.put('/:id/protected-files', updateProtectedFiles);
+router.post('/:id/protected-files', updateProtectedFiles);
 
 // Change Requests (Role-based permissions & Owner approval workflow)
 router.get('/:id/change-requests', getChangeRequests);

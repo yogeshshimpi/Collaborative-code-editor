@@ -16,14 +16,19 @@ import {
   Sparkles
 } from 'lucide-react';
 import { getLanguageFromFile } from '../../data/initialFiles';
-import { apiUrl } from '../../services/api';
+import { apiUrl, api } from '../../services/api';
 
 export default function VersionHistoryModal({
   isOpen,
   onClose,
   roomId,
+  projectId,
   fileName,
   userRole = 'editor',
+  requiresApproval = false,
+  protectedFiles = [],
+  currentUser,
+  currentContent = '',
   onRestore,
   onShowToast
 }) {
@@ -177,6 +182,14 @@ export default function VersionHistoryModal({
   // Handle restoring selected version
   const handleRestoreConfirm = async () => {
     if (!selectedVersionId || isViewer) return;
+
+    // Check if file is protected against editor restores
+    if (userRole === 'editor' && protectedFiles.includes(fileName)) {
+      if (onShowToast) {
+        onShowToast(`File "${fileName}" is protected by the project owner and cannot be restored.`, 'error');
+      }
+      return;
+    }
 
     setIsRestoring(true);
     try {
@@ -430,13 +443,18 @@ export default function VersionHistoryModal({
                     ) : (
                       <button
                         type="button"
-                        className="btn btn-primary btn-sm btn-restore-trigger"
+                        className="btn btn-sm btn-restore-trigger btn-primary"
                         onClick={() => setShowConfirmRestore(true)}
-                        title="Restore this version into the active project"
+                        title="Restore this version into active project"
                         aria-label="Restore this version"
+                        disabled={userRole === 'editor' && protectedFiles.includes(fileName)}
                       >
                         <RotateCcw size={13} />
-                        <span>Restore This Version</span>
+                        <span>
+                          {userRole === 'editor' && protectedFiles.includes(fileName)
+                            ? 'Protected File'
+                            : 'Restore This Version'}
+                        </span>
                       </button>
                     )}
                   </div>
@@ -451,8 +469,7 @@ export default function VersionHistoryModal({
                     <div className="confirm-text">
                       <strong>Confirm Version Restore</strong>
                       <p>
-                        Restoring will overwrite current <code>{fileName}</code> in the workspace with this version from{' '}
-                        {new Date(selectedVersionDetails.created_at).toLocaleTimeString()}. All collaborators will immediately receive the restored code.
+                        Restoring will overwrite current <code>{fileName}</code> in the workspace with this version from {new Date(selectedVersionDetails.created_at).toLocaleTimeString()}. All collaborators will immediately receive the restored code.
                       </p>
                     </div>
                     <div className="confirm-buttons">
@@ -466,7 +483,7 @@ export default function VersionHistoryModal({
                       </button>
                       <button
                         type="button"
-                        className="btn btn-primary btn-xs btn-confirm-restore"
+                        className="btn btn-xs btn-primary btn-confirm-restore"
                         onClick={handleRestoreConfirm}
                         disabled={isRestoring}
                       >

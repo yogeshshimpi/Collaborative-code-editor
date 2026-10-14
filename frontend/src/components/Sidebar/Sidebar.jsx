@@ -18,7 +18,9 @@ import {
   Code2,
   Database,
   Terminal,
-  FileJson
+  FileJson,
+  Lock,
+  Unlock
 } from 'lucide-react';
 import { buildFileTree, isValidName, normalizePath } from '../../utils/fileTree';
 import { getDefaultFileContent } from '../../data/initialFiles';
@@ -36,9 +38,13 @@ export default function Sidebar({
   onDeleteFolder,
   onMoveItem,
   userRole = 'editor',
+  requiresApproval = false,
   isOpen = false,
   onClose,
-  projectName = 'my-project'
+  projectName = 'my-project',
+  protectedFiles = [],
+  isOwner = false,
+  onToggleProtectFile
 }) {
   const isViewer = userRole === 'viewer';
 
@@ -56,9 +62,6 @@ export default function Sidebar({
   const [renameValue, setRenameValue] = useState('');
   const [renameError, setRenameError] = useState(null);
   const renameInputRef = useRef(null);
-
-  // Delete confirmation modal state: { path: string, isFolder: boolean } | null
-  const [deleteTarget, setDeleteTarget] = useState(null);
 
   // Drag over target path for visual feedback
   const [dragOverPath, setDragOverPath] = useState(null);
@@ -250,16 +253,6 @@ export default function Sidebar({
     }
   };
 
-  // Confirm delete
-  const handleDeleteConfirm = () => {
-    if (!deleteTarget || isViewer) return;
-    if (deleteTarget.isFolder) {
-      onDeleteFolder(deleteTarget.path);
-    } else {
-      onDeleteFile(deleteTarget.path);
-    }
-    setDeleteTarget(null);
-  };
 
   // Drag and drop handlers
   const handleDragStart = (e, node) => {
@@ -434,24 +427,29 @@ export default function Sidebar({
                   >
                     <FolderPlus size={13} />
                   </button>
-                  <button
-                    type="button"
-                    className="item-action-btn"
-                    title="Rename Folder"
-                    aria-label="Rename Folder"
-                    onClick={(e) => startRename(node, e)}
-                  >
-                    <Edit2 size={13} />
-                  </button>
-                  <button
-                    type="button"
-                    className="item-action-btn delete-action-btn"
-                    title="Delete Folder"
-                    aria-label="Delete Folder"
-                    onClick={() => setDeleteTarget({ path: node.path, isFolder: true })}
-                  >
-                    <Trash2 size={13} />
-                  </button>
+                  {/* Hide rename/delete if folder has protected files and user is not owner */}
+                  {(!protectedFiles.some((pf) => pf === node.path || pf.startsWith(`${node.path}/`)) || isOwner) && (
+                    <>
+                      <button
+                        type="button"
+                        className="item-action-btn"
+                        title="Rename Folder"
+                        aria-label="Rename Folder"
+                        onClick={(e) => startRename(node, e)}
+                      >
+                        <Edit2 size={13} />
+                      </button>
+                      <button
+                        type="button"
+                        className="item-action-btn delete-action-btn"
+                        title="Delete Folder"
+                        aria-label="Delete Folder"
+                        onClick={() => onDeleteFolder(node.path)}
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -505,13 +503,15 @@ export default function Sidebar({
       }
 
       // File item
+      const isProtected = protectedFiles.includes(node.path);
+
       return (
         <div
           key={`file-${node.path}`}
-          className={`file-item ${isSelected ? 'selected' : ''}`}
+          className={`file-item ${isSelected ? 'selected' : ''} ${isProtected ? 'is-protected-file' : ''}`}
           style={{ paddingLeft: indentPadding }}
           onClick={() => handleFileClick(node.path)}
-          draggable={!isViewer && !isRenaming}
+          draggable={!isViewer && !isRenaming && (!isProtected || isOwner)}
           onDragStart={(e) => handleDragStart(e, node)}
           role="button"
           tabIndex={0}
@@ -542,27 +542,59 @@ export default function Sidebar({
             </span>
           )}
 
+          {/* Protected File Lock Badge */}
+          {isProtected && (
+            <span
+              className="file-protected-lock"
+              title="This file is protected by the project owner."
+              aria-label="Protected file"
+            >
+              <Lock size={12} />
+            </span>
+          )}
+
           {/* Action buttons for File */}
           {!isViewer && !isRenaming && (
             <div className="item-actions" onClick={(e) => e.stopPropagation()}>
-              <button
-                type="button"
-                className="item-action-btn"
-                title="Rename File"
-                aria-label="Rename File"
-                onClick={(e) => startRename(node, e)}
-              >
-                <Edit2 size={13} />
-              </button>
-              <button
-                type="button"
-                className="item-action-btn delete-action-btn"
-                title="Delete File"
-                aria-label="Delete File"
-                onClick={() => setDeleteTarget({ path: node.path, isFolder: false })}
-              >
-                <Trash2 size={13} />
-              </button>
+              {/* Owner can toggle file protection */}
+              {isOwner && (
+                <button
+                  type="button"
+                  className={`item-action-btn ${isProtected ? 'is-protected-active' : ''}`}
+                  title={isProtected ? 'Unprotect file' : 'Protect file (Owner only)'}
+                  aria-label={isProtected ? 'Unprotect file' : 'Protect file'}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (onToggleProtectFile) onToggleProtectFile(node.path);
+                  }}
+                >
+                  {isProtected ? <Unlock size={13} /> : <Lock size={13} />}
+                </button>
+              )}
+
+              {/* Editors and Owners can rename & delete unprotected files; only Owner can modify protected files */}
+              {(!isProtected || isOwner) && (
+                <>
+                  <button
+                    type="button"
+                    className="item-action-btn"
+                    title="Rename File"
+                    aria-label="Rename File"
+                    onClick={(e) => startRename(node, e)}
+                  >
+                    <Edit2 size={13} />
+                  </button>
+                  <button
+                    type="button"
+                    className="item-action-btn delete-action-btn"
+                    title="Delete File"
+                    aria-label="Delete File"
+                    onClick={() => onDeleteFile(node.path)}
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -691,57 +723,6 @@ export default function Sidebar({
           )}
         </div>
       </aside>
-
-      {/* Delete Confirmation Modal */}
-      {deleteTarget && (
-        <div className="modal-backdrop" onClick={() => setDeleteTarget(null)}>
-          <div className="delete-confirm-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="delete-modal-header">
-              <div className="delete-modal-title">
-                <AlertTriangle size={18} className="delete-warning-icon" />
-                <span>Delete {deleteTarget.isFolder ? 'Folder' : 'File'}</span>
-              </div>
-              <button
-                type="button"
-                className="action-icon-btn"
-                onClick={() => setDeleteTarget(null)}
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            <div className="delete-modal-body">
-              <p>
-                Are you sure you want to delete{' '}
-                <strong className="delete-target-name">{deleteTarget.path}</strong>?
-              </p>
-              {deleteTarget.isFolder && (
-                <p className="delete-warning-subtext">
-                  This will permanently delete all files and subfolders inside this folder.
-                </p>
-              )}
-              <p className="delete-permanent-notice">This action cannot be undone.</p>
-            </div>
-
-            <div className="delete-modal-actions">
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => setDeleteTarget(null)}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn btn-danger"
-                onClick={handleDeleteConfirm}
-              >
-                Delete permanently
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 }

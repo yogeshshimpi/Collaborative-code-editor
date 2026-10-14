@@ -1,5 +1,5 @@
 import { saveFileContent } from '../db/workspace.js';
-import { getProjectById } from '../db/projects.js';
+import { getProjectById, isFileProtected } from '../db/projects.js';
 import { isValidFilePath } from '../utils/filePath.js';
 import { logger } from '../utils/logger.js';
 
@@ -28,11 +28,13 @@ export async function handleCodeChange(io, socket, data) {
   // Authoritative server-side role and approval check from database
   let userRole = socket.data.role;
   let requiresApproval = false;
+  let project = null;
 
   try {
-    const project = await getProjectById(cleanRoomId, userId);
+    project = await getProjectById(cleanRoomId, userId);
     if (project) {
       if (project.role) userRole = project.role;
+      if (project.owner_id === userId) userRole = 'owner';
       requiresApproval = Boolean(project.requires_approval);
     }
   } catch {}
@@ -44,13 +46,22 @@ export async function handleCodeChange(io, socket, data) {
     return;
   }
 
-  // 2. Approval check: editors cannot auto-save code when approval mode is enabled
+  // 2. Protected files check: editors cannot edit protected files
+  if (userRole === 'editor' && project && isFileProtected(project, fileName)) {
+    socket.emit('permission-error', {
+      error: `File "${fileName}" is protected by the project owner and cannot be edited.`
+    });
+    socket.emit('save-status', { status: 'error', fileName });
+    return;
+  }
+
+  // 3. Strict Approval Mode: When ON, editor code changes require approval
   if (userRole === 'editor' && requiresApproval) {
     socket.emit('save-status', { status: 'approval_required', fileName });
     socket.emit('approval-required', {
       roomId: cleanRoomId,
       fileName,
-      message: 'Approval mode is active. Please submit your changes as a Change Request for Owner review.'
+      message: 'Strict review mode is enabled. Your code changes require owner approval.'
     });
     return;
   }

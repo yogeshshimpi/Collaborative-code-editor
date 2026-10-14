@@ -205,6 +205,35 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ status, rejectionReason })
     });
+  },
+
+  async updateProtectedFiles(projectId, protectedFiles) {
+    return request(`/api/projects/${encodeURIComponent(projectId)}/protected-files`, {
+      method: 'PUT',
+      body: JSON.stringify({ protectedFiles })
+    });
+  },
+
+  // Sandboxed Multi-Language Code Execution
+  async executeCode({ projectId, language, fileName, code, stdin, files, provider }) {
+    return request('/api/execute/run', {
+      method: 'POST',
+      body: JSON.stringify({
+        projectId,
+        language,
+        fileName,
+        code,
+        stdin,
+        files,
+        provider
+      })
+    });
+  },
+
+  async getExecutionLanguages() {
+    return request('/api/execute/languages', {
+      method: 'GET'
+    });
   }
 };
 

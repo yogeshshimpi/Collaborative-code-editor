@@ -7,7 +7,8 @@ import {
   getProjectCollaborators,
   changeMemberRole,
   removeMemberFromProject,
-  setApprovalMode
+  setApprovalMode,
+  setProtectedFiles
 } from '../services/projectService.js';
 import { sendProjectInvitation, cancelProjectInvitation } from '../services/invitationService.js';
 import { logActivity } from '../services/activityService.js';
@@ -193,6 +194,39 @@ export const toggleApprovalMode = asyncHandler(async (req, res) => {
   });
 });
 
+export const updateProtectedFiles = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { protectedFiles } = req.body;
+  const { project } = await setProtectedFiles(id, protectedFiles, req.user.id);
+
+  const io = req.app.get('io');
+  if (io && project.room_id) {
+    io.to(project.room_id).emit('protected-files-updated', {
+      roomId: project.room_id,
+      protectedFiles: project.protected_files || [],
+      updatedBy: req.user.name
+    });
+  }
+
+  logActivity({
+    roomId: project.room_id,
+    userId: req.user.id,
+    userName: req.user.name,
+    userEmail: req.user.email,
+    actionType: 'protected_files_update',
+    targetName: project.name,
+    details: { protectedFiles: project.protected_files },
+    summary: `${req.user.name} updated protected files for ${project.name}`
+  }).then((act) => {
+    if (act && io) io.to(project.room_id).emit('activity-log-entry', act);
+  }).catch(() => {});
+
+  res.json({
+    message: 'Protected files updated successfully.',
+    project
+  });
+});
+
 export default {
   getProjects,
   createProject,
@@ -204,5 +238,6 @@ export default {
   revokeInvitation,
   updateMemberRole,
   removeMember,
-  toggleApprovalMode
+  toggleApprovalMode,
+  updateProtectedFiles
 };

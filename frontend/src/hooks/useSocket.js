@@ -22,7 +22,9 @@ export function useSocket({
   onChangeRequestCreated,
   onChangeRequestApproved,
   onChangeRequestRejected,
-  onApprovalRequired
+  onApprovalRequired,
+  onProtectedFilesUpdated,
+  onActivityNotification
 }) {
   const [connectionStatus, setConnectionStatus] = useState('connecting'); // 'connecting' | 'connected' | 'disconnected'
   const [participantCount, setParticipantCount] = useState(1);
@@ -51,7 +53,17 @@ export function useSocket({
   const onChangeRequestApprovedRef = useRef(onChangeRequestApproved);
   const onChangeRequestRejectedRef = useRef(onChangeRequestRejected);
   const onApprovalRequiredRef = useRef(onApprovalRequired);
+  const onProtectedFilesUpdatedRef = useRef(onProtectedFilesUpdated);
+  const onActivityNotificationRef = useRef(onActivityNotification);
   const userRef = useRef(user);
+
+  useEffect(() => {
+    onProtectedFilesUpdatedRef.current = onProtectedFilesUpdated;
+  }, [onProtectedFilesUpdated]);
+
+  useEffect(() => {
+    onActivityNotificationRef.current = onActivityNotification;
+  }, [onActivityNotification]);
 
   useEffect(() => {
     onRemoteCodeChangeRef.current = onRemoteCodeChange;

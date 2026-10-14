@@ -12,7 +12,7 @@ export async function createProject({ id, name, ownerId }) {
     const query = `
       INSERT INTO projects (room_id, name, owner_id)
       VALUES ($1, $2, $3)
-      RETURNING id, room_id, name, owner_id, COALESCE(requires_approval, FALSE) AS requires_approval, created_at, updated_at;
+      RETURNING id, room_id, name, owner_id, COALESCE(requires_approval, FALSE) AS requires_approval, COALESCE(protected_files, '[]'::jsonb) AS protected_files, created_at, updated_at;
     `;
     const res = await pool.query(query, [cleanRoomId, cleanName, ownerId]);
     return res.rows[0];
@@ -25,6 +25,7 @@ export async function createProject({ id, name, ownerId }) {
     name: cleanName,
     owner_id: ownerId,
     requires_approval: false,
+    protected_files: [],
     created_at: new Date(),
     updated_at: new Date()
   };
@@ -42,6 +43,7 @@ export async function getUserProjects(userId) {
         p.name, 
         p.owner_id,
         COALESCE(p.requires_approval, FALSE) AS requires_approval,
+        COALESCE(p.protected_files, '[]'::jsonb) AS protected_files,
         u.name AS owner_name,
         u.email AS owner_email,
         CASE 
@@ -98,6 +100,7 @@ export async function getProjectById(id, userId = null) {
         p.name, 
         p.owner_id,
         COALESCE(p.requires_approval, FALSE) AS requires_approval,
+        COALESCE(p.protected_files, '[]'::jsonb) AS protected_files,
         u.name AS owner_name,
         u.email AS owner_email,
         CASE 
@@ -431,7 +434,7 @@ export async function updateProjectApprovalMode(projectIdOrRoomId, requiresAppro
       UPDATE projects
       SET requires_approval = $1, updated_at = CURRENT_TIMESTAMP
       WHERE id = $2
-      RETURNING id, room_id, name, owner_id, requires_approval, created_at, updated_at;
+      RETURNING id, room_id, name, owner_id, requires_approval, COALESCE(protected_files, '[]'::jsonb) AS protected_files, created_at, updated_at;
     `;
     const res = await pool.query(query, [boolVal, targetId]);
     return res.rows[0] ? { ...res.rows[0], role: 'owner' } : null;
@@ -447,6 +450,50 @@ export async function updateProjectApprovalMode(projectIdOrRoomId, requiresAppro
   return null;
 }
 
+export async function updateProjectProtectedFiles(projectIdOrRoomId, protectedFiles, userId) {
+  const project = await getProjectById(projectIdOrRoomId, userId);
+  if (!project) return null;
+  if (project.role !== 'owner' && project.owner_id !== userId) {
+    throw new Error('Only the project owner can update protected files.');
+  }
+
+  const targetId = project.id;
+  const cleanList = Array.isArray(protectedFiles)
+    ? Array.from(new Set(protectedFiles.filter((p) => typeof p === 'string' && p.trim()).map((p) => p.trim())))
+    : [];
+
+  if (isDbConnected() && pool) {
+    const query = `
+      UPDATE projects
+      SET protected_files = $1::jsonb, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2
+      RETURNING id, room_id, name, owner_id, requires_approval, COALESCE(protected_files, '[]'::jsonb) AS protected_files, created_at, updated_at;
+    `;
+    const res = await pool.query(query, [JSON.stringify(cleanList), targetId]);
+    return res.rows[0] ? { ...res.rows[0], role: 'owner' } : null;
+  }
+
+  const p = inMemoryProjects.get(targetId);
+  if (p) {
+    p.protected_files = cleanList;
+    p.updated_at = new Date();
+    inMemoryProjects.set(targetId, p);
+    return { ...p, role: 'owner' };
+  }
+  return null;
+}
+
+export function isFileProtected(project, filePath) {
+  if (!project || !filePath) return false;
+  const list = Array.isArray(project.protected_files)
+    ? project.protected_files
+    : typeof project.protected_files === 'string'
+    ? JSON.parse(project.protected_files || '[]')
+    : [];
+  const cleanPath = filePath.replace(/^\/+/, '').trim().toLowerCase();
+  return list.some(item => (typeof item === 'string' ? item : '').replace(/^\/+/, '').trim().toLowerCase() === cleanPath);
+}
+
 export default {
   createProject,
   getUserProjects,
@@ -458,6 +505,8 @@ export default {
   updateProject,
   updateProjectName,
   deleteProject,
-  updateProjectApprovalMode
+  updateProjectApprovalMode,
+  updateProjectProtectedFiles,
+  isFileProtected
 };
 

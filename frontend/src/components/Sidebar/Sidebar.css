@@ -405,6 +405,20 @@
   font-size: 12px;
 }
 
+.delete-approval-notice {
+  color: #fbbf24;
+  font-size: 12px;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  border-radius: 6px;
+  padding: 8px 10px;
+  line-height: 1.45;
+}
+
+.text-amber {
+  color: #f59e0b !important;
+}
+
 .delete-modal-actions {
   display: flex;
   align-items: center;
@@ -581,5 +595,32 @@
     min-width: 32px;
     min-height: 32px;
   }
+}
+
+/* Protected File Styling */
+.file-protected-lock {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #f59e0b;
+  margin-left: 2px;
+  flex-shrink: 0;
+  transition: transform 0.15s ease;
+}
+
+.file-item:hover .file-protected-lock {
+  transform: scale(1.15);
+}
+
+.file-item.is-protected-file {
+  position: relative;
+}
+
+.item-action-btn.is-protected-active {
+  color: #f59e0b !important;
+}
+
+.item-action-btn.is-protected-active:hover {
+  background-color: rgba(245, 158, 11, 0.15) !important;
 }
 

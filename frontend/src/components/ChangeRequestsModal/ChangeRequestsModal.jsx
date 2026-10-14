@@ -18,7 +18,8 @@ import {
   Eye,
   Filter,
   Check,
-  Ban
+  Ban,
+  RotateCcw
 } from 'lucide-react';
 import { DiffEditor, Editor } from '@monaco-editor/react';
 import { api } from '../../services/api';
@@ -195,17 +196,23 @@ export default function ChangeRequestsModal({
 
   const getTypeIcon = (type) => {
     switch (type) {
+      case 'file_create':
       case 'create_file':
+      case 'folder_create':
       case 'create_folder':
         return <FilePlus size={14} className="text-emerald" />;
+      case 'file_rename':
       case 'rename_file':
+      case 'folder_rename':
       case 'rename_folder':
         return <FileEdit size={14} className="text-indigo" />;
+      case 'file_delete':
       case 'delete_file':
+      case 'folder_delete':
       case 'delete_folder':
         return <Trash2 size={14} className="text-rose" />;
       case 'version_restore':
-        return <History size={14} className="text-amber" />;
+        return <RotateCcw size={14} className="text-amber" />;
       default:
         return <FileCode size={14} className="text-accent" />;
     }
@@ -566,7 +573,17 @@ export default function ChangeRequestsModal({
                                 disabled={isReviewing}
                               >
                                 {isReviewing ? <Loader2 size={14} className="spinning" /> : <Check size={14} />}
-                                <span>Approve & Merge</span>
+                                <span>
+                                  {selectedRequest.request_type === 'file_delete' || selectedRequest.request_type === 'delete_file' || selectedRequest.request_type === 'folder_delete' || selectedRequest.request_type === 'delete_folder'
+                                    ? 'Approve Deletion'
+                                    : selectedRequest.request_type === 'version_restore'
+                                    ? 'Approve Restore'
+                                    : selectedRequest.request_type === 'file_create' || selectedRequest.request_type === 'create_file' || selectedRequest.request_type === 'folder_create' || selectedRequest.request_type === 'create_folder'
+                                    ? 'Approve Creation'
+                                    : selectedRequest.request_type === 'file_rename' || selectedRequest.request_type === 'rename_file' || selectedRequest.request_type === 'folder_rename' || selectedRequest.request_type === 'rename_folder'
+                                    ? 'Approve Rename'
+                                    : 'Approve & Merge'}
+                                </span>
                               </button>
                             </div>
                           )}
@@ -604,16 +621,22 @@ export default function ChangeRequestsModal({
                     <div className="cr-diff-container">
                       <div className="cr-diff-header">
                         <span className="diff-header-title">
-                          Original vs Proposed Diff ({selectedRequest.target_path})
+                          {selectedRequest.request_type === 'version_restore'
+                            ? `Version Restore Diff: Current vs Checkpoint (${selectedRequest.target_path})`
+                            : selectedRequest.request_type === 'code_change'
+                            ? `Original vs Proposed Diff (${selectedRequest.target_path})`
+                            : `Operation Details: ${selectedRequest.title}`}
                         </span>
-                        <div className="diff-legend">
-                          <span className="legend-red">- Original</span>
-                          <span className="legend-green">+ Proposed</span>
-                        </div>
+                        {(selectedRequest.request_type === 'code_change' || selectedRequest.request_type === 'version_restore') && (
+                          <div className="diff-legend">
+                            <span className="legend-red">- {selectedRequest.request_type === 'version_restore' ? 'Current' : 'Original'}</span>
+                            <span className="legend-green">+ {selectedRequest.request_type === 'version_restore' ? 'Restored Checkpoint' : 'Proposed'}</span>
+                          </div>
+                        )}
                       </div>
 
                       <div className="cr-diff-editor-wrapper">
-                        {selectedRequest.request_type === 'code_change' ? (
+                        {selectedRequest.request_type === 'code_change' || selectedRequest.request_type === 'version_restore' ? (
                           <DiffEditor
                             height="100%"
                             language={getLanguageFromFile(selectedRequest.target_path)}
@@ -632,6 +655,58 @@ export default function ChangeRequestsModal({
                               automaticLayout: true
                             }}
                           />
+                        ) : selectedRequest.request_type === 'file_delete' || selectedRequest.request_type === 'delete_file' || selectedRequest.request_type === 'folder_delete' || selectedRequest.request_type === 'delete_folder' ? (
+                          <div className="cr-major-card cr-delete-card">
+                            <div className="cr-major-card-badge text-rose">
+                              <Trash2 size={20} />
+                              <span>Major Operation: Permanent Deletion</span>
+                            </div>
+                            <p className="cr-major-card-desc">
+                              Collaborator <strong>{selectedRequest.author_name}</strong> requested deletion of{' '}
+                              <code className="cr-path-tag">{selectedRequest.target_path}</code>.
+                            </p>
+                            <div className="cr-major-card-warning">
+                              🛡️ <strong>Robust System Protection:</strong> Deletions are gated by Owner Approval. Approving will permanently remove this {selectedRequest.request_type.includes('folder') ? 'folder and its contents' : 'file'} across all connected collaborator workspaces.
+                            </div>
+                            {selectedRequest.original_content && (
+                              <div className="cr-code-preview-wrap">
+                                <span className="cr-preview-tag">File Content Before Deletion:</span>
+                                <pre className="cr-code-snippet">{selectedRequest.original_content}</pre>
+                              </div>
+                            )}
+                          </div>
+                        ) : selectedRequest.request_type === 'file_create' || selectedRequest.request_type === 'create_file' || selectedRequest.request_type === 'folder_create' || selectedRequest.request_type === 'create_folder' ? (
+                          <div className="cr-major-card cr-create-card">
+                            <div className="cr-major-card-badge text-emerald">
+                              <FilePlus size={20} />
+                              <span>Major Operation: New {selectedRequest.request_type.includes('folder') ? 'Folder' : 'File'} Creation</span>
+                            </div>
+                            <p className="cr-major-card-desc">
+                              Collaborator <strong>{selectedRequest.author_name}</strong> requested creation of{' '}
+                              <code className="cr-path-tag">{selectedRequest.target_path}</code>.
+                            </p>
+                            {selectedRequest.proposed_content && (
+                              <div className="cr-code-preview-wrap">
+                                <span className="cr-preview-tag">Proposed Initial Content:</span>
+                                <pre className="cr-code-snippet">{selectedRequest.proposed_content}</pre>
+                              </div>
+                            )}
+                          </div>
+                        ) : selectedRequest.request_type === 'file_rename' || selectedRequest.request_type === 'rename_file' || selectedRequest.request_type === 'folder_rename' || selectedRequest.request_type === 'rename_folder' ? (
+                          <div className="cr-major-card cr-rename-card">
+                            <div className="cr-major-card-badge text-indigo">
+                              <FileEdit size={20} />
+                              <span>Major Operation: Path Rename</span>
+                            </div>
+                            <p className="cr-major-card-desc">
+                              Collaborator <strong>{selectedRequest.author_name}</strong> requested renaming:
+                            </p>
+                            <div className="cr-rename-flow">
+                              <code className="path-old">{selectedRequest.old_path || 'original'}</code>
+                              <span className="rename-arrow">➔</span>
+                              <code className="path-new">{selectedRequest.target_path}</code>
+                            </div>
+                          </div>
                         ) : (
                           <div className="cr-non-code-summary">
                             <h4>Operation Details</h4>

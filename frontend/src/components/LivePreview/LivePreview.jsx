@@ -18,7 +18,15 @@ import {
   FileCode,
   ExternalLink,
   Link2,
-  Check
+  Check,
+  Loader2,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  Cpu,
+  Copy,
+  CornerDownLeft,
+  Code2
 } from 'lucide-react';
 import { buildPreviewDocument } from '../../utils/previewCompiler';
 
@@ -37,7 +45,13 @@ export default function LivePreview({
   style,
   className = '',
   previewTab,
-  onTabChange
+  onTabChange,
+  executionResult,
+  isExecuting = false,
+  onExecuteCode,
+  stdin = '',
+  onStdinChange,
+  onClearExecution
 }) {
   const [activeTab, setActiveTab] = useState(previewTab || 'preview');
 
@@ -58,6 +72,8 @@ export default function LivePreview({
   const [consoleLogs, setConsoleLogs] = useState([]);
   const [consoleFilter, setConsoleFilter] = useState('all'); // 'all' | 'log' | 'warn' | 'error'
   const [renderNonce, setRenderNonce] = useState(0);
+  const [isStdinOpen, setIsStdinOpen] = useState(() => Boolean(stdin && stdin.trim()));
+  const [copiedOutput, setCopiedOutput] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [autoRunOnEdit, setAutoRunOnEdit] = useState(true);
   const [isCopied, setIsCopied] = useState(false);
@@ -223,6 +239,47 @@ export default function LivePreview({
     setConsoleLogs([]);
   };
 
+  const handleCopyOutput = async () => {
+    const textToCopy = [
+      executionResult?.compileOutput,
+      executionResult?.stdout,
+      executionResult?.stderr
+    ]
+      .filter(Boolean)
+      .join('\n');
+    if (!textToCopy) return;
+
+    let copied = false;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(textToCopy);
+        copied = true;
+      }
+    } catch (_err) {
+      void _err;
+    }
+
+    if (!copied) {
+      try {
+        const textarea = document.createElement('textarea');
+        textarea.value = textToCopy;
+        textarea.style.position = 'fixed';
+        textarea.style.left = '-9999px';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        copied = true;
+      } catch {}
+    }
+
+    setCopiedOutput(true);
+    setTimeout(() => setCopiedOutput(false), 2200);
+    if (onShowToast) {
+      onShowToast('Execution output copied to clipboard!');
+    }
+  };
+
   // Compile the final HTML document to pass into srcDoc
   const compiledHtml = useMemo(() => {
     return buildPreviewDocument(files, selectedHtmlFile, renderNonce);
@@ -248,17 +305,19 @@ export default function LivePreview({
     <aside
       className={`live-preview-container ${isMaximized ? 'maximized' : ''} ${className}`}
       style={style}
-      aria-label="CodeCollab Live Preview"
+      aria-label="CodeCollab Live Preview & Execution"
     >
       {/* Preview Header Toolbar */}
       <header className="preview-header">
         <div className="preview-header-left">
           <div className="preview-status-indicator" title="Safe Isolated Sandbox">
-            <span className="preview-status-dot" />
-            <span className="preview-title">Live Preview</span>
+            <span className={`preview-status-dot ${isExecuting ? 'status-dot-pulsing' : ''}`} />
+            <span className="preview-title">
+              {activeTab === 'terminal' ? 'Code Execution' : 'Live Preview'}
+            </span>
           </div>
 
-          {/* Segmented View Tabs (Preview vs Console) */}
+          {/* Segmented View Tabs (Preview vs Terminal Output vs Console) */}
           <div className="preview-tabs-group" role="tablist">
             <button
               type="button"
@@ -266,16 +325,49 @@ export default function LivePreview({
               onClick={() => handleSelectTab('preview')}
               role="tab"
               aria-selected={activeTab === 'preview'}
+              title="Interactive Web Sandbox Preview"
             >
               <Play size={12} fill="currentColor" />
               <span>Preview</span>
             </button>
+
+            <button
+              type="button"
+              className={`preview-tab-btn ${activeTab === 'terminal' ? 'active' : ''}`}
+              onClick={() => handleSelectTab('terminal')}
+              role="tab"
+              aria-selected={activeTab === 'terminal'}
+              title="Sandboxed Multi-Language Output (Python, Java, C++, C, Node.js)"
+            >
+              <Code2 size={12} />
+              <span>Output</span>
+              {isExecuting ? (
+                <span className="terminal-tab-running" title="Executing code...">
+                  <Loader2 size={11} className="spinning" />
+                </span>
+              ) : executionResult ? (
+                <span
+                  className={`terminal-tab-dot ${
+                    executionResult.status === 'Accepted'
+                      ? 'dot-success'
+                      : executionResult.compileOutput
+                      ? 'dot-error'
+                      : executionResult.stderr
+                      ? 'dot-warn'
+                      : 'dot-info'
+                  }`}
+                  title={`Status: ${executionResult.status || 'Finished'}`}
+                />
+              ) : null}
+            </button>
+
             <button
               type="button"
               className={`preview-tab-btn ${activeTab === 'console' ? 'active' : ''}`}
               onClick={() => handleSelectTab('console')}
               role="tab"
               aria-selected={activeTab === 'console'}
+              title="Browser Virtual Console Telemetry"
             >
               <Terminal size={12} />
               <span>Console</span>
@@ -294,92 +386,173 @@ export default function LivePreview({
 
         {/* Center / Right Controls */}
         <div className="preview-header-right">
-          {/* Viewport Width Controls (Only active in Preview tab) */}
+          {/* TERMINAL CONTROLS */}
+          {activeTab === 'terminal' && (
+            <>
+              {/* Run / Re-Run Button */}
+              {onExecuteCode && (
+                <button
+                  type="button"
+                  className="preview-control-btn preview-btn-labeled btn-run-code"
+                  onClick={() => onExecuteCode()}
+                  disabled={isExecuting}
+                  title="Execute code in sandboxed runner (Ctrl+Enter)"
+                  aria-label="Run Code"
+                >
+                  {isExecuting ? (
+                    <Loader2 size={13} className="spinning" />
+                  ) : (
+                    <Play size={12} fill="currentColor" />
+                  )}
+                  <span className="preview-btn-label">
+                    {isExecuting ? 'Running...' : 'Run'}
+                  </span>
+                </button>
+              )}
+
+              {/* Toggle Stdin Drawer */}
+              <button
+                type="button"
+                className={`preview-control-btn preview-btn-labeled btn-toggle-stdin ${
+                  isStdinOpen ? 'active' : ''
+                }`}
+                onClick={() => setIsStdinOpen((v) => !v)}
+                title="Toggle standard input (stdin) for programs that read user input"
+                aria-label="Standard Input"
+              >
+                <CornerDownLeft size={12} />
+                <span className="preview-btn-label">Stdin</span>
+                {stdin && stdin.trim() && <span className="stdin-active-dot" />}
+              </button>
+
+              {/* Copy Terminal Output */}
+              <button
+                type="button"
+                className={`preview-control-btn ${copiedOutput ? 'copied' : ''}`}
+                onClick={handleCopyOutput}
+                disabled={
+                  !executionResult ||
+                  (!executionResult.stdout &&
+                    !executionResult.stderr &&
+                    !executionResult.compileOutput)
+                }
+                title="Copy terminal output to clipboard"
+                aria-label="Copy Output"
+              >
+                {copiedOutput ? (
+                  <Check size={13} className="text-success" />
+                ) : (
+                  <Copy size={13} />
+                )}
+              </button>
+
+              {/* Clear Terminal Output */}
+              {onClearExecution && (
+                <button
+                  type="button"
+                  className="preview-control-btn"
+                  onClick={onClearExecution}
+                  disabled={!executionResult && !isExecuting}
+                  title="Clear execution output"
+                  aria-label="Clear Output"
+                >
+                  <Trash2 size={13} />
+                </button>
+              )}
+            </>
+          )}
+
+          {/* PREVIEW CONTROLS */}
           {activeTab === 'preview' && (
-            <div className="viewport-switcher-group" title="Preview Viewport Mode">
+            <>
+              {/* Viewport Width Controls */}
+              <div className="viewport-switcher-group" title="Preview Viewport Mode">
+                <button
+                  type="button"
+                  className={`viewport-btn ${viewportMode === 'responsive' ? 'active' : ''}`}
+                  onClick={() => setViewportMode('responsive')}
+                  title="Full Responsive Width (100%)"
+                  aria-label="Full Responsive Width"
+                >
+                  <Monitor size={13} />
+                </button>
+                <button
+                  type="button"
+                  className={`viewport-btn ${viewportMode === 'tablet' ? 'active' : ''}`}
+                  onClick={() => setViewportMode('tablet')}
+                  title="Tablet Viewport (768px)"
+                  aria-label="Tablet Viewport (768px)"
+                >
+                  <Tablet size={13} />
+                </button>
+                <button
+                  type="button"
+                  className={`viewport-btn ${viewportMode === 'mobile' ? 'active' : ''}`}
+                  onClick={() => setViewportMode('mobile')}
+                  title="Mobile Viewport (375px)"
+                  aria-label="Mobile Viewport (375px)"
+                >
+                  <Smartphone size={13} />
+                </button>
+              </div>
+
+              {/* HTML Entry Selector (if multiple HTML files exist) */}
+              {htmlFiles.length > 1 && (
+                <div className="entry-html-selector-wrap" title="Select entry HTML file">
+                  <FileCode size={13} className="entry-icon" />
+                  <select
+                    className="entry-html-select"
+                    value={selectedHtmlFile || 'index.html'}
+                    onChange={(e) => setSelectedHtmlFile(e.target.value)}
+                    aria-label="Entry HTML File"
+                  >
+                    {htmlFiles.map((f) => (
+                      <option key={f} value={f}>
+                        {f}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Refresh Button */}
               <button
                 type="button"
-                className={`viewport-btn ${viewportMode === 'responsive' ? 'active' : ''}`}
-                onClick={() => setViewportMode('responsive')}
-                title="Full Responsive Width (100%)"
-                aria-label="Full Responsive Width"
+                className="preview-control-btn btn-refresh"
+                onClick={handleManualRefresh}
+                title="Refresh sandbox preview"
+                aria-label="Refresh Preview"
               >
-                <Monitor size={13} />
+                <RotateCw size={13} className={isRefreshing ? 'spinning' : ''} />
               </button>
+
+              {/* Open in New Tab Button */}
               <button
                 type="button"
-                className={`viewport-btn ${viewportMode === 'tablet' ? 'active' : ''}`}
-                onClick={() => setViewportMode('tablet')}
-                title="Tablet Viewport (768px)"
-                aria-label="Tablet Viewport (768px)"
+                className="preview-control-btn preview-btn-labeled btn-open-tab"
+                onClick={handleOpenNewTab}
+                title="Open preview in a separate browser tab"
+                aria-label="Open in New Tab"
               >
-                <Tablet size={13} />
+                <ExternalLink size={13} />
+                <span className="preview-btn-label">Open in New Tab</span>
               </button>
+
+              {/* Copy Preview Link Button */}
               <button
                 type="button"
-                className={`viewport-btn ${viewportMode === 'mobile' ? 'active' : ''}`}
-                onClick={() => setViewportMode('mobile')}
-                title="Mobile Viewport (375px)"
-                aria-label="Mobile Viewport (375px)"
+                className={`preview-control-btn preview-btn-labeled btn-copy-link ${
+                  isCopied ? 'copied' : ''
+                }`}
+                onClick={handleCopyLink}
+                title="Copy preview URL to clipboard"
+                aria-label="Copy Preview Link"
               >
-                <Smartphone size={13} />
+                {isCopied ? <Check size={13} className="text-success" /> : <Link2 size={13} />}
+                <span className="preview-btn-label">{isCopied ? 'Copied!' : 'Copy Preview Link'}</span>
               </button>
-            </div>
+            </>
           )}
-
-          {/* HTML Entry Selector (if multiple HTML files exist) */}
-          {htmlFiles.length > 1 && (
-            <div className="entry-html-selector-wrap" title="Select entry HTML file">
-              <FileCode size={13} className="entry-icon" />
-              <select
-                className="entry-html-select"
-                value={selectedHtmlFile || 'index.html'}
-                onChange={(e) => setSelectedHtmlFile(e.target.value)}
-                aria-label="Entry HTML File"
-              >
-                {htmlFiles.map((f) => (
-                  <option key={f} value={f}>
-                    {f}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {/* 1. Refresh Button */}
-          <button
-            type="button"
-            className="preview-control-btn btn-refresh"
-            onClick={handleManualRefresh}
-            title="Refresh sandbox preview"
-            aria-label="Refresh Preview"
-          >
-            <RotateCw size={13} className={isRefreshing ? 'spinning' : ''} />
-          </button>
-
-          {/* 2. Open in New Tab Button */}
-          <button
-            type="button"
-            className="preview-control-btn preview-btn-labeled btn-open-tab"
-            onClick={handleOpenNewTab}
-            title="Open preview in a separate browser tab"
-            aria-label="Open in New Tab"
-          >
-            <ExternalLink size={13} />
-            <span className="preview-btn-label">Open in New Tab</span>
-          </button>
-
-          {/* 3. Copy Preview Link Button */}
-          <button
-            type="button"
-            className={`preview-control-btn preview-btn-labeled btn-copy-link ${isCopied ? 'copied' : ''}`}
-            onClick={handleCopyLink}
-            title="Copy preview URL to clipboard"
-            aria-label="Copy Preview Link"
-          >
-            {isCopied ? <Check size={13} className="text-success" /> : <Link2 size={13} />}
-            <span className="preview-btn-label">{isCopied ? 'Copied!' : 'Copy Preview Link'}</span>
-          </button>
 
           {/* Maximize / Dock Toggle */}
           {onToggleMaximize && (
@@ -394,7 +567,7 @@ export default function LivePreview({
             </button>
           )}
 
-          {/* 4. Close Button */}
+          {/* Close Button */}
           <button
             type="button"
             className="preview-control-btn preview-close-btn"
@@ -489,7 +662,13 @@ export default function LivePreview({
                   <div
                     key={log.id}
                     className={`console-log-row ${
-                      isError ? 'log-row-error' : isWarn ? 'log-row-warn' : isSystem ? 'log-row-system' : 'log-row-normal'
+                      isError
+                        ? 'log-row-error'
+                        : isWarn
+                        ? 'log-row-warn'
+                        : isSystem
+                        ? 'log-row-system'
+                        : 'log-row-normal'
                     }`}
                   >
                     <div className="log-row-prefix">
@@ -524,32 +703,293 @@ export default function LivePreview({
             )}
           </div>
         </div>
+
+        {/* VIEW 3: Sandboxed Multi-Language Execution Output */}
+        <div className={`preview-terminal-pane ${activeTab === 'terminal' ? 'active' : 'hidden'}`}>
+          {/* Subheader / Status Bar */}
+          <div className="terminal-status-bar">
+            <div className="terminal-status-left">
+              {isExecuting ? (
+                <div className="terminal-status-pill pill-running">
+                  <Loader2 size={13} className="spinning" />
+                  <span>Executing in sandbox...</span>
+                </div>
+              ) : executionResult ? (
+                <div
+                  className={`terminal-status-pill ${
+                    executionResult.status === 'Accepted'
+                      ? 'pill-accepted'
+                      : executionResult.compileOutput
+                      ? 'pill-compile-error'
+                      : executionResult.status === 'Time Limit Exceeded'
+                      ? 'pill-timeout'
+                      : executionResult.stderr
+                      ? 'pill-runtime-error'
+                      : 'pill-neutral'
+                  }`}
+                >
+                  {executionResult.status === 'Accepted' ? (
+                    <CheckCircle2 size={13} />
+                  ) : executionResult.compileOutput ? (
+                    <XCircle size={13} />
+                  ) : executionResult.status === 'Time Limit Exceeded' ? (
+                    <Clock size={13} />
+                  ) : executionResult.stderr ? (
+                    <AlertTriangle size={13} />
+                  ) : (
+                    <Info size={13} />
+                  )}
+                  <span>
+                    {executionResult.status || 'Finished'}
+                    {executionResult.exitCode !== null && executionResult.exitCode !== undefined
+                      ? ` (Exit ${executionResult.exitCode})`
+                      : ''}
+                  </span>
+                </div>
+              ) : (
+                <div className="terminal-status-pill pill-idle">
+                  <Play size={12} fill="currentColor" />
+                  <span>Ready to execute</span>
+                </div>
+              )}
+
+              {/* Language Chip */}
+              {(executionResult?.language || activeFile) && (
+                <span className="terminal-meta-chip lang-badge">
+                  <FileCode size={12} />
+                  <span>
+                    {(
+                      executionResult?.language ||
+                      (activeFile ? activeFile.split('.').pop() : 'code')
+                    ).toUpperCase()}
+                  </span>
+                </span>
+              )}
+            </div>
+
+            {/* Metrics Chips (Time, Memory) */}
+            {executionResult && !isExecuting && (
+              <div className="terminal-metrics-group">
+                {executionResult.executionTimeMs !== undefined && (
+                  <span className="terminal-metric-chip" title="Execution Time">
+                    <Clock size={11} />
+                    <span>{executionResult.executionTimeMs} ms</span>
+                  </span>
+                )}
+                {executionResult.memoryKb !== undefined && executionResult.memoryKb !== null && (
+                  <span className="terminal-metric-chip" title="Memory Used">
+                    <Cpu size={11} />
+                    <span>
+                      {executionResult.memoryKb > 1024
+                        ? `${(executionResult.memoryKb / 1024).toFixed(1)} MB`
+                        : `${executionResult.memoryKb} KB`}
+                    </span>
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Collapsible Standard Input Drawer */}
+          {isStdinOpen && (
+            <div className="terminal-stdin-drawer">
+              <div className="terminal-stdin-header">
+                <div className="stdin-title-wrap">
+                  <CornerDownLeft size={13} />
+                  <span>Standard Input (stdin)</span>
+                </div>
+                {stdin && stdin.trim() && (
+                  <button
+                    type="button"
+                    className="stdin-clear-link"
+                    onClick={() => onStdinChange && onStdinChange('')}
+                  >
+                    Clear Input
+                  </button>
+                )}
+              </div>
+              <textarea
+                className="terminal-stdin-textarea"
+                placeholder="Enter input values to feed into standard input (e.g., test cases, strings, numbers)..."
+                value={stdin || ''}
+                onChange={(e) => onStdinChange && onStdinChange(e.target.value)}
+                disabled={isExecuting}
+                rows={3}
+                spellCheck={false}
+              />
+            </div>
+          )}
+
+          {/* Terminal Output Scroll Area */}
+          <div className="terminal-output-scroll">
+            {isExecuting ? (
+              <div className="terminal-executing-state">
+                <div className="terminal-spinner-ring">
+                  <Loader2 size={32} className="spinning text-accent" />
+                </div>
+                <h4>Running in Isolated Container...</h4>
+                <p>Sandboxed remote runner is executing your code securely.</p>
+              </div>
+            ) : !executionResult ? (
+              <div className="terminal-idle-card">
+                <div className="terminal-idle-icon-wrap">
+                  <Terminal size={28} />
+                </div>
+                <h3>Sandboxed Multi-Language Execution</h3>
+                <p>
+                  Safely execute Python, Java, C++, C, or JavaScript in an isolated cloud container
+                  with zero access to server files or sensitive environments.
+                </p>
+                <div className="terminal-keybind-hint">
+                  <span>Shortcut:</span>
+                  <kbd>Ctrl</kbd> + <kbd>Enter</kbd> or click <strong>Run</strong> above
+                </div>
+                <div className="terminal-supported-languages">
+                  <span className="tech-chip">Python 3</span>
+                  <span className="tech-chip">Java 15+</span>
+                  <span className="tech-chip">C++ (GCC)</span>
+                  <span className="tech-chip">C (GCC)</span>
+                  <span className="tech-chip">Node.js</span>
+                </div>
+                {onExecuteCode && (
+                  <button
+                    type="button"
+                    className="btn-terminal-run-hero"
+                    onClick={() => onExecuteCode()}
+                  >
+                    <Play size={14} fill="currentColor" />
+                    <span>Run {activeFile || 'Code'}</span>
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="terminal-results-wrapper">
+                {/* 1. Compiler Output (if build/compilation failed) */}
+                {executionResult.compileOutput && (
+                  <div className="terminal-stream-block stream-compile-error">
+                    <div className="stream-header">
+                      <div className="stream-label text-danger">
+                        <XCircle size={13} />
+                        <span>Compilation Diagnostics</span>
+                      </div>
+                    </div>
+                    <pre className="stream-pre pre-compile">{executionResult.compileOutput}</pre>
+                  </div>
+                )}
+
+                {/* 2. Standard Output */}
+                {executionResult.stdout && (
+                  <div className="terminal-stream-block stream-stdout">
+                    <div className="stream-header">
+                      <div className="stream-label text-success">
+                        <Terminal size={13} />
+                        <span>Standard Output (stdout)</span>
+                      </div>
+                      <button
+                        type="button"
+                        className="stream-copy-btn"
+                        onClick={handleCopyOutput}
+                        title="Copy stdout"
+                      >
+                        {copiedOutput ? (
+                          <Check size={12} className="text-success" />
+                        ) : (
+                          <Copy size={12} />
+                        )}
+                        <span>{copiedOutput ? 'Copied' : 'Copy'}</span>
+                      </button>
+                    </div>
+                    <pre className="stream-pre pre-stdout">{executionResult.stdout}</pre>
+                  </div>
+                )}
+
+                {/* 3. Standard Error / Runtime Diagnostics */}
+                {executionResult.stderr && (
+                  <div className="terminal-stream-block stream-stderr">
+                    <div className="stream-header">
+                      <div className="stream-label text-warning">
+                        <AlertTriangle size={13} />
+                        <span>Standard Error (stderr)</span>
+                      </div>
+                    </div>
+                    <pre className="stream-pre pre-stderr">{executionResult.stderr}</pre>
+                  </div>
+                )}
+
+                {/* 4. Completely Empty Output case */}
+                {!executionResult.compileOutput &&
+                  !executionResult.stdout &&
+                  !executionResult.stderr && (
+                    <div className="terminal-stream-block stream-empty">
+                      <CheckCircle2 size={16} className="text-success" />
+                      <span>
+                        Program exited successfully with status 0 (no output produced).
+                      </span>
+                    </div>
+                  )}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Preview Footer Status Bar */}
       <footer className="preview-footer">
         <div className="preview-footer-left">
-          <div className="security-badge" title="Executing in safe sandboxed frame without parent access">
-            <ShieldCheck size={12} className="text-success" />
-            <span>Sandboxed (No Parent Access)</span>
-          </div>
-
-          <div className="divider-vertical" />
-
-          <span className="footer-entry-info">
-            Entry: <code className="entry-filename">{selectedHtmlFile || 'index.html'}</code>
-          </span>
+          {activeTab === 'terminal' ? (
+            <>
+              <div
+                className="security-badge"
+                title="Executed in external isolated sandbox - Zero server access"
+              >
+                <ShieldCheck size={12} className="text-success" />
+                <span>Sandboxed Execution (Isolated Runner)</span>
+              </div>
+              <div className="divider-vertical" />
+              <span className="footer-entry-info">
+                Target: <code className="entry-filename">{activeFile || 'No file selected'}</code>
+              </span>
+            </>
+          ) : (
+            <>
+              <div
+                className="security-badge"
+                title="Executing in safe sandboxed frame without parent access"
+              >
+                <ShieldCheck size={12} className="text-success" />
+                <span>Sandboxed (No Parent Access)</span>
+              </div>
+              <div className="divider-vertical" />
+              <span className="footer-entry-info">
+                Entry: <code className="entry-filename">{selectedHtmlFile || 'index.html'}</code>
+              </span>
+            </>
+          )}
         </div>
 
         <div className="preview-footer-right">
-          <label className="auto-run-label" title="Automatically re-run sandbox when project files are modified">
-            <input
-              type="checkbox"
-              checked={autoRunOnEdit}
-              onChange={(e) => setAutoRunOnEdit(e.target.checked)}
-            />
-            <span>Auto-run</span>
-          </label>
+          {activeTab === 'terminal' ? (
+            <span className="terminal-provider-badge" title="Execution Engine">
+              Provider:{' '}
+              <strong>
+                {executionResult?.provider === 'judge0'
+                  ? 'Judge0 CE'
+                  : executionResult?.provider || 'Secure Sandbox'}
+              </strong>
+            </span>
+          ) : (
+            <label
+              className="auto-run-label"
+              title="Automatically re-run sandbox when project files are modified"
+            >
+              <input
+                type="checkbox"
+                checked={autoRunOnEdit}
+                onChange={(e) => setAutoRunOnEdit(e.target.checked)}
+              />
+              <span>Auto-run</span>
+            </label>
+          )}
         </div>
       </footer>
 

@@ -26,6 +26,14 @@ export const CLEAR_COOKIE_OPTIONS = {
   path: '/'
 };
 
+// Sandboxed Code Execution Configuration (External Provider Only)
+export const CODE_EXECUTION_PROVIDER = (process.env.CODE_EXECUTION_PROVIDER || 'judge0').toLowerCase();
+export const JUDGE0_API_URL = process.env.JUDGE0_API_URL || 'https://ce.judge0.com';
+export const JUDGE0_API_KEY = process.env.JUDGE0_API_KEY || '';
+export const PISTON_API_URL = process.env.PISTON_API_URL || 'https://emkc.org/api/v2/piston';
+export const PISTON_API_KEY = process.env.PISTON_API_KEY || '';
+export const CODE_EXECUTION_TIMEOUT_MS = Number(process.env.CODE_EXECUTION_TIMEOUT_MS) || 10000;
+
 export default {
   PORT,
   NODE_ENV,
@@ -35,5 +43,11 @@ export default {
   DATABASE_URL,
   COOKIE_NAME,
   COOKIE_OPTIONS,
-  CLEAR_COOKIE_OPTIONS
+  CLEAR_COOKIE_OPTIONS,
+  CODE_EXECUTION_PROVIDER,
+  JUDGE0_API_URL,
+  JUDGE0_API_KEY,
+  PISTON_API_URL,
+  PISTON_API_KEY,
+  CODE_EXECUTION_TIMEOUT_MS
 };

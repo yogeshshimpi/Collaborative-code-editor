@@ -11,7 +11,7 @@
   align-items: center;
   justify-content: space-between;
   padding: var(--safe-top) max(12px, var(--safe-right)) 0 max(12px, var(--safe-left));
-  z-index: 25;
+  z-index: 120;
   user-select: none;
   width: 100%;
   max-width: 100vw;
@@ -934,5 +934,327 @@
 
 .text-amber {
   color: #f59e0b !important;
+}
+
+/* Dedicated Owner Approval System Control in Navbar */
+/* Dedicated Owner Approval System Control in Navbar */
+.navbar-approval-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.navbar-approval-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 2px 6px 2px 4px;
+  transition: all 0.2s ease;
+}
+
+.navbar-approval-control:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(245, 158, 11, 0.35);
+}
+
+.navbar-approval-control.is-active {
+  background: rgba(245, 158, 11, 0.08);
+  border-color: rgba(245, 158, 11, 0.4);
+}
+
+.navbar-approval-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+.navbar-approval-pill:hover {
+  color: var(--text-primary);
+}
+
+.navbar-approval-control.is-active .navbar-approval-pill {
+  color: #fbbf24;
+}
+
+.approval-shield-icon {
+  color: var(--text-muted);
+  transition: color 0.2s ease;
+}
+
+.approval-shield-icon.active {
+  color: #f59e0b;
+}
+
+.approval-pill-label {
+  font-weight: 600;
+  letter-spacing: 0.1px;
+}
+
+.approval-caret {
+  color: var(--text-muted);
+  transition: transform 0.2s ease;
+  margin-left: 1px;
+}
+
+.approval-caret.open {
+  transform: rotate(180deg);
+  color: #fbbf24;
+}
+
+.approval-status-tag {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.4px;
+}
+
+.approval-status-tag.tag-on {
+  background: rgba(245, 158, 11, 0.22);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+.approval-status-tag.tag-off {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text-muted);
+  border: 1px solid var(--border-subtle);
+}
+
+/* Quick toggle switch inside Navbar */
+.navbar-approval-quick-toggle {
+  width: 28px;
+  height: 16px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--border-subtle);
+  cursor: pointer;
+  padding: 1px;
+  display: flex;
+  align-items: center;
+  transition: all 0.2s ease;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.navbar-approval-quick-toggle.active {
+  background: #f59e0b;
+  border-color: #f59e0b;
+}
+
+.quick-toggle-slider {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.navbar-approval-quick-toggle.active .quick-toggle-slider {
+  transform: translateX(12px);
+}
+
+.navbar-approval-quick-toggle.large {
+  width: 36px;
+  height: 20px;
+  border-radius: 12px;
+  padding: 2px;
+}
+
+.navbar-approval-quick-toggle.large .quick-toggle-slider {
+  width: 14px;
+  height: 14px;
+}
+
+.navbar-approval-quick-toggle.large.active .quick-toggle-slider {
+  transform: translateX(16px);
+}
+
+/* Approval Dropdown Menu Popover */
+.approval-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 320px;
+  background: var(--bg-elevated, #18191f);
+  border: 1px solid var(--border-strong, rgba(255, 255, 255, 0.12));
+  border-radius: 10px;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.55), 0 0 1px 1px rgba(245, 158, 11, 0.2);
+  padding: 14px;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: dropdown-fade-in 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes dropdown-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.approval-dropdown-header {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.approval-dropdown-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.approval-dropdown-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-primary, #ffffff);
+  flex: 1;
+}
+
+.approval-dropdown-subtitle {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  line-height: 1.4;
+  margin: 0;
+}
+
+.approval-dropdown-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.approval-quick-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.toggle-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.toggle-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.toggle-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.approval-protected-features {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.features-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+}
+
+.features-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.features-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.features-list li.active {
+  color: var(--text-primary);
+}
+
+.features-list li.inactive {
+  opacity: 0.45;
+}
+
+.feature-icon {
+  flex-shrink: 0;
+}
+
+.feature-delete {
+  color: #f87171;
+}
+
+.feature-restore {
+  color: #fbbf24;
+}
+
+.feature-code {
+  color: #818cf8;
+}
+
+.feature-create {
+  color: #34d399;
+}
+
+.approval-dropdown-footer {
+  padding-top: 4px;
+}
+
+.btn-block {
+  width: 100%;
+  justify-content: center;
+}
+
+.btn-cr-action.approval-active-editor {
+  border-color: rgba(245, 158, 11, 0.35);
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.navbar-cr-badge.pulse {
+  animation: cr-pulse 2s infinite ease-in-out;
+}
+
+@keyframes cr-pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.15); box-shadow: 0 0 8px rgba(245, 158, 11, 0.8); }
+  100% { transform: scale(1); }
 }
 

@@ -160,7 +160,8 @@ export async function reviewChangeRequest({
         break;
       }
 
-      case 'file_create': {
+      case 'file_create':
+      case 'create_file': {
         const created = await createFileInRoom({
           roomId,
           filePath: cr.target_path,
@@ -175,7 +176,8 @@ export async function reviewChangeRequest({
         break;
       }
 
-      case 'file_rename': {
+      case 'file_rename':
+      case 'rename_file': {
         const renamed = await renameFileInRoom({
           roomId,
           oldPath: cr.old_path,
@@ -189,7 +191,8 @@ export async function reviewChangeRequest({
         break;
       }
 
-      case 'file_delete': {
+      case 'file_delete':
+      case 'delete_file': {
         const deleted = await deleteFileInRoom({
           roomId,
           filePath: cr.target_path
@@ -201,7 +204,8 @@ export async function reviewChangeRequest({
         break;
       }
 
-      case 'folder_create': {
+      case 'folder_create':
+      case 'create_folder': {
         const created = await createFolderInRoom({
           roomId,
           folderPath: cr.target_path
@@ -213,7 +217,8 @@ export async function reviewChangeRequest({
         break;
       }
 
-      case 'folder_rename': {
+      case 'folder_rename':
+      case 'rename_folder': {
         const renamed = await renameFolderInRoom({
           roomId,
           oldFolder: cr.old_path,
@@ -228,7 +233,8 @@ export async function reviewChangeRequest({
         break;
       }
 
-      case 'folder_delete': {
+      case 'folder_delete':
+      case 'delete_folder': {
         const deleted = await deleteFolderInRoom({
           roomId,
           folderPath: cr.target_path
@@ -242,12 +248,13 @@ export async function reviewChangeRequest({
       }
 
       case 'version_restore': {
-        if (cr.proposed_content) {
+        const versionId = cr.old_path || cr.proposed_content;
+        if (versionId) {
           const restored = await restoreFileVersion({
             roomId,
             fileName: cr.target_path,
-            versionId: cr.proposed_content,
-            authorId: userId
+            versionId,
+            restoredByUserId: userId
           });
           appliedResult = {
             type: 'version_restore',

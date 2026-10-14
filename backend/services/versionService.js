@@ -4,7 +4,7 @@ import {
   createFileVersion,
   restoreFileVersion as dbRestoreFileVersion
 } from '../db/versions.js';
-import { getProjectById, getProjectRole } from '../db/projects.js';
+import { getProjectById, getProjectRole, isFileProtected } from '../db/projects.js';
 import { getRoomFiles } from '../db/workspace.js';
 import { normalizePath, isValidFilePath } from '../utils/filePath.js';
 import { ApiError } from '../utils/apiError.js';
@@ -100,8 +100,8 @@ export async function restoreVersionSnapshot({ roomId, rawFileName, versionId, u
   if (projectRole === 'viewer') {
     throw new ApiError(403, 'Viewer permission: editing is disabled.');
   }
-  if (projectRole === 'editor' && project?.requires_approval) {
-    throw new ApiError(403, 'Approval mode is active. Restoring a version must be submitted as a Change Request for Owner approval.');
+  if (projectRole === 'editor' && project && isFileProtected(project, fileName)) {
+    throw new ApiError(403, `File "${fileName}" is protected by the project owner and cannot be restored by editors.`);
   }
   const targetRoom = project?.room_id || roomId;
 

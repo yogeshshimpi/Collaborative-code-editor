@@ -113,6 +113,9 @@ export const getLanguageFromFile = (fileName) => {
   if (lower.endsWith('.json')) return 'json';
   if (lower.endsWith('.md') || lower.endsWith('.markdown')) return 'markdown';
   if (lower.endsWith('.py')) return 'python';
+  if (lower.endsWith('.java')) return 'java';
+  if (lower.endsWith('.cpp') || lower.endsWith('.cc') || lower.endsWith('.cxx') || lower.endsWith('.hpp')) return 'cpp';
+  if (lower.endsWith('.c') || lower.endsWith('.h')) return 'c';
   if (lower.endsWith('.sql')) return 'sql';
   if (lower.endsWith('.xml') || lower.endsWith('.svg')) return 'xml';
   if (lower.endsWith('.yaml') || lower.endsWith('.yml')) return 'yaml';
@@ -141,7 +144,17 @@ export const getDefaultFileContent = (fileName) => {
     return `{\n  \n}\n`;
   }
   if (lower.endsWith('.py')) {
-    return `def main():\n    print("Hello from Python")\n\nif __name__ == "__main__":\n    main()\n`;
+    return `def main():\n    print("Hello from Python in CodeCollab!")\n\nif __name__ == "__main__":\n    main()\n`;
+  }
+  if (lower.endsWith('.java')) {
+    const className = fileName.split('/').pop().replace(/\.java$/, '') || 'Main';
+    return `public class ${className} {\n    public static void main(String[] args) {\n        System.out.println("Hello from Java in CodeCollab!");\n    }\n}\n`;
+  }
+  if (lower.endsWith('.cpp') || lower.endsWith('.cc') || lower.endsWith('.cxx')) {
+    return `#include <iostream>\n\nint main() {\n    std::cout << "Hello from C++ in CodeCollab!" << std::endl;\n    return 0;\n}\n`;
+  }
+  if (lower.endsWith('.c')) {
+    return `#include <stdio.h>\n\nint main() {\n    printf("Hello from C in CodeCollab!\\n");\n    return 0;\n}\n`;
   }
   if (lower.endsWith('.sql')) {
     return `-- SQL Query\n`;
@@ -151,7 +164,7 @@ export const getDefaultFileContent = (fileName) => {
     return `# ${title}\n\nProject documentation.\n`;
   }
   if (lower.endsWith('.js') || lower.endsWith('.ts')) {
-    return `// ${fileName.split('/').pop()}\n`;
+    return `// ${fileName.split('/').pop()}\nconsole.log("Hello from JavaScript in CodeCollab!");\n`;
   }
   return '';
 };

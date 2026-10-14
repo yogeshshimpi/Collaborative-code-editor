@@ -250,6 +250,31 @@
   flex-shrink: 0;
 }
 
+/* Protected File Banner for Editors */
+.protected-file-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 16px;
+  background: rgba(239, 68, 68, 0.08);
+  border-bottom: 1px solid rgba(239, 68, 68, 0.25);
+  color: #f87171;
+  font-size: 12px;
+  z-index: 10;
+  flex-shrink: 0;
+}
+
+.protected-file-banner-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.protected-file-banner .banner-icon {
+  color: #ef4444;
+  flex-shrink: 0;
+}
+
 .approval-mode-banner-btn {
   display: inline-flex;
   align-items: center;

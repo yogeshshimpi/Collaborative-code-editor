@@ -163,13 +163,15 @@ export async function initDatabase() {
           name VARCHAR(100) NOT NULL,
           owner_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
           requires_approval BOOLEAN NOT NULL DEFAULT FALSE,
+          protected_files JSONB NOT NULL DEFAULT '[]'::jsonb,
           created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
         );
 
-        -- Ensure owner_id and requires_approval columns exist if table was pre-existing
+        -- Ensure owner_id, requires_approval, and protected_files columns exist if table was pre-existing
         ALTER TABLE projects ADD COLUMN IF NOT EXISTS owner_id INTEGER REFERENCES users(id) ON DELETE CASCADE;
         ALTER TABLE projects ADD COLUMN IF NOT EXISTS requires_approval BOOLEAN NOT NULL DEFAULT FALSE;
+        ALTER TABLE projects ADD COLUMN IF NOT EXISTS protected_files JSONB NOT NULL DEFAULT '[]'::jsonb;
 
         CREATE TABLE IF NOT EXISTS project_members (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

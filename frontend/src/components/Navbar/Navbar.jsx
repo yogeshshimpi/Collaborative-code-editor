@@ -18,7 +18,10 @@ import {
   ShieldCheck,
   History,
   Activity,
-  GitPullRequest
+  GitPullRequest,
+  RotateCcw,
+  Trash2,
+  FilePlus
 } from 'lucide-react';
 
 export default function Navbar({
@@ -40,6 +43,8 @@ export default function Navbar({
   isActivityOpen = false,
   onOpenChangeRequests,
   pendingRequestsCount = 0,
+  requiresApproval = false,
+  onToggleApprovalMode,
   isRightPanelOpen,
   toggleRightPanel,
   onToggleSidebar,
@@ -55,6 +60,9 @@ export default function Navbar({
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const userMenuRef = useRef(null);
 
+  const [isApprovalMenuOpen, setIsApprovalMenuOpen] = useState(false);
+  const approvalMenuRef = useRef(null);
+
   // Sync inputs when props change externally
   useEffect(() => {
     setRoomInput(roomId);
@@ -64,20 +72,23 @@ export default function Navbar({
     setTitleInput(projectName);
   }, [projectName]);
 
-  // Close dropdown on click outside
+  // Close dropdowns on click outside
   useEffect(() => {
     function handleClickOutside(event) {
       if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
         setIsUserMenuOpen(false);
       }
+      if (approvalMenuRef.current && !approvalMenuRef.current.contains(event.target)) {
+        setIsApprovalMenuOpen(false);
+      }
     }
-    if (isUserMenuOpen) {
+    if (isUserMenuOpen || isApprovalMenuOpen) {
       document.addEventListener('mousedown', handleClickOutside);
     }
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [isUserMenuOpen]);
+  }, [isUserMenuOpen, isApprovalMenuOpen]);
 
   const handleRoomSubmit = (e) => {
     e?.preventDefault?.();
@@ -331,17 +342,153 @@ export default function Navbar({
           </button>
         )}
 
-        {/* Change Requests action button with pending badge */}
-        {onOpenChangeRequests && (
+        {/* Dedicated Owner Approval System Control in Navbar */}
+        {userRole === 'owner' && onOpenChangeRequests && (
+          <div className="navbar-approval-wrapper" ref={approvalMenuRef}>
+            <div className={`navbar-approval-control ${requiresApproval ? 'is-active' : 'is-inactive'}`} title="Approval System: Protect project from unapproved code edits, file deletions, and version restores">
+              <button
+                type="button"
+                className="navbar-approval-pill"
+                onClick={() => setIsApprovalMenuOpen((prev) => !prev)}
+                title={
+                  requiresApproval
+                    ? 'Approval Mode is ACTIVE: Major changes (restore, delete file, edits) require your approval. Click for details.'
+                    : 'Approval Mode is OFF: Editors can edit and delete directly. Click for details.'
+                }
+                aria-label="Approval System Menu"
+                aria-expanded={isApprovalMenuOpen}
+              >
+                <ShieldCheck size={14} className={`approval-shield-icon ${requiresApproval ? 'active' : ''}`} />
+                <span className="approval-pill-label">Approval System</span>
+                <span className={`approval-status-tag ${requiresApproval ? 'tag-on' : 'tag-off'}`}>
+                  {requiresApproval ? 'ON' : 'OFF'}
+                </span>
+                {pendingRequestsCount > 0 && (
+                  <span
+                    className="navbar-cr-badge pulse"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenChangeRequests();
+                    }}
+                    title={`${pendingRequestsCount} change requests waiting for approval (click to review)`}
+                  >
+                    {pendingRequestsCount}
+                  </span>
+                )}
+                <ChevronDown size={11} className={`approval-caret ${isApprovalMenuOpen ? 'open' : ''}`} />
+              </button>
+
+              {/* Direct One-Click Toggle for Owner */}
+              {onToggleApprovalMode && (
+                <button
+                  type="button"
+                  className={`navbar-approval-quick-toggle ${requiresApproval ? 'active' : ''}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleApprovalMode(!requiresApproval);
+                  }}
+                  title={requiresApproval ? 'Turn OFF Approval Mode (Direct Editing Enabled)' : 'Turn ON Approval Mode (Owner Approval Required for Major Changes)'}
+                  aria-label={requiresApproval ? 'Disable approval mode' : 'Enable approval mode'}
+                >
+                  <span className="quick-toggle-slider" />
+                </button>
+              )}
+            </div>
+
+            {/* Approval System Dropdown / Popover for Owner */}
+            {isApprovalMenuOpen && (
+              <div className="approval-dropdown-menu" role="menu">
+                <div className="approval-dropdown-header">
+                  <div className="approval-dropdown-title-row">
+                    <ShieldCheck size={16} className={requiresApproval ? 'text-amber' : 'text-muted'} />
+                    <span className="approval-dropdown-title">Strict Approval Mode</span>
+                    <span className={`approval-status-tag ${requiresApproval ? 'tag-on' : 'tag-off'}`}>
+                      {requiresApproval ? 'ON' : 'OFF'}
+                    </span>
+                  </div>
+                  <p className="approval-dropdown-subtitle">
+                    Optional code approval gate. When enabled, only editor code edits require approval before being applied. File/folder operations remain immediate.
+                  </p>
+                </div>
+
+                <div className="approval-dropdown-body">
+                  <div className="approval-quick-toggle-row">
+                    <div className="toggle-info">
+                      <span className="toggle-title">Require approval before editor code is applied</span>
+                      <span className="toggle-desc">
+                        {requiresApproval
+                          ? 'Strict review mode is ON. Editor code edits require owner approval.'
+                          : 'Default mode: Editors collaborate normally without blocking approvals.'}
+                      </span>
+                    </div>
+                    {onToggleApprovalMode && (
+                      <button
+                        type="button"
+                        className={`navbar-approval-quick-toggle large ${requiresApproval ? 'active' : ''}`}
+                        onClick={() => onToggleApprovalMode(!requiresApproval)}
+                        title={requiresApproval ? 'Disable strict approval mode' : 'Enable strict approval mode'}
+                      >
+                        <span className="quick-toggle-slider" />
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="approval-protected-features">
+                    <span className="features-label">Workflow Behavior:</span>
+                    <ul className="features-list">
+                      <li className={requiresApproval ? 'active' : 'inactive'}>
+                        <GitPullRequest size={13} className="feature-icon feature-code" />
+                        <span><strong>Editor Code Edits:</strong> {requiresApproval ? 'Private draft requiring owner review' : 'Real-time collaborative live sync'}</span>
+                      </li>
+                      <li className="active">
+                        <Trash2 size={13} className="feature-icon feature-delete" />
+                        <span><strong>File & Folder Management:</strong> Immediate for editors (with 10s safe Undo)</span>
+                      </li>
+                      <li className="active">
+                        <RotateCcw size={13} className="feature-icon feature-restore" />
+                        <span><strong>Version Restores:</strong> Immediate rollback without approval</span>
+                      </li>
+                      <li className="active">
+                        <ShieldCheck size={13} className="feature-icon feature-create" />
+                        <span><strong>Protected Files:</strong> Critical files (e.g. .env, package.json) locked from editor edits</span>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+
+                <div className="approval-dropdown-footer">
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm btn-block"
+                    onClick={() => {
+                      setIsApprovalMenuOpen(false);
+                      onOpenChangeRequests();
+                    }}
+                  >
+                    <GitPullRequest size={13} />
+                    <span>
+                      {pendingRequestsCount > 0
+                        ? `Review Pending Requests (${pendingRequestsCount})`
+                        : 'Open Change Requests & History'}
+                    </span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Change Requests / Approvals button for Collaborators (Editors & Viewers) */}
+        {userRole !== 'owner' && onOpenChangeRequests && (
           <button
             type="button"
-            className="btn btn-secondary btn-action btn-cr-action"
+            className={`btn btn-secondary btn-action btn-cr-action ${requiresApproval ? 'approval-active-editor' : ''}`}
             onClick={onOpenChangeRequests}
-            title="View Change Requests & Approvals"
+            title={requiresApproval ? "Approval Mode Active: Changes require owner approval" : "View Change Requests"}
             aria-label="Change Requests"
           >
-            <GitPullRequest size={14} className={pendingRequestsCount > 0 ? "text-amber" : ""} />
-            <span className="btn-text">Requests</span>
+            <GitPullRequest size={14} className={pendingRequestsCount > 0 || requiresApproval ? "text-amber" : ""} />
+            <span className="btn-text">{requiresApproval ? 'Approvals' : 'Requests'}</span>
             {pendingRequestsCount > 0 && (
               <span className="navbar-cr-badge">{pendingRequestsCount}</span>
             )}

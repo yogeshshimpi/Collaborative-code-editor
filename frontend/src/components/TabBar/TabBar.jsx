@@ -104,18 +104,18 @@ export default function TabBar({
       {/* Zone 2: Key editor action buttons pinned on right: [ Submit for Review ] [ Undo ] [ Redo ] [ Run ] [ Console ] */}
       <div className="tab-bar-actions">
 
-        {/* [ Submit for Review ] when approval mode is active for editors */}
-        {requiresApproval && userRole === 'editor' && onSubmitForReview && (
+        {/* [ Request Review ] optional code review button for editors */}
+        {userRole === 'editor' && (onSubmitForReview || onRequestReview) && (
           <button
             type="button"
             className="tab-action-btn btn-tab-submit-review"
-            onClick={onSubmitForReview}
+            onClick={onRequestReview || onSubmitForReview}
             onMouseDown={(e) => e.preventDefault()}
-            title="Submit proposed changes for project owner review"
-            aria-label="Submit for Review"
+            title="Request project owner review for current code changes"
+            aria-label="Request Review"
           >
-            <GitPullRequest size={13} className="tab-action-icon text-amber" />
-            <span className="tab-action-text">Submit for Review</span>
+            <GitPullRequest size={13} className="tab-action-icon" />
+            <span className="tab-action-text">Request Review</span>
           </button>
         )}
 

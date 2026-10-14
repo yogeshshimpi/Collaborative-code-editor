@@ -8,22 +8,24 @@ import {
   deleteFolderInRoom,
   moveItemInRoom
 } from '../db/workspace.js';
-import { getProjectById, getProjectRole } from '../db/projects.js';
+import { getProjectById, getProjectRole, isFileProtected } from '../db/projects.js';
 import { ApiError } from '../utils/apiError.js';
 
 /**
  * Validates that the user has write permissions for this project room.
- * Rejects viewers and checks if approval mode blocks direct changes for editors.
+ * Rejects viewers and checks if file is protected against editor modifications.
  */
-async function assertWritePermission(roomId, userId, actionName = 'make changes') {
+async function assertWritePermission(roomId, userId, actionName = 'make changes', targetPath = null) {
   const role = await getProjectRole(roomId, userId);
   if (role === 'viewer') {
     throw new ApiError(403, 'Viewer permission: editing is disabled.');
   }
 
-  const project = await getProjectById(roomId, userId);
-  if (role === 'editor' && project?.requires_approval) {
-    throw new ApiError(403, `Approval mode is active. Cannot directly ${actionName}; please submit a Change Request for Owner approval.`);
+  if (targetPath && role === 'editor') {
+    const project = await getProjectById(roomId, userId);
+    if (project && isFileProtected(project, targetPath)) {
+      throw new ApiError(403, `File "${targetPath}" is protected by the project owner and cannot be modified.`);
+    }
   }
 }
 
@@ -41,7 +43,8 @@ export async function getWorkspaceTree(roomId, userId) {
     files: workspace.files,
     folders: workspace.folders,
     userRole: projectRole || 'editor',
-    requiresApproval: Boolean(project?.requires_approval)
+    requiresApproval: Boolean(project?.requires_approval),
+    protectedFiles: project?.protected_files || []
   };
 }
 
@@ -66,7 +69,7 @@ export async function createWorkspaceFolder({ roomId, path, userId }) {
 }
 
 export async function renameWorkspaceFile({ roomId, oldPath, newPath, userId }) {
-  await assertWritePermission(roomId, userId, 'rename files');
+  await assertWritePermission(roomId, userId, 'rename files', oldPath);
 
   return renameFileInRoom({
     roomId,
@@ -76,7 +79,7 @@ export async function renameWorkspaceFile({ roomId, oldPath, newPath, userId }) 
 }
 
 export async function renameWorkspaceFolder({ roomId, oldFolder, newFolder, userId }) {
-  await assertWritePermission(roomId, userId, 'rename folders');
+  await assertWritePermission(roomId, userId, 'rename folders', oldFolder);
 
   return renameFolderInRoom({
     roomId,
@@ -86,7 +89,7 @@ export async function renameWorkspaceFolder({ roomId, oldFolder, newFolder, user
 }
 
 export async function deleteWorkspaceFile({ roomId, path, userId }) {
-  await assertWritePermission(roomId, userId, 'delete files');
+  await assertWritePermission(roomId, userId, 'delete files', path);
 
   return deleteFileInRoom({
     roomId,
@@ -95,7 +98,7 @@ export async function deleteWorkspaceFile({ roomId, path, userId }) {
 }
 
 export async function deleteWorkspaceFolder({ roomId, path, userId }) {
-  await assertWritePermission(roomId, userId, 'delete folders');
+  await assertWritePermission(roomId, userId, 'delete folders', path);
 
   return deleteFolderInRoom({
     roomId,
@@ -104,7 +107,7 @@ export async function deleteWorkspaceFolder({ roomId, path, userId }) {
 }
 
 export async function moveWorkspaceItem({ roomId, itemType, oldPath, targetParentFolder, userId }) {
-  await assertWritePermission(roomId, userId, 'move items');
+  await assertWritePermission(roomId, userId, 'move items', oldPath);
 
   return moveItemInRoom({
     roomId,

@@ -21,6 +21,7 @@ import versionRoutes from './routes/versionRoutes.js';
 import invitationRoutes from './routes/invitationRoutes.js';
 import activityRoutes from './routes/activityRoutes.js';
 import healthRoutes from './routes/healthRoutes.js';
+import executionRoutes from './routes/executionRoutes.js';
 
 const app = express();
 const server = http.createServer(app);
@@ -50,6 +51,7 @@ app.use('/api/projects', workspaceRoutes);
 app.use('/api/projects', versionRoutes);
 app.use('/api/projects', activityRoutes);
 app.use('/api/invitations', invitationRoutes);
+app.use('/api/execute', executionRoutes);
 app.get('/api/rooms/:roomId', getLegacyRoom);
 
 // Global error handlers
