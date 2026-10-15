@@ -1,12 +1,14 @@
 import {
   getRoomWorkspace as dbGetRoomWorkspace,
+  getFileMetadata,
   createFileInRoom,
   createFolderInRoom,
   renameFileInRoom,
   renameFolderInRoom,
   deleteFileInRoom,
   deleteFolderInRoom,
-  moveItemInRoom
+  moveItemInRoom,
+  saveFileContent
 } from '../db/workspace.js';
 import { getProjectById, getProjectRole, isFileProtected } from '../db/projects.js';
 import { ApiError } from '../utils/apiError.js';
@@ -42,10 +44,41 @@ export async function getWorkspaceTree(roomId, userId) {
     roomId: targetRoom,
     files: workspace.files,
     folders: workspace.folders,
+    fileMeta: workspace.fileMeta || {},
     userRole: projectRole || 'editor',
     requiresApproval: Boolean(project?.requires_approval),
     protectedFiles: project?.protected_files || []
   };
+}
+
+export async function saveWorkspaceFile({ roomId, fileName, content, userId, baseVersion = null }) {
+  await assertWritePermission(roomId, userId, 'save file content', fileName);
+
+  const cleanFile = typeof fileName === 'string' ? fileName.trim() : '';
+
+  // If strict owner approval mode is enabled and user is editor, reject direct write
+  const role = await getProjectRole(roomId, userId);
+  const project = await getProjectById(roomId, userId);
+  if (role === 'editor' && project?.requires_approval) {
+    throw new ApiError(403, 'Strict review mode is enabled. Your code changes require owner approval.');
+  }
+
+  // Version-based conflict detection
+  if (baseVersion !== null && baseVersion !== undefined) {
+    const currentMeta = await getFileMetadata(roomId, cleanFile);
+    if (currentMeta && typeof currentMeta.version === 'number' && currentMeta.version > Number(baseVersion)) {
+      const conflictErr = new ApiError(409, 'Conflict: File has been updated by another collaborator.');
+      conflictErr.details = {
+        serverVersion: currentMeta.version,
+        serverUpdatedAt: currentMeta.updatedAt,
+        serverContent: currentMeta.content,
+        fileName: cleanFile
+      };
+      throw conflictErr;
+    }
+  }
+
+  return saveFileContent(roomId, cleanFile, content, userId);
 }
 
 export async function createWorkspaceFile({ roomId, path, content, userId }) {
@@ -123,6 +156,7 @@ export async function getRawWorkspace(roomId) {
 
 export default {
   getWorkspaceTree,
+  saveWorkspaceFile,
   createWorkspaceFile,
   createWorkspaceFolder,
   renameWorkspaceFile,

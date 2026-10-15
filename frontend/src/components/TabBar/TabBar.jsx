@@ -16,6 +16,7 @@ import {
   AlignLeft,
   MessageSquare
 } from 'lucide-react';
+import SyncStatus from '../SyncStatus/SyncStatus';
 
 export default function TabBar({
   openTabs = [],
@@ -32,9 +33,10 @@ export default function TabBar({
   readOnly = false,
   _requiresApproval = false,
   userRole = 'editor',
-  onSubmitForReview,
-  onRequestReview,
-  onAddComment
+  onAddComment,
+  saveStatus = 'saved',
+  onRetrySave = null,
+  lastSavedAt = null
 }) {
   const tabBarRef = useRef(null);
   const scrollContainerRef = useRef(null);
@@ -197,6 +199,16 @@ export default function TabBar({
 
       {/* Zone 2: Streamlined Editor Action Toolbar (Consistent across ALL screens!) */}
       <div className="tab-bar-actions">
+        {/* Compact Sync Status Feedback Indicator */}
+        {saveStatus && (
+          <SyncStatus
+            status={saveStatus}
+            onRetry={onRetrySave}
+            lastSavedAt={lastSavedAt}
+            compact={isTight}
+          />
+        )}
+
         {/* Run Code Button */}
         <button
           type="button"

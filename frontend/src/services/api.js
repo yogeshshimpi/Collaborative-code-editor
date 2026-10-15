@@ -183,6 +183,13 @@ export const api = {
     });
   },
 
+  async saveProjectFileContent(roomId, { fileName, content, baseVersion }) {
+    return request(`/api/projects/${encodeURIComponent(roomId)}/files/content`, {
+      method: 'PUT',
+      body: JSON.stringify({ fileName, content, baseVersion })
+    });
+  },
+
   // Project Members & Collaborators
   async getProjectMembers(projectId) {
     return request(`/api/projects/${encodeURIComponent(projectId)}/members`, {

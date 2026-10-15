@@ -33,7 +33,8 @@ export function useSocket({
   onCommentReply,
   onCommentResolved,
   onCommentDeleted,
-  onNotification
+  onNotification,
+  onReconnect
 }) {
   const [connectionStatus, setConnectionStatus] = useState('connecting'); // 'connecting' | 'connected' | 'disconnected'
   const [participantCount, setParticipantCount] = useState(1);
@@ -73,8 +74,13 @@ export function useSocket({
   const onCommentResolvedRef = useRef(onCommentResolved);
   const onCommentDeletedRef = useRef(onCommentDeleted);
   const onNotificationRef = useRef(onNotification);
+  const onReconnectRef = useRef(onReconnect);
 
   const userRef = useRef(user);
+
+  useEffect(() => {
+    onReconnectRef.current = onReconnect;
+  }, [onReconnect]);
 
   useEffect(() => {
     onNewChatMessageRef.current = onNewChatMessage;
@@ -202,27 +208,42 @@ export function useSocket({
     const socket = initSocket();
     socketRef.current = socket;
 
-    socket.on('connect', () => {
+    const handleConnect = () => {
       setConnectionStatus('connected');
-      // Emit join-room with room ID and live user presence details
+      // Automatically rejoin room with user presence details
       socket.emit('join-room', {
         roomId,
         user: userRef.current
       });
-    });
+      if (onReconnectRef.current) {
+        onReconnectRef.current();
+      }
+    };
 
-    socket.on('disconnect', () => {
+    const handleDisconnect = () => {
       setConnectionStatus('disconnected');
       setRemoteCursors({});
-    });
+    };
 
-    socket.on('connect_error', () => {
+    const handleConnectError = () => {
       setConnectionStatus('disconnected');
-    });
+    };
 
-    socket.on('reconnect_attempt', () => {
+    const handleReconnecting = () => {
       setConnectionStatus('connecting');
-    });
+    };
+
+    socket.on('connect', handleConnect);
+    socket.on('disconnect', handleDisconnect);
+    socket.on('connect_error', handleConnectError);
+    socket.on('reconnect_attempt', handleReconnecting);
+    socket.on('reconnecting', handleReconnecting);
+
+    if (socket.io) {
+      socket.io.on('reconnect_attempt', handleReconnecting);
+      socket.io.on('reconnect', handleConnect);
+      socket.io.on('reconnect_error', handleConnectError);
+    }
 
     // Receive workspace permission role (owner, editor, viewer)
     socket.on('user-role', (data) => {
@@ -469,6 +490,12 @@ export function useSocket({
       socket.off('disconnect');
       socket.off('connect_error');
       socket.off('reconnect_attempt');
+      socket.off('reconnecting');
+      if (socket.io) {
+        socket.io.off('reconnect_attempt');
+        socket.io.off('reconnect');
+        socket.io.off('reconnect_error');
+      }
       socket.off('user-role');
       socket.off('permission-error');
       socket.off('file-error');

@@ -20,6 +20,11 @@ import { useAuth } from '../../context/useAuth';
 import { api } from '../../services/api';
 import { INITIAL_FILES, getLanguageFromFile } from '../../data/initialFiles';
 import { useSocket } from '../../hooks/useSocket';
+import { useAutoSave } from '../../hooks/useAutoSave';
+import { useOfflineFileRecovery } from '../../hooks/useOfflineFileRecovery';
+import RestoreBanner from '../../components/RestoreBanner/RestoreBanner';
+import ConflictResolutionModal from '../../components/ConflictResolutionModal/ConflictResolutionModal';
+import { removeLocalDraft } from '../../utils/localDraftStorage';
 
 export default function EditorWorkspacePage() {
   const { roomId: urlRoomId } = useParams();
@@ -243,6 +248,16 @@ export default function EditorWorkspacePage() {
 
   // File storage state - holds independent content per file
   const [filesState, setFilesState] = useState(INITIAL_FILES);
+  // Per-file server metadata (version & updatedAt timestamp)
+  const [fileMeta, setFileMeta] = useState({});
+  // Conflict resolution modal state
+  const [conflictState, setConflictState] = useState({
+    isOpen: false,
+    fileName: '',
+    localContent: '',
+    remoteContent: '',
+    remoteAuthor: 'Teammate'
+  });
   // Folder paths list in workspace
   const [foldersState, setFoldersState] = useState([]);
   // Open tabs list
@@ -382,10 +397,53 @@ export default function EditorWorkspacePage() {
   // Mobile sidebar drawer state (open/close)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   // Updated only from server acknowledgements
-  const [saveStatus, setSaveStatus] = useState('idle');
-
   // Flag to avoid infinite loops: prevent remote updates from being emitted back
   const isRemoteChangeRef = useRef(false);
+
+  const activeFileRef = useRef(activeFile);
+  activeFileRef.current = activeFile;
+
+  const filesStateRef = useRef(filesState);
+  filesStateRef.current = filesState;
+
+  const hasUnsavedChangesRef = useRef(false);
+
+  // On normal page load, fetch the latest project files & metadata from backend/database first
+  useEffect(() => {
+    if (!activeRoomId || activeRoomId === 'demo-room') return;
+    let isMounted = true;
+    api.getProjectWorkspace(activeRoomId)
+      .then((res) => {
+        if (!isMounted || !res?.files) return;
+        isRemoteChangeRef.current = true;
+        setFilesState((prev) => {
+          const next = { ...prev };
+          for (const [name, content] of Object.entries(res.files)) {
+            if (typeof content === 'string') {
+              next[name] = {
+                name,
+                language: getLanguageFromFile(name),
+                content
+              };
+            }
+          }
+          return next;
+        });
+        if (Array.isArray(res.folders)) {
+          setFoldersState(res.folders);
+        }
+        if (res.fileMeta && typeof res.fileMeta === 'object') {
+          setFileMeta((prev) => ({ ...prev, ...res.fileMeta }));
+        }
+      })
+      .catch((err) => {
+        console.warn('[Workspace] Initial files fetch skipped/failed:', err.message);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeRoomId]);
 
   // Handle permission error from server (e.g. viewer trying to emit code changes)
   const handlePermissionError = useCallback((err) => {
@@ -397,9 +455,25 @@ export default function EditorWorkspacePage() {
     showToast(err?.error || err?.message || 'File operation failed.', 'error');
   }, [showToast]);
 
-  // Remote code change callback
+  // Remote code change callback with conflict safety
   const handleRemoteCodeChange = useCallback(({ fileName, content }) => {
     if (!fileName || typeof content !== 'string') return;
+
+    // Conflict safety: check if teammate edited the active file while we have unsaved local edits
+    if (
+      activeFileRef.current === fileName &&
+      hasUnsavedChangesRef.current &&
+      filesStateRef.current[fileName]?.content !== content
+    ) {
+      setConflictState({
+        isOpen: true,
+        fileName,
+        localContent: filesStateRef.current[fileName]?.content || '',
+        remoteContent: content,
+        remoteAuthor: 'A teammate'
+      });
+      return;
+    }
 
     isRemoteChangeRef.current = true;
     setFilesState((prev) => {
@@ -421,8 +495,10 @@ export default function EditorWorkspacePage() {
     isRemoteChangeRef.current = true;
     const incomingFiles = syncData.files || syncData;
     const incomingFolders = Array.isArray(syncData.folders) ? syncData.folders : [];
+    const incomingMeta = syncData.fileMeta || {};
 
     setFoldersState(incomingFolders);
+    setFileMeta((prev) => ({ ...prev, ...incomingMeta }));
 
     setFilesState((prev) => {
       const next = {};
@@ -591,9 +667,23 @@ export default function EditorWorkspacePage() {
     });
   }, []);
 
-  const handleSaveStatus = useCallback(({ status }) => {
-    if (status === 'saving' || status === 'saved' || status === 'error') {
-      setSaveStatus(status);
+  const setSaveStatusRef = useRef(null);
+  const flushPendingDraftsRef = useRef(null);
+
+  const handleSaveStatus = useCallback(({ status, version, savedAt, fileName }) => {
+    if (setSaveStatusRef.current) {
+      if (status === 'saving' || status === 'saved' || status === 'error') {
+        setSaveStatusRef.current(status);
+      }
+    }
+    if (status === 'saved' && version && fileName) {
+      setFileMeta((prev) => ({
+        ...prev,
+        [fileName]: {
+          version,
+          updatedAt: savedAt || new Date().toISOString()
+        }
+      }));
     }
   }, []);
 
@@ -621,6 +711,11 @@ export default function EditorWorkspacePage() {
     onRemoteCodeChange: handleRemoteCodeChange,
     onRoomSync: handleRoomSync,
     onSaveStatus: handleSaveStatus,
+    onReconnect: () => {
+      if (flushPendingDraftsRef.current) {
+        flushPendingDraftsRef.current();
+      }
+    },
     onPermissionError: handlePermissionError,
     onFileCreated: handleFileCreated,
     onFileRenamed: handleFileRenamed,
@@ -820,11 +915,129 @@ export default function EditorWorkspacePage() {
   const isProtectedActiveFile = Boolean(activeFile && protectedFiles.includes(activeFile));
   const isEditorRestricted = isProtectedActiveFile && !isOwner;
 
+  // Offline recovery hook (detects if local draft is newer after refresh and offers Restore/Discard)
+  const {
+    isOnline,
+    recoveryCandidate,
+    restoreDraft,
+    discardDraft,
+    dismissBanner
+  } = useOfflineFileRecovery({
+    roomId: activeRoomId,
+    userId: currentUser?.id,
+    activeFile,
+    filesState,
+    fileMeta,
+    onDraftRestored: (fileName, restoredContent) => {
+      isRemoteChangeRef.current = false;
+      setFilesState((prev) => ({
+        ...prev,
+        [fileName]: {
+          ...prev[fileName],
+          content: restoredContent
+        }
+      }));
+      triggerChange(fileName, restoredContent);
+      showToast(`Restored unsaved local edits for "${fileName}"`, 'success');
+    }
+  });
+
+  // Auto-Save hook: 1000ms debounce, local storage draft persistence, beforeunload protection, reconnect sync
+  const {
+    saveStatus,
+    setSaveStatus,
+    lastSavedAt,
+    hasUnsavedChanges,
+    triggerChange,
+    saveImmediately,
+    flushPendingDrafts
+  } = useAutoSave({
+    roomId: activeRoomId,
+    userId: currentUser?.id,
+    activeFile,
+    filesState,
+    fileMeta,
+    setFileMeta,
+    isOnline,
+    socketConnected: connectionStatus === 'connected',
+    socketConnectionStatus: connectionStatus,
+    isViewer: isViewer || isEditorRestricted,
+    onSaveSuccess: () => {},
+    onSaveError: (err) => {
+      if (err?.status !== 409) {
+        showToast(`Could not save "${activeFile}". Changes are saved locally.`, 'warning');
+      }
+    },
+    onConflict: ({ fileName, localContent, serverDetails }) => {
+      setConflictState({
+        isOpen: true,
+        fileName,
+        localContent,
+        remoteContent: serverDetails?.serverContent || '',
+        remoteAuthor: 'Another collaborator'
+      });
+    }
+  });
+
+  // Keep refs in sync for socket callbacks & beforeunload
+  setSaveStatusRef.current = setSaveStatus;
+  flushPendingDraftsRef.current = flushPendingDrafts;
+  hasUnsavedChangesRef.current = hasUnsavedChanges;
+
+  // Conflict Resolution Action Handlers
+  const handleConflictKeepMine = useCallback(async () => {
+    if (!conflictState.fileName) return;
+    const fileName = conflictState.fileName;
+    const localContent = conflictState.localContent;
+    setConflictState((prev) => ({ ...prev, isOpen: false }));
+
+    try {
+      await api.saveProjectFileContent(activeRoomId, {
+        fileName,
+        content: localContent
+        // omitting baseVersion forces overwrite
+      });
+      emitCodeChange(fileName, localContent);
+      removeLocalDraft(currentUser?.id, activeRoomId, fileName);
+      setSaveStatus('saved');
+      showToast(`Kept local changes for "${fileName}" and synced with team.`, 'success');
+    } catch (err) {
+      showToast(`Could not overwrite server changes: ${err.message}`, 'error');
+      setSaveStatus('error');
+    }
+  }, [conflictState, activeRoomId, emitCodeChange, currentUser?.id, setSaveStatus, showToast]);
+
+  const handleConflictUseTeammate = useCallback(() => {
+    if (!conflictState.fileName) return;
+    const fileName = conflictState.fileName;
+    const remoteContent = conflictState.remoteContent;
+    setConflictState((prev) => ({ ...prev, isOpen: false }));
+
+    isRemoteChangeRef.current = true;
+    setFilesState((prev) => ({
+      ...prev,
+      [fileName]: {
+        ...prev[fileName],
+        content: remoteContent
+      }
+    }));
+    removeLocalDraft(currentUser?.id, activeRoomId, fileName);
+    setSaveStatus('saved');
+    showToast(`Updated "${fileName}" with teammate changes.`, 'info');
+  }, [conflictState, activeRoomId, currentUser?.id, setSaveStatus, showToast]);
+
+  const handleConflictCompareLater = useCallback(() => {
+    setConflictState((prev) => ({ ...prev, isOpen: false }));
+    showToast('Local changes kept in editor. You can save or compare whenever ready.', 'info');
+  }, [showToast]);
+
   // Real-time Collaboration Drawer Handlers (Chat, Comments, Share & Invite)
   const openCommentsCount = codeComments.filter((c) => !c.isResolved).length;
 
   const handleOpenCollabDrawer = useCallback((tab = 'collaborators') => {
-    // Close any conflicting right-side panels to avoid overlap
+    // When opening right sidebar drawer, close preview and any conflicting panels
+    setIsPreviewOpen(false);
+    setMaximizedPane('none');
     setIsActivityLogOpen(false);
     setIsHistoryOpen(false);
     setIsChangeRequestsOpen(false);
@@ -841,7 +1054,9 @@ export default function EditorWorkspacePage() {
       if (prev && (!tab || tab === collabDrawerTab)) {
         return false;
       }
-      // Close any conflicting right-side panels to avoid overlap
+      // When opening right sidebar drawer, close preview and any conflicting panels
+      setIsPreviewOpen(false);
+      setMaximizedPane('none');
       setIsActivityLogOpen(false);
       setIsHistoryOpen(false);
       setIsChangeRequestsOpen(false);
@@ -1255,7 +1470,7 @@ export default function EditorWorkspacePage() {
     if (!activeFile) return;
     const cleanContent = newContent ?? '';
 
-    if (isViewer) {
+    if (isViewer || isEditorRestricted) {
       showToast('You have view-only access. Code editing is disabled.', 'error');
       return;
     }
@@ -1273,7 +1488,11 @@ export default function EditorWorkspacePage() {
       }
     }));
 
+    // Broadcast live code change to collaborators
     emitCodeChange(activeFile, cleanContent);
+
+    // Trigger debounced auto-save & save draft locally
+    triggerChange(activeFile, cleanContent);
   };
 
   // Handlers for Per-File Stdin & Execution
@@ -1319,6 +1538,8 @@ export default function EditorWorkspacePage() {
     }
 
     setIsExecuting(true);
+    setIsCollabDrawerOpen(false);
+    setIsActivityLogOpen(false);
     setIsPreviewOpen(true);
     setPreviewActiveTab('terminal');
     if (maximizedPane === 'editor') {
@@ -1522,6 +1743,10 @@ export default function EditorWorkspacePage() {
       setMaximizedPane('none');
     }
 
+    // Close right sidebar panels so preview gets full right-side view
+    setIsCollabDrawerOpen(false);
+    setIsActivityLogOpen(false);
+
     const fileLang = activeFile ? getLanguageFromFile(activeFile) : null;
     const isBackendLang = fileLang && ['python', 'java', 'cpp', 'c'].includes(fileLang);
     const isJsInTerminal = fileLang === 'javascript' && previewActiveTab === 'terminal';
@@ -1541,6 +1766,8 @@ export default function EditorWorkspacePage() {
   }, [maximizedPane, activeFile, previewActiveTab, handleExecuteCode, isViewer, showToast]);
 
   const handleOpenConsole = useCallback(() => {
+    setIsCollabDrawerOpen(false);
+    setIsActivityLogOpen(false);
     setIsPreviewOpen(true);
     setPreviewActiveTab('console');
     if (maximizedPane === 'editor') {
@@ -1553,8 +1780,12 @@ export default function EditorWorkspacePage() {
   const handleTogglePreview = () => {
     setIsPreviewOpen((prev) => {
       const next = !prev;
-      if (next && maximizedPane === 'editor') {
-        setMaximizedPane('none');
+      if (next) {
+        setIsCollabDrawerOpen(false);
+        setIsActivityLogOpen(false);
+        if (maximizedPane === 'editor') {
+          setMaximizedPane('none');
+        }
       }
       return next;
     });
@@ -1734,6 +1965,8 @@ export default function EditorWorkspacePage() {
     setIsActivityLogOpen((prev) => {
       const next = !prev;
       if (next) {
+        setIsPreviewOpen(false);
+        setMaximizedPane('none');
         setIsCollabDrawerOpen(false);
       }
       return next;
@@ -1968,6 +2201,17 @@ export default function EditorWorkspacePage() {
                 </div>
               )}
 
+              {/* Unsaved Offline Local Recovery Banner */}
+              {recoveryCandidate && (
+                <RestoreBanner
+                  fileName={recoveryCandidate.fileName}
+                  draftTimestamp={recoveryCandidate.timestamp}
+                  onRestore={() => restoreDraft(recoveryCandidate.fileName)}
+                  onDiscard={() => discardDraft(recoveryCandidate.fileName)}
+                  onClose={dismissBanner}
+                />
+              )}
+
               {/* Code Editor Tab Bar with Responsive Dropdown & Grouped Tools */}
               {openTabs.length > 0 && (
                 <TabBar
@@ -1985,6 +2229,9 @@ export default function EditorWorkspacePage() {
                   readOnly={isViewer || isEditorRestricted}
                   requiresApproval={projectRequiresApproval}
                   userRole={effectiveRole}
+                  saveStatus={saveStatus}
+                  onRetrySave={() => saveImmediately(activeFile)}
+                  lastSavedAt={lastSavedAt}
                   onRequestReview={() => {
                     setIsCollabDrawerOpen(false);
                     setChangeRequestsInitialCreate(true);
@@ -2119,6 +2366,8 @@ export default function EditorWorkspacePage() {
         roomId={activeRoomId}
         saveStatus={saveStatus}
         userRole={effectiveRole}
+        onRetrySave={() => saveImmediately(activeFile)}
+        lastSavedAt={lastSavedAt}
       />
 
       {/* Collaborators & Access Management Modal */}
@@ -2265,6 +2514,19 @@ export default function EditorWorkspacePage() {
         activeUsers={activeUsers}
         onSubmit={handleSubmitNewComment}
         isViewer={isViewer}
+      />
+
+      {/* Collaborator Conflict Resolution Modal */}
+      <ConflictResolutionModal
+        isOpen={conflictState.isOpen}
+        onClose={() => setConflictState((prev) => ({ ...prev, isOpen: false }))}
+        fileName={conflictState.fileName}
+        localContent={conflictState.localContent}
+        remoteContent={conflictState.remoteContent}
+        remoteAuthor={conflictState.remoteAuthor}
+        onKeepMine={handleConflictKeepMine}
+        onUseTeammate={handleConflictUseTeammate}
+        onCompareLater={handleConflictCompareLater}
       />
     </div>
   );

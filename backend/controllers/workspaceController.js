@@ -1,5 +1,6 @@
 import {
   getWorkspaceTree,
+  saveWorkspaceFile,
   createWorkspaceFile,
   createWorkspaceFolder,
   renameWorkspaceFile,
@@ -11,6 +12,8 @@ import {
 } from '../services/workspaceService.js';
 import { logActivity } from '../services/activityService.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import { isValidFilePath } from '../utils/filePath.js';
+import { ApiError } from '../utils/apiError.js';
 
 export const getTree = asyncHandler(async (req, res) => {
   const { roomId } = req.params;
@@ -22,6 +25,47 @@ export const getFiles = asyncHandler(async (req, res) => {
   const { roomId } = req.params;
   const data = await getWorkspaceTree(roomId, req.user.id);
   res.json(data);
+});
+
+export const saveFileContentEndpoint = asyncHandler(async (req, res) => {
+  const { roomId } = req.params;
+  const { fileName, content, baseVersion } = req.body;
+
+  if (!isValidFilePath(fileName)) {
+    throw new ApiError(400, 'Invalid file path.');
+  }
+  if (typeof content !== 'string') {
+    throw new ApiError(400, 'Content must be a string.');
+  }
+
+  const saved = await saveWorkspaceFile({
+    roomId,
+    fileName,
+    content,
+    userId: req.user.id,
+    baseVersion
+  });
+
+  const io = req.app.get('io');
+  if (io) {
+    // Notify room of updated save status
+    io.to(roomId).emit('save-status', {
+      status: 'saved',
+      fileName: saved.fileName,
+      savedAt: saved.updatedAt,
+      version: saved.version
+    });
+  }
+
+  res.status(200).json({
+    message: 'File saved successfully.',
+    file: {
+      fileName: saved.fileName,
+      content: saved.content,
+      updatedAt: saved.updatedAt,
+      version: saved.version
+    }
+  });
 });
 
 export const createFile = asyncHandler(async (req, res) => {

@@ -20,7 +20,7 @@ export async function getRoomWorkspace(roomId) {
   if (isDbConnected() && pool) {
     try {
       const filesRes = await pool.query(
-        'SELECT file_name, content FROM room_files WHERE room_id = $1 ORDER BY file_name ASC;',
+        'SELECT file_name, content, updated_at, version FROM room_files WHERE room_id = $1 ORDER BY file_name ASC;',
         [cleanRoomId]
       );
       const foldersRes = await pool.query(
@@ -35,21 +35,30 @@ export async function getRoomWorkspace(roomId) {
       if (!hasFiles && !hasFolders) {
         for (const [name, content] of Object.entries(STARTER_FILES)) {
           await pool.query(
-            `INSERT INTO room_files (room_id, file_name, content, updated_at)
-             VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+            `INSERT INTO room_files (room_id, file_name, content, updated_at, version)
+             VALUES ($1, $2, $3, CURRENT_TIMESTAMP, 1)
              ON CONFLICT (room_id, file_name) DO NOTHING;`,
             [cleanRoomId, name, content]
           );
         }
 
         const seededFiles = { ...STARTER_FILES };
+        const seededMeta = {};
+        for (const name of Object.keys(seededFiles)) {
+          seededMeta[name] = { updatedAt: new Date().toISOString(), version: 1 };
+        }
         inMemoryStore.set(cleanRoomId, { ...seededFiles });
-        return { files: seededFiles, folders: [] };
+        return { files: seededFiles, folders: [], fileMeta: seededMeta };
       }
 
       const files = {};
+      const fileMeta = {};
       for (const row of filesRes.rows) {
         files[row.file_name] = row.content;
+        fileMeta[row.file_name] = {
+          updatedAt: row.updated_at,
+          version: row.version || 1
+        };
       }
       const folders = foldersRes.rows.map((r) => r.folder_path);
 
@@ -62,7 +71,7 @@ export async function getRoomWorkspace(roomId) {
         folders.forEach((f) => folderSet.add(f));
       }
 
-      return { files, folders };
+      return { files, folders, fileMeta };
     } catch (err) {
       logger.error(`Error loading workspace for room "${cleanRoomId}":`, err.message);
     }
@@ -76,7 +85,11 @@ export async function getRoomWorkspace(roomId) {
 
   const memFiles = inMemoryStore.get(cleanRoomId) || {};
   const memFolders = Array.from(inMemoryFolders.get(cleanRoomId) || []);
-  return { files: { ...memFiles }, folders: memFolders };
+  const memMeta = {};
+  for (const name of Object.keys(memFiles)) {
+    memMeta[name] = { updatedAt: new Date().toISOString(), version: 1 };
+  }
+  return { files: { ...memFiles }, folders: memFolders, fileMeta: memMeta };
 }
 
 /**
@@ -570,34 +583,81 @@ export async function moveItemInRoom({ roomId, itemType, oldPath, targetParentFo
 }
 
 /**
+ * Retrieve metadata (version, updated_at, content) for a specific file in a room.
+ */
+export async function getFileMetadata(roomId, fileName) {
+  if (!roomId || !fileName) return null;
+  const cleanRoomId = roomId.trim();
+  const cleanFile = normalizePath(fileName);
+  if (isDbConnected() && pool) {
+    try {
+      const res = await pool.query(
+        'SELECT file_name, content, updated_at, version FROM room_files WHERE room_id = $1 AND file_name = $2 LIMIT 1;',
+        [cleanRoomId, cleanFile]
+      );
+      if (res.rows.length > 0) {
+        const row = res.rows[0];
+        return {
+          fileName: row.file_name,
+          content: row.content,
+          updatedAt: row.updated_at,
+          version: row.version || 1
+        };
+      }
+    } catch (err) {
+      logger.error(`Error loading file metadata for "${cleanFile}":`, err.message);
+    }
+  }
+  if (inMemoryStore.has(cleanRoomId)) {
+    const mem = inMemoryStore.get(cleanRoomId);
+    if (mem && mem[cleanFile] !== undefined) {
+      return {
+        fileName: cleanFile,
+        content: mem[cleanFile],
+        updatedAt: new Date().toISOString(),
+        version: 1
+      };
+    }
+  }
+  return null;
+}
+
+/**
  * Persist file content to PostgreSQL with debounced writes to optimize performance.
  * Also records debounced version history checkpoints without storing every keypress.
+ * Resolves with { fileName, content, updatedAt, version }.
  */
 export function saveFileContent(roomId, fileName, content, authorId = null) {
+  const cleanFile = normalizePath(fileName);
   // Always update in-memory cache immediately
   if (!inMemoryStore.has(roomId)) {
     inMemoryStore.set(roomId, {});
   }
-  inMemoryStore.get(roomId)[fileName] = content;
+  inMemoryStore.get(roomId)[cleanFile] = content;
 
   if (!isDbConnected() || !pool) {
     createFileVersion({
       roomId,
-      fileName,
+      fileName: cleanFile,
       content,
       authorId,
       versionType: 'auto'
     }).catch(() => {});
-    return Promise.reject(new Error('Database is not connected'));
+    return Promise.resolve({
+      fileName: cleanFile,
+      content,
+      updatedAt: new Date().toISOString(),
+      version: 1
+    });
   }
 
   // Debounce writes so rapid keystrokes do not flood PostgreSQL.
-  const timerKey = `${roomId}:${fileName}`;
+  const timerKey = `${roomId}:${cleanFile}`;
   return new Promise((resolve, reject) => {
     let pending = pendingSaves.get(timerKey);
 
     if (!pending) {
-      pending = { roomId, fileName, content, authorId, timer: null, waiters: [] };
+      pending = { roomId, fileName: cleanFile, content, authorId, timer: null, waiters: [] };
       pendingSaves.set(timerKey, pending);
     } else {
       clearTimeout(pending.timer);
@@ -610,13 +670,24 @@ export function saveFileContent(roomId, fileName, content, authorId = null) {
       pendingSaves.delete(timerKey);
       try {
         const upsertQuery = `
-          INSERT INTO room_files (room_id, file_name, content, updated_at)
-          VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+          INSERT INTO room_files (room_id, file_name, content, updated_at, version)
+          VALUES ($1, $2, $3, CURRENT_TIMESTAMP, 1)
           ON CONFLICT (room_id, file_name)
-          DO UPDATE SET content = EXCLUDED.content, updated_at = CURRENT_TIMESTAMP;
+          DO UPDATE SET 
+            content = EXCLUDED.content, 
+            updated_at = CURRENT_TIMESTAMP,
+            version = COALESCE(room_files.version, 1) + 1
+          RETURNING file_name, content, updated_at, version;
         `;
-        await pool.query(upsertQuery, [pending.roomId, pending.fileName, pending.content]);
-        pending.waiters.forEach(({ resolve: res }) => res());
+        const res = await pool.query(upsertQuery, [pending.roomId, pending.fileName, pending.content]);
+        const savedRow = res.rows && res.rows[0];
+        const resultPayload = {
+          fileName: pending.fileName,
+          content: pending.content,
+          updatedAt: savedRow ? savedRow.updated_at : new Date().toISOString(),
+          version: savedRow ? savedRow.version : 1
+        };
+        pending.waiters.forEach(({ resolve: r }) => r(resultPayload));
 
         // Automatically record debounced version checkpoint (collapses within 2 minutes)
         createFileVersion({
@@ -629,7 +700,7 @@ export function saveFileContent(roomId, fileName, content, authorId = null) {
           logger.warn(`[Version History] Auto version creation skipped: ${err.message}`);
         });
       } catch (err) {
-        logger.error(`Failed to save file "${fileName}" in room "${roomId}":`, err.message);
+        logger.error(`Failed to save file "${cleanFile}" in room "${roomId}":`, err.message);
         pending.waiters.forEach(({ reject: rej }) => rej(err));
       }
     }, 800);
@@ -639,6 +710,7 @@ export function saveFileContent(roomId, fileName, content, authorId = null) {
 export default {
   getRoomWorkspace,
   getRoomFiles,
+  getFileMetadata,
   createFileInRoom,
   createFolderInRoom,
   renameFileInRoom,

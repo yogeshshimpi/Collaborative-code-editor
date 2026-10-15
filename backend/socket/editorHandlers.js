@@ -69,17 +69,20 @@ export async function handleCodeChange(io, socket, data) {
   // Broadcast update to all other sockets in the room (instant live sync)
   socket.to(cleanRoomId).emit('code-change', {
     fileName,
-    content
+    content,
+    senderId: socket.id,
+    authorId: userId
   });
 
   // Notify editing browser of save status
   socket.emit('save-status', { status: 'saving', fileName });
   saveFileContent(cleanRoomId, fileName, content, userId)
-    .then(() => {
+    .then((saveInfo) => {
       socket.emit('save-status', {
         status: 'saved',
         fileName,
-        savedAt: new Date().toISOString()
+        savedAt: (saveInfo && saveInfo.updatedAt) || new Date().toISOString(),
+        version: saveInfo ? saveInfo.version : 1
       });
     })
     .catch(() => {

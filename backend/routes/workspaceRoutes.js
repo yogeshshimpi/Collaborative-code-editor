@@ -9,6 +9,7 @@ import {
   deleteFile,
   deleteFolder,
   moveItem,
+  saveFileContentEndpoint,
   getLegacyRoom
 } from '../controllers/workspaceController.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
@@ -17,6 +18,7 @@ const router = express.Router();
 
 router.get('/:roomId/tree', requireAuth, getTree);
 router.get('/:roomId/files', requireAuth, getFiles);
+router.put('/:roomId/files/content', requireAuth, saveFileContentEndpoint);
 router.post('/:roomId/files', requireAuth, createFile);
 router.post('/:roomId/folders', requireAuth, createFolder);
 router.put('/:roomId/files/rename', requireAuth, renameFile);

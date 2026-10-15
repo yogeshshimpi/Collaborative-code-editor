@@ -1,5 +1,6 @@
 import './StatusBar.css';
-import { CheckCircle2, GitBranch, Radio, WifiOff, Loader2, Cloud, CloudOff, Shield, ShieldCheck, Eye } from 'lucide-react';
+import { CheckCircle2, GitBranch, Radio, WifiOff, Loader2, Shield, ShieldCheck, Eye } from 'lucide-react';
+import SyncStatus from '../SyncStatus/SyncStatus';
 
 export default function StatusBar({
   language = 'JavaScript',
@@ -7,8 +8,10 @@ export default function StatusBar({
   encoding = 'UTF-8',
   connectionStatus = 'connected',
   roomId = 'demo-room',
-  saveStatus = 'idle',
-  userRole = 'editor'
+  saveStatus = 'saved',
+  userRole = 'editor',
+  onRetrySave = null,
+  lastSavedAt = null
 }) {
   const getLanguageLabel = (lang) => {
     if (!lang) return 'Plain Text';
@@ -99,9 +102,14 @@ export default function StatusBar({
           <span>No errors</span>
         </div>
 
-        {/* Sync status: prioritized */}
+        {/* Sync & Save status: prioritized */}
         {renderSyncStatus()}
-        {renderSaveStatus()}
+        <SyncStatus
+          status={saveStatus}
+          onRetry={onRetrySave}
+          lastSavedAt={lastSavedAt}
+          className="status-item-sync-status"
+        />
       </div>
 
       <div className="status-bar-right">
