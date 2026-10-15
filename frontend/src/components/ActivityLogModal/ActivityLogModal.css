@@ -173,11 +173,34 @@
   align-items: center;
   gap: 6px;
   overflow-x: auto;
-  scrollbar-width: none;
+  overflow-y: hidden;
+  padding-bottom: 5px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.22) rgba(0, 0, 0, 0.15);
+  -webkit-overflow-scrolling: touch;
 }
 
 .activity-filter-pills::-webkit-scrollbar {
-  display: none;
+  height: 4px;
+}
+
+.activity-filter-pills::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 4px;
+}
+
+.activity-filter-pills::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.22);
+  border-radius: 4px;
+  transition: background 0.15s ease;
+}
+
+.activity-filter-pills::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-primary, #6d5dfc);
+}
+
+.activity-filter-pills::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 .activity-filter-pill {

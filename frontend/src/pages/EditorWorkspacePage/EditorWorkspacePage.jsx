@@ -7,7 +7,6 @@ import Sidebar from '../../components/Sidebar/Sidebar';
 import TabBar from '../../components/TabBar/TabBar';
 import EditorArea from '../../components/EditorArea/EditorArea';
 import StatusBar from '../../components/StatusBar/StatusBar';
-import CollaboratorsPanel from '../../components/CollaboratorsPanel/CollaboratorsPanel';
 import CollaboratorsModal from '../../components/CollaboratorsModal/CollaboratorsModal';
 import VersionHistoryModal from '../../components/VersionHistoryModal/VersionHistoryModal';
 import ActivityLogModal from '../../components/ActivityLogModal/ActivityLogModal';
@@ -15,8 +14,7 @@ import ChangeRequestsModal from '../../components/ChangeRequestsModal/ChangeRequ
 import LivePreview from '../../components/LivePreview/LivePreview';
 import WorkspaceSplitDivider from '../../components/WorkspaceSplitDivider/WorkspaceSplitDivider';
 import Toast from '../../components/Toast/Toast';
-import ChatPanel from '../../components/ChatPanel/ChatPanel';
-import CodeCommentsDrawer from '../../components/CodeComments/CodeCommentsDrawer';
+import CollaborationDrawer from '../../components/CollaborationDrawer/CollaborationDrawer';
 import AddCommentModal from '../../components/CodeComments/AddCommentModal';
 import { useAuth } from '../../context/useAuth';
 import { api } from '../../services/api';
@@ -62,18 +60,19 @@ export default function EditorWorkspacePage() {
   const [projectNotFound, setProjectNotFound] = useState(false);
   const [toast, setToast] = useState(null);
 
-  // Real-time Collaboration Chat State
-  const [isChatOpen, setIsChatOpen] = useState(false);
+  // Unified Right-Side Collaboration Drawer State (Live Members, Chat, Comments, Share & Invite)
+  const [isCollabDrawerOpen, setIsCollabDrawerOpen] = useState(false);
+  const [collabDrawerTab, setCollabDrawerTab] = useState('collaborators'); // 'collaborators' | 'chat' | 'comments'
   const [unreadChatCount, setUnreadChatCount] = useState(0);
   const [chatMessages, setChatMessages] = useState([]);
 
   // Real-time Code Comments State
-  const [isCommentsOpen, setIsCommentsOpen] = useState(false);
   const [codeComments, setCodeComments] = useState([]);
   const [addCommentModal, setAddCommentModal] = useState({
     isOpen: false,
     filePath: '',
     lineNumber: 1,
+    endLineNumber: 1,
     codeSnippet: ''
   });
 
@@ -120,7 +119,17 @@ export default function EditorWorkspacePage() {
     api.getCodeComments(projId)
       .then((res) => {
         if (Array.isArray(res?.comments)) {
-          setCodeComments(res.comments);
+          const seen = new Set();
+          const unique = [];
+          res.comments.forEach((c) => {
+            if (!c) return;
+            const key = String(c.id || `${c.filePath}-${c.lineNumber}-${c.content}`);
+            if (!seen.has(key)) {
+              seen.add(key);
+              unique.push(c);
+            }
+          });
+          setCodeComments(unique);
         }
       })
       .catch(() => {});
@@ -242,8 +251,6 @@ export default function EditorWorkspacePage() {
   const [activeFile, setActiveFile] = useState('main.js');
   // Live cursor position for the status bar
   const [cursor, setCursor] = useState({ line: 1, column: 1 });
-  // Right panel toggle (Collaborators)
-  const [isRightPanelOpen, setIsRightPanelOpen] = useState(false);
   // Collaborators & Invitations Modal
   const [isCollaboratorsOpen, setIsCollaboratorsOpen] = useState(false);
   // Version History Modal
@@ -703,17 +710,16 @@ export default function EditorWorkspacePage() {
       );
     },
     // Real-time Chat Events
-    onNewChatMessage: (msg) => {
+    onNewChatMessage: (data) => {
+      const msg = data?.message && typeof data.message === 'object' ? data.message : data;
+      if (!msg || !msg.id) return;
       setChatMessages((prev) => {
         if (prev.some((m) => m.id === msg.id)) return prev;
         return [...prev, msg];
       });
-      setIsChatOpen((open) => {
-        if (!open) {
-          setUnreadChatCount((c) => c + 1);
-        }
-        return open;
-      });
+      if (!isCollabDrawerOpen || collabDrawerTab !== 'chat') {
+        setUnreadChatCount((count) => count + 1);
+      }
     },
     onChatMessageEdited: (updated) => {
       setChatMessages((prev) =>
@@ -730,9 +736,15 @@ export default function EditorWorkspacePage() {
       );
     },
     // Real-time Code Comments Events
-    onNewComment: (comment) => {
+    onNewComment: (data) => {
+      const comment = data?.comment || data;
+      if (!comment || !comment.id) return;
       setCodeComments((prev) => {
-        if (prev.some((c) => c.id === comment.id)) return prev;
+        const commentId = String(comment.id);
+        const commentKey = `${comment.filePath}-${comment.lineNumber}-${comment.content}`;
+        if (prev.some((c) => String(c.id) === commentId || `${c.filePath}-${c.lineNumber}-${c.content}` === commentKey)) {
+          return prev;
+        }
         return [comment, ...prev];
       });
       showToast(`New code comment on ${comment.filePath}:${comment.lineNumber}`, 'info');
@@ -808,18 +820,44 @@ export default function EditorWorkspacePage() {
   const isProtectedActiveFile = Boolean(activeFile && protectedFiles.includes(activeFile));
   const isEditorRestricted = isProtectedActiveFile && !isOwner;
 
-  // Real-time Collaboration Chat & Code Comments Handlers
+  // Real-time Collaboration Drawer Handlers (Chat, Comments, Share & Invite)
   const openCommentsCount = codeComments.filter((c) => !c.isResolved).length;
 
-  const handleToggleChat = useCallback(() => {
-    setIsChatOpen((prev) => {
-      const next = !prev;
-      if (next) {
+  const handleOpenCollabDrawer = useCallback((tab = 'collaborators') => {
+    // Close any conflicting right-side panels to avoid overlap
+    setIsActivityLogOpen(false);
+    setIsHistoryOpen(false);
+    setIsChangeRequestsOpen(false);
+
+    setCollabDrawerTab(tab);
+    setIsCollabDrawerOpen(true);
+    if (tab === 'chat') {
+      setUnreadChatCount(0);
+    }
+  }, []);
+
+  const handleToggleCollabDrawer = useCallback((tab = 'collaborators') => {
+    setIsCollabDrawerOpen((prev) => {
+      if (prev && (!tab || tab === collabDrawerTab)) {
+        return false;
+      }
+      // Close any conflicting right-side panels to avoid overlap
+      setIsActivityLogOpen(false);
+      setIsHistoryOpen(false);
+      setIsChangeRequestsOpen(false);
+
+      const nextTab = tab || collabDrawerTab || 'collaborators';
+      setCollabDrawerTab(nextTab);
+      if (nextTab === 'chat') {
         setUnreadChatCount(0);
       }
-      return next;
+      return true;
     });
-  }, []);
+  }, [collabDrawerTab]);
+
+  const handleToggleChat = useCallback(() => {
+    handleToggleCollabDrawer('chat');
+  }, [handleToggleCollabDrawer]);
 
   const handleSendChatMessage = useCallback(
     async (text) => {
@@ -875,60 +913,106 @@ export default function EditorWorkspacePage() {
   );
 
   const handleToggleComments = useCallback(() => {
-    setIsCommentsOpen((prev) => !prev);
-  }, []);
+    handleToggleCollabDrawer('comments');
+  }, [handleToggleCollabDrawer]);
 
   const handleGutterCommentClick = useCallback(
     (line, file) => {
       const targetFile = file || activeFile;
+      const targetLine = Number(line);
       const hasComments = codeComments.some(
-        (c) => c.filePath === targetFile && Number(c.lineNumber) === Number(line)
+        (c) =>
+          c.filePath === targetFile &&
+          ((c.lineNumber && Number(c.lineNumber) === targetLine) ||
+            (c.endLineNumber && targetLine >= Number(c.lineNumber) && targetLine <= Number(c.endLineNumber)))
       );
       if (hasComments) {
-        setIsCommentsOpen(true);
+        handleOpenCollabDrawer('comments');
       } else {
         const fileContent = filesState[targetFile]?.content || '';
         const lines = fileContent.split('\n');
-        const codeSnippet = lines[line - 1] || '';
+        const codeSnippet = lines[targetLine - 1] || '';
         setAddCommentModal({
           isOpen: true,
           filePath: targetFile,
-          lineNumber: line,
+          lineNumber: targetLine,
+          endLineNumber: targetLine,
           codeSnippet: codeSnippet.trim()
         });
       }
     },
-    [activeFile, codeComments, filesState]
+    [activeFile, codeComments, filesState, handleOpenCollabDrawer]
   );
 
   const handleAddCommentAtLine = useCallback(
-    (line, file) => {
+    (startLine, file, endLine = null, customSnippet = null) => {
       const targetFile = file || activeFile;
       const fileContent = filesState[targetFile]?.content || '';
       const lines = fileContent.split('\n');
-      const codeSnippet = lines[line - 1] || '';
+      const s = Number(startLine) || 1;
+      const e = endLine ? Math.max(s, Number(endLine) || s) : s;
+
+      let codeSnippet = customSnippet;
+      if (!codeSnippet) {
+        if (s === e) {
+          codeSnippet = lines[s - 1] || '';
+        } else {
+          codeSnippet = lines.slice(s - 1, e).join('\n');
+        }
+      }
+
       setAddCommentModal({
         isOpen: true,
         filePath: targetFile,
-        lineNumber: line,
-        codeSnippet: codeSnippet.trim()
+        lineNumber: s,
+        endLineNumber: e,
+        codeSnippet: codeSnippet ? codeSnippet.trim() : ''
       });
     },
     [activeFile, filesState]
   );
 
+  const handleAddCommentAtSelection = useCallback(() => {
+    const editor = editorRef?.current;
+    if (!editor || !activeFile) {
+      handleOpenCollabDrawer('comments');
+      return;
+    }
+    const sel = editor.getSelection();
+    const model = editor.getModel();
+    if (sel && !sel.isEmpty()) {
+      const s = Math.min(sel.startLineNumber, sel.endLineNumber);
+      const e = Math.max(sel.startLineNumber, sel.endLineNumber);
+      const selectedText = model ? model.getValueInRange(sel) : '';
+      handleAddCommentAtLine(s, activeFile, e, selectedText);
+    } else {
+      const pos = editor.getPosition();
+      const line = pos ? pos.lineNumber : 1;
+      const lineText = model ? model.getLineContent(line) : '';
+      handleAddCommentAtLine(line, activeFile, line, lineText);
+    }
+  }, [editorRef, activeFile, handleOpenCollabDrawer, handleAddCommentAtLine]);
+
   const handleSubmitNewComment = useCallback(
-    async ({ filePath, lineNumber, content, selectedText }) => {
+    async ({ filePath, lineNumber, endLineNumber, content, selectedText }) => {
       const projId = currentProject?.id || matchedInContext?.id || roomId;
       if (!projId) return;
       const res = await api.createCodeComment(projId, {
         filePath,
         lineNumber,
+        endLineNumber: endLineNumber && endLineNumber > lineNumber ? endLineNumber : lineNumber,
         content,
         selectedText
       });
       if (res?.comment) {
-        setCodeComments((prev) => [res.comment, ...prev]);
+        setCodeComments((prev) => {
+          const resId = String(res.comment.id);
+          const resKey = `${res.comment.filePath}-${res.comment.lineNumber}-${res.comment.content}`;
+          if (prev.some((c) => String(c.id) === resId || `${c.filePath}-${c.lineNumber}-${c.content}` === resKey)) {
+            return prev;
+          }
+          return [res.comment, ...prev];
+        });
         showToast('Comment posted successfully', 'success');
       }
     },
@@ -1105,14 +1189,24 @@ export default function EditorWorkspacePage() {
   }, [activeFile, openTabs, emitCursorClear]);
 
   const handleJumpToCommentLine = useCallback(
-    (targetFilePath, lineNumber) => {
+    (targetFilePath, lineNumber, endLineNumber = null) => {
       if (targetFilePath && targetFilePath !== activeFile) {
         handleSelectFile(targetFilePath);
       }
       setTimeout(() => {
         if (editorRef.current && lineNumber) {
-          editorRef.current.revealLineInCenter(lineNumber);
-          editorRef.current.setPosition({ lineNumber, column: 1 });
+          const monaco = monacoRef.current;
+          const start = Number(lineNumber);
+          const end = endLineNumber ? Math.max(start, Number(endLineNumber)) : start;
+          if (start === end) {
+            editorRef.current.revealLineInCenter(start);
+            editorRef.current.setPosition({ lineNumber: start, column: 1 });
+          } else {
+            editorRef.current.revealLinesInCenter(start, end);
+            if (monaco) {
+              editorRef.current.setSelection(new monaco.Range(start, 1, end, 1));
+            }
+          }
           editorRef.current.focus();
         }
       }, 100);
@@ -1124,15 +1218,15 @@ export default function EditorWorkspacePage() {
     (notif) => {
       if (!notif) return;
       if (notif.type === 'chat_mention') {
-        setIsChatOpen(true);
+        handleOpenCollabDrawer('chat');
       } else if (notif.type === 'code_comment' || notif.type === 'comment_mention') {
         if (notif.metadata?.filePath) {
           handleJumpToCommentLine(notif.metadata.filePath, notif.metadata.lineNumber || 1);
         }
-        setIsCommentsOpen(true);
+        handleOpenCollabDrawer('comments');
       }
     },
-    [handleJumpToCommentLine]
+    [handleJumpToCommentLine, handleOpenCollabDrawer]
   );
 
   // Close an open tab
@@ -1639,22 +1733,12 @@ export default function EditorWorkspacePage() {
   const handleToggleActivity = useCallback(() => {
     setIsActivityLogOpen((prev) => {
       const next = !prev;
-      if (next && !isMobileWorkspace) {
-        setIsRightPanelOpen(false);
+      if (next) {
+        setIsCollabDrawerOpen(false);
       }
       return next;
     });
-  }, [isMobileWorkspace]);
-
-  const handleToggleCollaborators = useCallback(() => {
-    setIsRightPanelOpen((prev) => {
-      const next = !prev;
-      if (next && !isMobileWorkspace) {
-        setIsActivityLogOpen(false);
-      }
-      return next;
-    });
-  }, [isMobileWorkspace]);
+  }, []);
 
   const currentFileObj = activeFile ? filesState[activeFile] : null;
   const currentLanguage = activeFile ? getLanguageFromFile(activeFile) : 'plaintext';
@@ -1699,6 +1783,7 @@ export default function EditorWorkspacePage() {
       <Navbar
         projectName={projectName}
         roomId={activeRoomId}
+        activeFile={activeFile}
         onChangeRoom={handleChangeRoom}
         onRenameProject={handleRenameProject}
         connectionStatus={connectionStatus}
@@ -1708,29 +1793,31 @@ export default function EditorWorkspacePage() {
         userRole={effectiveRole}
         onRun={handleRun}
         isPreviewOpen={isPreviewOpen}
-        onShare={() => setIsCollaboratorsOpen(true)}
-        onOpenCollaborators={() => setIsCollaboratorsOpen(true)}
-        onOpenHistory={() => setIsHistoryOpen(true)}
+        onShare={() => handleToggleCollabDrawer('collaborators')}
+        onOpenCollaborators={(tab = 'collaborators') => handleOpenCollabDrawer(tab)}
+        onToggleCollaborators={(tab = 'collaborators') => handleToggleCollabDrawer(tab)}
+        isCollabDrawerOpen={isCollabDrawerOpen}
+        onOpenHistory={() => {
+          setIsCollabDrawerOpen(false);
+          setIsHistoryOpen(true);
+        }}
         onOpenActivity={handleToggleActivity}
         isActivityOpen={isActivityLogOpen}
         onOpenChangeRequests={() => {
+          setIsCollabDrawerOpen(false);
           setChangeRequestsInitialCreate(false);
           setIsChangeRequestsOpen(true);
         }}
         pendingRequestsCount={pendingRequestsCount}
         requiresApproval={projectRequiresApproval}
         onToggleApprovalMode={handleToggleApprovalMode}
-        isRightPanelOpen={isRightPanelOpen}
-        toggleRightPanel={handleToggleCollaborators}
         onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
         isAuthenticated={true}
         onOpenProjects={() => navigate('/projects')}
         onLogout={handleLogout}
-        onToggleChat={handleToggleChat}
-        isChatOpen={isChatOpen}
+        onToggleChat={() => handleToggleCollabDrawer('chat')}
         unreadChatCount={unreadChatCount}
-        onToggleComments={handleToggleComments}
-        isCommentsOpen={isCommentsOpen}
+        onToggleComments={() => handleToggleCollabDrawer('comments')}
         openCommentsCount={openCommentsCount}
         notifications={notifications}
         unreadNotificationsCount={unreadNotificationsCount}
@@ -1870,6 +1957,7 @@ export default function EditorWorkspacePage() {
                     type="button"
                     className="approval-mode-banner-btn"
                     onClick={() => {
+                      setIsCollabDrawerOpen(false);
                       setChangeRequestsInitialCreate(true);
                       setIsChangeRequestsOpen(true);
                     }}
@@ -1898,13 +1986,16 @@ export default function EditorWorkspacePage() {
                   requiresApproval={projectRequiresApproval}
                   userRole={effectiveRole}
                   onRequestReview={() => {
+                    setIsCollabDrawerOpen(false);
                     setChangeRequestsInitialCreate(true);
                     setIsChangeRequestsOpen(true);
                   }}
                   onSubmitForReview={() => {
+                    setIsCollabDrawerOpen(false);
                     setChangeRequestsInitialCreate(true);
                     setIsChangeRequestsOpen(true);
                   }}
+                  onAddComment={handleAddCommentAtSelection}
                 />
               )}
 
@@ -1917,7 +2008,7 @@ export default function EditorWorkspacePage() {
                   onCursorActivity={handleCursorActivity}
                   layoutTrigger={
                     isSidebarOpen ||
-                    isRightPanelOpen ||
+                    isCollabDrawerOpen ||
                     isPreviewOpen ||
                     maximizedPane !== 'none' ||
                     splitRatio ||
@@ -2004,16 +2095,6 @@ export default function EditorWorkspacePage() {
             )}
           </div>
         </main>
-
-        {/* Right Collaborators Panel */}
-        <CollaboratorsPanel
-          isOpen={isRightPanelOpen}
-          onClose={() => setIsRightPanelOpen(false)}
-          roomId={activeRoomId}
-          currentUser={currentUser}
-          activeUsers={activeUsers}
-          currentActiveFile={activeFile}
-        />
 
         {/* Right Activity Log Panel on big screens */}
         {!isMobileWorkspace && isActivityLogOpen && (
@@ -2141,34 +2222,35 @@ export default function EditorWorkspacePage() {
         />
       )}
 
-      {/* Real-time Team Collaboration Chat Panel */}
-      <ChatPanel
-        isOpen={isChatOpen}
-        onClose={() => setIsChatOpen(false)}
+      {/* Real-time Team Collaboration Right-Side Drawer (Chat, Comments, Share & Invite with Live Count) */}
+      <CollaborationDrawer
+        isOpen={isCollabDrawerOpen}
+        onClose={() => setIsCollabDrawerOpen(false)}
+        initialTab={collabDrawerTab}
         projectId={currentProject?.id || matchedInContext?.id || activeRoomId}
         roomId={activeRoomId}
+        projectName={projectName}
+        participantCount={participantCount}
         currentUser={currentUser}
         userRole={effectiveRole}
         activeUsers={activeUsers}
-        messages={chatMessages}
+        // Chat props
+        chatMessages={chatMessages}
         onSendMessage={handleSendChatMessage}
         onEditMessage={handleEditChatMessage}
         onDeleteMessage={handleDeleteChatMessage}
-        socket={socket}
-      />
-
-      {/* Code Comments Drawer */}
-      <CodeCommentsDrawer
-        isOpen={isCommentsOpen}
-        onClose={() => setIsCommentsOpen(false)}
+        unreadChatCount={unreadChatCount}
+        onClearUnreadChat={() => setUnreadChatCount(0)}
+        // Comments props
         comments={codeComments}
         activeFile={activeFile}
-        currentUser={currentUser}
-        userRole={effectiveRole}
-        onReply={handleReplyComment}
-        onResolve={handleResolveComment}
-        onDelete={handleDeleteComment}
+        openCommentsCount={openCommentsCount}
+        onReplyComment={handleReplyComment}
+        onResolveComment={handleResolveComment}
+        onDeleteComment={handleDeleteComment}
         onJumpToLine={handleJumpToCommentLine}
+        // Toast
+        onShowToast={showToast}
       />
 
       {/* Add Code Comment Modal */}
@@ -2177,7 +2259,9 @@ export default function EditorWorkspacePage() {
         onClose={() => setAddCommentModal((prev) => ({ ...prev, isOpen: false }))}
         filePath={addCommentModal.filePath}
         lineNumber={addCommentModal.lineNumber}
+        endLineNumber={addCommentModal.endLineNumber}
         codeSnippet={addCommentModal.codeSnippet}
+        fileContent={filesState[addCommentModal.filePath]?.content || ''}
         activeUsers={activeUsers}
         onSubmit={handleSubmitNewComment}
         isViewer={isViewer}

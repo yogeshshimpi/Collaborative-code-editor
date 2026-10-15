@@ -9,7 +9,7 @@ import { logger } from '../utils/logger.js';
 
 export async function handleCreateComment(io, socket, data) {
   try {
-    const { roomId, projectId, filePath, lineNumber, lineContent, content, mentions } = data || {};
+    const { roomId, projectId, filePath, lineNumber, endLineNumber, lineContent, content, mentions } = data || {};
     const targetRoom = roomId || socket.data.currentRoom || 'demo-room';
 
     if (socket.data?.role === 'viewer') {
@@ -31,6 +31,7 @@ export async function handleCreateComment(io, socket, data) {
       roomId: targetRoom,
       filePath,
       lineNumber: Number(lineNumber),
+      endLineNumber: endLineNumber ? Number(endLineNumber) : null,
       lineContent,
       authorId,
       authorName,

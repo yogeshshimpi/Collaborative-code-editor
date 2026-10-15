@@ -78,7 +78,17 @@
   left: -21px;
 }
 
-/* 2. Floating Touch Selection Action Bar */
+/* 2. Transparent backdrop to dismiss context menu when tapping outside */
+.touch-context-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 92;
+  background: transparent;
+  pointer-events: auto !important;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 3. Floating Touch Selection Context Menu Container */
 .touch-selection-action-bar {
   position: absolute;
   pointer-events: auto !important;
@@ -87,8 +97,7 @@
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  transform: translateX(-50%);
-  animation: touchBarFadeIn 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: contextMenuFadeIn 0.12s cubic-bezier(0.16, 1, 0.3, 1);
   max-width: 96vw;
 }
 
@@ -98,68 +107,125 @@
   transform: translateX(-50%) !important;
 }
 
-/* Action Bar Buttons Capsule */
-.touch-action-buttons-group {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  background: rgba(15, 23, 42, 0.94);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border: 1px solid rgba(129, 140, 248, 0.35);
-  border-radius: 24px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55), 0 0 14px rgba(99, 102, 241, 0.25);
-  padding: 2px 4px;
-  overflow: hidden;
-}
-
-/* Action button with minimum 44px touch target */
-.touch-action-btn {
-  min-height: 44px;
-  min-width: 44px;
-  padding: 0 12px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  font-size: 13px;
-  font-weight: 500;
-  font-family: inherit;
-  color: #f1f5f9;
-  background: transparent;
-  border: none;
-  border-radius: 20px;
-  cursor: pointer;
-  transition: all 0.12s ease;
-  white-space: nowrap;
+/* Vertical Context Menu Column (exact Monaco/VS Code Right Click Bar) */
+.touch-context-menu {
+  display: flex;
+  flex-direction: column;
+  width: 260px;
+  min-width: 240px;
+  max-width: calc(100vw - 20px);
+  background: #252526;
+  border: 1px solid #454545;
+  border-radius: 5px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  padding: 4px 0;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
+  overflow-y: auto;
+  max-height: min(420px, 85vh);
+  overscroll-behavior: contain;
 }
 
-.touch-action-btn:hover {
-  background: rgba(99, 102, 241, 0.16);
+/* Custom sleek scrollbar for menu if height is constrained */
+.touch-context-menu::-webkit-scrollbar {
+  width: 4px;
+}
+
+.touch-context-menu::-webkit-scrollbar-thumb {
+  background: #454545;
+  border-radius: 2px;
+}
+
+/* Individual context menu item (matching VS Code menu items) */
+.context-menu-item {
+  width: 100%;
+  height: 28px;
+  min-height: 28px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  color: #cccccc;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 13px;
+  font-weight: 400;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.05s ease, color 0.05s ease;
+  white-space: nowrap;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.context-menu-item:hover,
+.context-menu-item:active {
+  background: #04395e;
   color: #ffffff;
 }
 
-.touch-action-btn:active {
-  background: rgba(99, 102, 241, 0.3);
-  color: #ffffff;
-  transform: scale(0.95);
-}
-
-.touch-action-btn:disabled {
+.context-menu-item:disabled {
   opacity: 0.38;
   cursor: not-allowed;
   pointer-events: none;
 }
 
-.touch-action-btn.btn-cancel {
-  color: var(--text-muted);
+.context-item-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: inherit;
 }
 
-.touch-action-btn.btn-cancel:hover {
-  color: #f87171;
-  background: rgba(239, 68, 68, 0.14);
+.context-item-emoji {
+  font-size: 13px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+}
+
+.context-item-label {
+  font-size: 13px;
+  line-height: 20px;
+  color: inherit;
+  font-weight: 400;
+}
+
+.context-item-shortcut {
+  font-size: 12px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: #8c8c8c;
+  margin-left: 16px;
+  flex-shrink: 0;
+  letter-spacing: -0.1px;
+}
+
+.context-menu-item:hover .context-item-shortcut,
+.context-menu-item:active .context-item-shortcut {
+  color: #ffffff;
+}
+
+.context-item-chevron {
+  font-size: 13px;
+  color: #8c8c8c;
+  margin-left: 16px;
+  flex-shrink: 0;
+  font-weight: 600;
+}
+
+.context-menu-item:hover .context-item-chevron,
+.context-menu-item:active .context-item-chevron {
+  color: #ffffff;
+}
+
+.context-menu-divider {
+  height: 1px;
+  background: #454545;
+  margin: 4px 10px;
+  width: auto;
+  flex-shrink: 0;
 }
 
 /* Feedback Notice Toast */
@@ -179,14 +245,14 @@
   animation: toastFadeIn 0.15s ease-out;
 }
 
-@keyframes touchBarFadeIn {
+@keyframes contextMenuFadeIn {
   from {
     opacity: 0;
-    transform: translateX(-50%) scale(0.94);
+    transform: scale(0.96);
   }
   to {
     opacity: 1;
-    transform: translateX(-50%) scale(1);
+    transform: scale(1);
   }
 }
 

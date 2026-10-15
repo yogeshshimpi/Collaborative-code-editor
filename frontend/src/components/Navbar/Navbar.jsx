@@ -3,9 +3,7 @@ import { useState, useRef, useEffect } from 'react';
 import {
   Code2,
   Play,
-  Share2,
   Users,
-  Hash,
   Edit2,
   Check,
   PanelLeft,
@@ -19,19 +17,17 @@ import {
   History,
   Activity,
   GitPullRequest,
-  RotateCcw,
-  Trash2,
-  FilePlus,
   MoreHorizontal,
   MessageSquare,
-  MessageCircle
+  MessageCircle,
+  Settings
 } from 'lucide-react';
 import NotificationBell from '../Notifications/NotificationBell';
 
 export default function Navbar({
   projectName = 'Untitled Project',
   roomId = 'demo-room',
-  onChangeRoom,
+  activeFile = '',
   onRenameProject,
   connectionStatus = 'connecting',
   participantCount = 1,
@@ -42,6 +38,8 @@ export default function Navbar({
   isPreviewOpen = false,
   onShare,
   onOpenCollaborators,
+  onToggleCollaborators,
+  isCollabDrawerOpen = false,
   onOpenHistory,
   onOpenActivity,
   isActivityOpen = false,
@@ -49,8 +47,6 @@ export default function Navbar({
   pendingRequestsCount = 0,
   requiresApproval = false,
   onToggleApprovalMode,
-  isRightPanelOpen,
-  toggleRightPanel,
   onToggleSidebar,
   isAuthenticated = false,
   onOpenAuth,
@@ -69,23 +65,21 @@ export default function Navbar({
   onMarkAllNotificationsRead,
   onNavigateNotification
 }) {
-  const [isEditingRoom, setIsEditingRoom] = useState(false);
-  const [roomInput, setRoomInput] = useState(roomId);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleInput, setTitleInput] = useState(projectName);
-  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
-  const userMenuRef = useRef(null);
+
+  // Dropdown states for Workspace, Approvals, Profile, and Mobile overflow menus
+  const [isWorkspaceMenuOpen, setIsWorkspaceMenuOpen] = useState(false);
+  const workspaceMenuRef = useRef(null);
 
   const [isApprovalMenuOpen, setIsApprovalMenuOpen] = useState(false);
   const approvalMenuRef = useRef(null);
 
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const userMenuRef = useRef(null);
+
   const [isMobileToolsOpen, setIsMobileToolsOpen] = useState(false);
   const mobileToolsRef = useRef(null);
-
-  // Sync inputs when props change externally
-  useEffect(() => {
-    setRoomInput(roomId);
-  }, [roomId]);
 
   useEffect(() => {
     setTitleInput(projectName);
@@ -94,11 +88,14 @@ export default function Navbar({
   // Close dropdowns on click outside or Escape
   useEffect(() => {
     function handleClickOutside(event) {
-      if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
-        setIsUserMenuOpen(false);
+      if (workspaceMenuRef.current && !workspaceMenuRef.current.contains(event.target)) {
+        setIsWorkspaceMenuOpen(false);
       }
       if (approvalMenuRef.current && !approvalMenuRef.current.contains(event.target)) {
         setIsApprovalMenuOpen(false);
+      }
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
+        setIsUserMenuOpen(false);
       }
       if (mobileToolsRef.current && !mobileToolsRef.current.contains(event.target)) {
         setIsMobileToolsOpen(false);
@@ -106,12 +103,18 @@ export default function Navbar({
     }
     function handleKeyDown(event) {
       if (event.key === 'Escape') {
-        setIsUserMenuOpen(false);
+        setIsWorkspaceMenuOpen(false);
         setIsApprovalMenuOpen(false);
+        setIsUserMenuOpen(false);
         setIsMobileToolsOpen(false);
       }
     }
-    if (isUserMenuOpen || isApprovalMenuOpen || isMobileToolsOpen) {
+    if (
+      isWorkspaceMenuOpen ||
+      isApprovalMenuOpen ||
+      isUserMenuOpen ||
+      isMobileToolsOpen
+    ) {
       document.addEventListener('mousedown', handleClickOutside);
       document.addEventListener('keydown', handleKeyDown);
     }
@@ -119,20 +122,12 @@ export default function Navbar({
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isUserMenuOpen, isApprovalMenuOpen, isMobileToolsOpen]);
-
-  const handleRoomSubmit = (e) => {
-    e?.preventDefault?.();
-    const clean = roomInput.trim();
-    if (clean && clean !== roomId) {
-      if (onRenameProject) {
-        onRenameProject({ newRoomId: clean });
-      } else if (onChangeRoom) {
-        onChangeRoom(clean);
-      }
-    }
-    setIsEditingRoom(false);
-  };
+  }, [
+    isWorkspaceMenuOpen,
+    isApprovalMenuOpen,
+    isUserMenuOpen,
+    isMobileToolsOpen
+  ]);
 
   const handleTitleSubmit = (e) => {
     e?.preventDefault?.();
@@ -162,7 +157,7 @@ export default function Navbar({
       case 'disconnected':
       default:
         return {
-          label: 'Disconnected',
+          label: 'Offline',
           className: 'status-disconnected',
           title: 'Disconnected from backend server'
         };
@@ -174,8 +169,11 @@ export default function Navbar({
 
   return (
     <header className="navbar">
+      {/* =========================================================================
+          LEFT ZONE: [ CodeCollab ] [ Connection ] [ Project Name ] [ Owner Badge ]
+          ========================================================================= */}
       <div className="navbar-left">
-        {/* Mobile/Responsive Sidebar Toggle Button */}
+        {/* Responsive Sidebar Explorer Toggle */}
         <button
           type="button"
           className="btn-sidebar-toggle"
@@ -186,62 +184,25 @@ export default function Navbar({
           <PanelLeft size={16} />
         </button>
 
-        <div className="brand" title="CodeCollab Workspace">
+        {/* [ CodeCollab ] Brand */}
+        <div className="brand" title="CodeCollab IDE">
           <div className="brand-icon">
-            <Code2 size={18} />
+            <Code2 size={15} />
           </div>
           <span className="brand-name">CodeCollab</span>
         </div>
 
-        <div className="divider-vertical divider-desktop" />
-
-        {/* Dynamic Real-time Connection Indicator */}
-        <div className={`connection-pill ${connConfig.className}`} title={connConfig.title}>
-          <span className="status-dot"></span>
-          <span className="status-label">{connConfig.label}</span>
+        {/* [ Connection ] Indicator */}
+        <div
+          className={`navbar-connection-badge ${connConfig.className}`}
+          title={connConfig.title}
+        >
+          <span className={`status-dot-indicator ${connConfig.className}`} />
+          <span className="connection-text">{connConfig.label}</span>
         </div>
 
-        <div className="divider-vertical divider-desktop" />
-
-        {/* Room Switcher / Display */}
-        <div className="room-badge-container">
-          {isEditingRoom ? (
-            <form onSubmit={handleRoomSubmit} className="room-edit-form">
-              <Hash size={13} className="room-icon" />
-              <input
-                type="text"
-                className="room-input"
-                value={roomInput}
-                onChange={(e) => setRoomInput(e.target.value)}
-                autoFocus
-                onBlur={handleRoomSubmit}
-                placeholder="Room name"
-              />
-              <button type="submit" className="room-submit-btn" title="Confirm Room" aria-label="Confirm Room">
-                <Check size={12} />
-              </button>
-            </form>
-          ) : (
-            <div
-              className="room-badge"
-              onClick={() => {
-                setRoomInput(roomId);
-                setIsEditingRoom(true);
-              }}
-              title="Click to switch room"
-              role="button"
-              tabIndex={0}
-            >
-              <Hash size={13} className="room-icon" />
-              <span className="room-name">{roomId}</span>
-              <Edit2 size={11} className="room-edit-icon" />
-            </div>
-          )}
-        </div>
-
-        <div className="divider-vertical divider-tablet" />
-
-        <div className="project-title-container">
+        {/* [ Project Name ] & [ Owner Badge ] Context Capsule */}
+        <div className="project-context-capsule">
           {isEditingTitle ? (
             <form onSubmit={handleTitleSubmit} className="project-title-edit-form">
               <input
@@ -271,325 +232,277 @@ export default function Navbar({
               tabIndex={userRole !== 'viewer' ? 0 : undefined}
             >
               <span className="project-title">{projectName}</span>
-              {userRole !== 'viewer' && <Edit2 size={11} className="title-edit-icon" />}
+              {userRole !== 'viewer' && <Edit2 size={10} className="title-edit-icon" />}
+            </div>
+          )}
+
+          {/* Role Tag */}
+          {userRole === 'owner' && (
+            <span className="navbar-role-tag role-owner" title="Project Owner (Full Administrative Access)">
+              <ShieldCheck size={11} />
+              <span className="role-tag-text">Owner</span>
+            </span>
+          )}
+          {userRole === 'viewer' && (
+            <span className="navbar-role-tag role-viewer" title="View-Only Access (Editing disabled)">
+              <Eye size={11} />
+              <span className="role-tag-text">View Only</span>
+            </span>
+          )}
+          {userRole === 'editor' && (
+            <span className="navbar-role-tag role-editor" title="Editor (Live Collaboration Access)">
+              <User size={11} />
+              <span className="role-tag-text">Editor</span>
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* =========================================================================
+          CENTER ZONE: Clean Breadcrumb [ Active File ] (Static, no switch room button)
+          ========================================================================= */}
+      <div className="navbar-center navbar-desktop-only">
+        <div className="navbar-center-breadcrumb">
+          <span className="breadcrumb-proj" title={`Project: ${projectName}`}>
+            {projectName}
+          </span>
+          {activeFile && (
+            <>
+              <span className="breadcrumb-sep">›</span>
+              <span className="breadcrumb-file" title={`Active file: ${activeFile}`}>
+                {activeFile}
+              </span>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* =========================================================================
+          RIGHT ZONE: 3 Structured Dropdowns + Bell + Run + Profile
+          ========================================================================= */}
+      <div className="navbar-right">
+
+        {/* ---------------------------------------------------------------------
+            COLLABORATORS:
+            When clicked, directly opens right-side Collaboration Drawer
+            with Live Members count and 3 sections: Chat, Comments, Share & Invite
+            --------------------------------------------------------------------- */}
+        <div className="navbar-collab-wrapper navbar-desktop-tools">
+          <button
+            type="button"
+            className={`navbar-btn-dropdown navbar-btn-collab ${isCollabDrawerOpen ? 'active' : ''}`}
+            onClick={() => {
+              if (onToggleCollaborators) {
+                onToggleCollaborators('collaborators');
+              } else if (onOpenCollaborators) {
+                onOpenCollaborators('collaborators');
+              }
+            }}
+            title="Collaborators & Live Team (Opens Collaboration Drawer on Collaborators)"
+            aria-label="Collaborators Panel"
+          >
+            <div className="presence-avatars">
+              {peerUsers.slice(0, 2).map((peer) => {
+                const initials = peer.name ? peer.name.slice(0, 1).toUpperCase() : 'G';
+                return (
+                  <span
+                    key={peer.id || peer.socketId}
+                    className="presence-avatar"
+                    style={{ backgroundColor: peer.color }}
+                  >
+                    {initials}
+                  </span>
+                );
+              })}
+              <span
+                className="presence-avatar presence-avatar-self"
+                style={{ backgroundColor: currentUser.color }}
+              >
+                {currentUser.initials || currentUser.name.slice(0, 1).toUpperCase()}
+              </span>
+            </div>
+            <span className="navbar-btn-label">Collaborators</span>
+            <span className="presence-count-pill">{participantCount}</span>
+
+            {(unreadChatCount > 0 || openCommentsCount > 0) && (
+              <span className="navbar-badge navbar-chat-badge pulse">
+                {(unreadChatCount || 0) + (openCommentsCount || 0)}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {/* ---------------------------------------------------------------------
+            DROPDOWN 2: Workspace & History
+            - My Projects
+            - Version History
+            - Activity Log
+            --------------------------------------------------------------------- */}
+        <div className="navbar-dropdown-wrapper navbar-desktop-tools" ref={workspaceMenuRef}>
+          <button
+            type="button"
+            className={`navbar-btn-dropdown ${isWorkspaceMenuOpen ? 'active' : ''}`}
+            onClick={() => setIsWorkspaceMenuOpen((prev) => !prev)}
+            title="Workspace & History"
+            aria-label="Workspace & History Menu"
+            aria-expanded={isWorkspaceMenuOpen}
+            aria-haspopup="true"
+          >
+            <FolderCode size={14} />
+            <span className="navbar-btn-label">Workspace & History</span>
+            <ChevronDown size={11} className={`dropdown-caret ${isWorkspaceMenuOpen ? 'open' : ''}`} />
+          </button>
+
+          {isWorkspaceMenuOpen && (
+            <div className="workspace-dropdown-menu" role="menu">
+              <div className="workspace-dropdown-header">
+                <span className="workspace-dropdown-title">Workspace & History</span>
+              </div>
+
+              <div className="dropdown-action-group">
+                {isAuthenticated && onOpenProjects && (
+                  <button
+                    type="button"
+                    className="dropdown-menu-item"
+                    onClick={() => {
+                      setIsWorkspaceMenuOpen(false);
+                      onOpenProjects();
+                    }}
+                    role="menuitem"
+                  >
+                    <div className="menu-item-left">
+                      <FolderCode size={14} />
+                      <span>My Projects</span>
+                    </div>
+                  </button>
+                )}
+
+                {onOpenHistory && (
+                  <button
+                    type="button"
+                    className="dropdown-menu-item"
+                    onClick={() => {
+                      setIsWorkspaceMenuOpen(false);
+                      onOpenHistory();
+                    }}
+                    role="menuitem"
+                  >
+                    <div className="menu-item-left">
+                      <History size={14} />
+                      <span>Version History</span>
+                    </div>
+                  </button>
+                )}
+
+                {onOpenActivity && (
+                  <button
+                    type="button"
+                    className={`dropdown-menu-item ${isActivityOpen ? 'active' : ''}`}
+                    onClick={() => {
+                      setIsWorkspaceMenuOpen(false);
+                      onOpenActivity();
+                    }}
+                    role="menuitem"
+                  >
+                    <div className="menu-item-left">
+                      <Activity size={14} />
+                      <span>Activity Log</span>
+                    </div>
+                  </button>
+                )}
+              </div>
             </div>
           )}
         </div>
 
-        {/* User Role Badge in Header */}
-        {userRole === 'viewer' && (
-          <div className="navbar-role-badge badge-viewer" title="You have View-Only access to this project. Editing and saving are disabled.">
-            <Eye size={12} />
-            <span>View Only</span>
-          </div>
-        )}
-        {userRole === 'owner' && (
-          <div className="navbar-role-badge badge-owner" title="You are the Owner of this project with full permissions.">
-            <ShieldCheck size={12} />
-            <span>Owner</span>
-          </div>
-        )}
-      </div>
-
-      <div className="navbar-right">
-        {/* Collaborators counter button */}
-        <button
-          type="button"
-          className={`collaborators-counter-btn ${isRightPanelOpen ? 'active' : ''}`}
-          onClick={toggleRightPanel}
-          title="Toggle Collaborators Panel"
-          aria-label="Toggle Collaborators Panel"
-        >
-          <Users size={14} />
-          <span className="participant-count-text">
-            {participantCount} {participantCount === 1 ? 'collaborator' : 'collaborators'}
-          </span>
-          <span className="participant-count-short">{participantCount}</span>
-        </button>
-
-        {/* Peer Collaborator Avatars Stack */}
-        {peerUsers.length > 0 && (
-          <div className="peer-avatars-stack navbar-desktop-only" title={`${peerUsers.length} peer(s) in room`}>
-            {peerUsers.slice(0, 3).map((peer) => {
-              const initials = peer.name ? peer.name.replace(/[^0-9a-zA-Z]/g, '').slice(-2) : 'G';
-              return (
-                <div
-                  key={peer.id || peer.socketId}
-                  className="peer-avatar"
-                  style={{ backgroundColor: peer.color }}
-                  title={`Peer: ${peer.name}`}
-                >
-                  <span>{initials}</span>
-                </div>
-              );
-            })}
-            {peerUsers.length > 3 && (
-              <div className="peer-avatar peer-avatar-more">
-                <span>+{peerUsers.length - 3}</span>
-              </div>
+        {/* ---------------------------------------------------------------------
+            DROPDOWN 3: Approvals & Review
+            - Strict Review Mode (toggle)
+            - Approvals & Requests
+            --------------------------------------------------------------------- */}
+        <div className="navbar-dropdown-wrapper navbar-desktop-tools" ref={approvalMenuRef}>
+          <button
+            type="button"
+            className={`navbar-btn-dropdown ${requiresApproval ? 'active-approval' : ''} ${
+              isApprovalMenuOpen ? 'active' : ''
+            }`}
+            onClick={() => setIsApprovalMenuOpen((prev) => !prev)}
+            title="Approvals & Review"
+            aria-label="Approvals & Review Menu"
+            aria-expanded={isApprovalMenuOpen}
+            aria-haspopup="true"
+          >
+            <ShieldCheck size={14} className={requiresApproval ? 'text-amber' : ''} />
+            <span className="navbar-btn-label">Approvals & Review</span>
+            {pendingRequestsCount > 0 && (
+              <span className="navbar-cr-badge pulse">{pendingRequestsCount}</span>
             )}
-          </div>
-        )}
-
-        {/* My Projects shortcut button when logged in (Desktop) */}
-        {isAuthenticated && (
-          <button
-            type="button"
-            className="btn btn-secondary btn-action navbar-desktop-only"
-            onClick={onOpenProjects}
-            title="Manage Projects"
-            aria-label="Manage Projects"
-          >
-            <FolderCode size={14} />
-            <span className="btn-text">Projects</span>
+            <ChevronDown size={11} className={`dropdown-caret ${isApprovalMenuOpen ? 'open' : ''}`} />
           </button>
-        )}
 
-        {/* Sign In CTA when in guest mode (Desktop) */}
-        {!isAuthenticated && (
-          <button
-            type="button"
-            className="btn btn-secondary btn-action btn-auth navbar-desktop-only"
-            onClick={() => onOpenAuth && onOpenAuth('login')}
-            title="Sign in to save projects"
-            aria-label="Sign In"
-          >
-            <LogIn size={14} />
-            <span className="btn-text">Sign In</span>
-          </button>
-        )}
-
-        {/* Version History action button (Desktop) */}
-        {onOpenHistory && (
-          <button
-            type="button"
-            className="btn btn-secondary btn-action navbar-desktop-only"
-            onClick={onOpenHistory}
-            title="View per-file version history & restore previous versions"
-            aria-label="Version History"
-          >
-            <History size={14} />
-            <span className="btn-text">History</span>
-          </button>
-        )}
-
-        {/* Dedicated Owner Approval System Control in Navbar (Desktop) */}
-        {userRole === 'owner' && onOpenChangeRequests && (
-          <div className="navbar-approval-wrapper navbar-desktop-only" ref={approvalMenuRef}>
-            <div className={`navbar-approval-control ${requiresApproval ? 'is-active' : 'is-inactive'}`} title="Approval System: Protect project from unapproved code edits, file deletions, and version restores">
-              <button
-                type="button"
-                className="navbar-approval-pill"
-                onClick={() => setIsApprovalMenuOpen((prev) => !prev)}
-                title={
-                  requiresApproval
-                    ? 'Approval Mode is ACTIVE: Major changes (restore, delete file, edits) require your approval. Click for details.'
-                    : 'Approval Mode is OFF: Editors can edit and delete directly. Click for details.'
-                }
-                aria-label="Approval System Menu"
-                aria-expanded={isApprovalMenuOpen}
-              >
-                <ShieldCheck size={14} className={`approval-shield-icon ${requiresApproval ? 'active' : ''}`} />
-                <span className="approval-pill-label">Approval System</span>
-                <span className={`approval-status-tag ${requiresApproval ? 'tag-on' : 'tag-off'}`}>
-                  {requiresApproval ? 'ON' : 'OFF'}
-                </span>
-                {pendingRequestsCount > 0 && (
-                  <span
-                    className="navbar-cr-badge pulse"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onOpenChangeRequests();
-                    }}
-                    title={`${pendingRequestsCount} change requests waiting for approval (click to review)`}
-                  >
-                    {pendingRequestsCount}
+          {isApprovalMenuOpen && (
+            <div className="approval-dropdown-menu" role="menu">
+              <div className="approval-dropdown-header">
+                <div className="approval-dropdown-title-row">
+                  <ShieldCheck size={15} className={requiresApproval ? 'text-amber' : 'text-muted'} />
+                  <span className="approval-dropdown-title">Approvals & Review</span>
+                  <span className={`approval-status-tag ${requiresApproval ? 'tag-on' : 'tag-off'}`}>
+                    {requiresApproval ? 'ON' : 'OFF'}
                   </span>
-                )}
-                <ChevronDown size={11} className={`approval-caret ${isApprovalMenuOpen ? 'open' : ''}`} />
-              </button>
-
-              {/* Direct One-Click Toggle for Owner */}
-              {onToggleApprovalMode && (
-                <button
-                  type="button"
-                  className={`navbar-approval-quick-toggle ${requiresApproval ? 'active' : ''}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onToggleApprovalMode(!requiresApproval);
-                  }}
-                  title={requiresApproval ? 'Turn OFF Approval Mode (Direct Editing Enabled)' : 'Turn ON Approval Mode (Owner Approval Required for Major Changes)'}
-                  aria-label={requiresApproval ? 'Disable approval mode' : 'Enable approval mode'}
-                >
-                  <span className="quick-toggle-slider" />
-                </button>
-              )}
-            </div>
-
-            {/* Approval System Dropdown / Popover for Owner */}
-            {isApprovalMenuOpen && (
-              <div className="approval-dropdown-menu" role="menu">
-                <div className="approval-dropdown-header">
-                  <div className="approval-dropdown-title-row">
-                    <ShieldCheck size={16} className={requiresApproval ? 'text-amber' : 'text-muted'} />
-                    <span className="approval-dropdown-title">Strict Approval Mode</span>
-                    <span className={`approval-status-tag ${requiresApproval ? 'tag-on' : 'tag-off'}`}>
-                      {requiresApproval ? 'ON' : 'OFF'}
-                    </span>
-                  </div>
-                  <p className="approval-dropdown-subtitle">
-                    Optional code approval gate. When enabled, only editor code edits require approval before being applied. File/folder operations remain immediate.
-                  </p>
                 </div>
+              </div>
 
-                <div className="approval-dropdown-body">
+              <div className="approval-dropdown-body">
+                {/* 1. Strict Review Mode Toggle for Owner */}
+                {userRole === 'owner' && onToggleApprovalMode && (
                   <div className="approval-quick-toggle-row">
                     <div className="toggle-info">
-                      <span className="toggle-title">Require approval before editor code is applied</span>
+                      <span className="toggle-title">Strict Review Mode</span>
                       <span className="toggle-desc">
                         {requiresApproval
-                          ? 'Strict review mode is ON. Editor code edits require owner approval.'
-                          : 'Default mode: Editors collaborate normally without blocking approvals.'}
+                          ? 'Active: Code edits require owner approval.'
+                          : 'Inactive: Real-time collaborative sync.'}
                       </span>
                     </div>
-                    {onToggleApprovalMode && (
-                      <button
-                        type="button"
-                        className={`navbar-approval-quick-toggle large ${requiresApproval ? 'active' : ''}`}
-                        onClick={() => onToggleApprovalMode(!requiresApproval)}
-                        title={requiresApproval ? 'Disable strict approval mode' : 'Enable strict approval mode'}
-                      >
-                        <span className="quick-toggle-slider" />
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      className={`navbar-approval-quick-toggle large ${requiresApproval ? 'active' : ''}`}
+                      onClick={() => onToggleApprovalMode(!requiresApproval)}
+                      title={requiresApproval ? 'Disable strict review mode' : 'Enable strict review mode'}
+                    >
+                      <span className="quick-toggle-slider" />
+                    </button>
                   </div>
+                )}
 
-                  <div className="approval-protected-features">
-                    <span className="features-label">Workflow Behavior:</span>
-                    <ul className="features-list">
-                      <li className={requiresApproval ? 'active' : 'inactive'}>
-                        <GitPullRequest size={13} className="feature-icon feature-code" />
-                        <span><strong>Editor Code Edits:</strong> {requiresApproval ? 'Private draft requiring owner review' : 'Real-time collaborative live sync'}</span>
-                      </li>
-                      <li className="active">
-                        <Trash2 size={13} className="feature-icon feature-delete" />
-                        <span><strong>File & Folder Management:</strong> Immediate for editors (with 10s safe Undo)</span>
-                      </li>
-                      <li className="active">
-                        <RotateCcw size={13} className="feature-icon feature-restore" />
-                        <span><strong>Version Restores:</strong> Immediate rollback without approval</span>
-                      </li>
-                      <li className="active">
-                        <ShieldCheck size={13} className="feature-icon feature-create" />
-                        <span><strong>Protected Files:</strong> Critical files (e.g. .env, package.json) locked from editor edits</span>
-                      </li>
-                    </ul>
+                {/* 2. Approvals & Requests Item */}
+                {onOpenChangeRequests && (
+                  <div className="approval-requests-section">
+                    <button
+                      type="button"
+                      className="dropdown-menu-item approval-cr-btn"
+                      onClick={() => {
+                        setIsApprovalMenuOpen(false);
+                        onOpenChangeRequests();
+                      }}
+                      role="menuitem"
+                    >
+                      <div className="menu-item-left">
+                        <GitPullRequest size={14} className={pendingRequestsCount > 0 || requiresApproval ? 'text-amber' : ''} />
+                        <span>Approvals & Requests</span>
+                      </div>
+                      {pendingRequestsCount > 0 && (
+                        <span className="navbar-cr-badge">{pendingRequestsCount}</span>
+                      )}
+                    </button>
                   </div>
-                </div>
-
-                <div className="approval-dropdown-footer">
-                  <button
-                    type="button"
-                    className="btn btn-primary btn-sm btn-block"
-                    onClick={() => {
-                      setIsApprovalMenuOpen(false);
-                      onOpenChangeRequests();
-                    }}
-                  >
-                    <GitPullRequest size={13} />
-                    <span>
-                      {pendingRequestsCount > 0
-                        ? `Review Pending Requests (${pendingRequestsCount})`
-                        : 'Open Change Requests & History'}
-                    </span>
-                  </button>
-                </div>
+                )}
               </div>
-            )}
-          </div>
-        )}
+            </div>
+          )}
+        </div>
 
-        {/* Change Requests / Approvals button for Collaborators (Desktop) */}
-        {userRole !== 'owner' && onOpenChangeRequests && (
-          <button
-            type="button"
-            className={`btn btn-secondary btn-action btn-cr-action navbar-desktop-only ${requiresApproval ? 'approval-active-editor' : ''}`}
-            onClick={onOpenChangeRequests}
-            title={requiresApproval ? "Approval Mode Active: Changes require owner approval" : "View Change Requests"}
-            aria-label="Change Requests"
-          >
-            <GitPullRequest size={14} className={pendingRequestsCount > 0 || requiresApproval ? "text-amber" : ""} />
-            <span className="btn-text">{requiresApproval ? 'Approvals' : 'Requests'}</span>
-            {pendingRequestsCount > 0 && (
-              <span className="navbar-cr-badge">{pendingRequestsCount}</span>
-            )}
-          </button>
-        )}
-
-        {/* Project Activity Log action button (Desktop) */}
-        {onOpenActivity && (
-          <button
-            type="button"
-            className={`btn btn-secondary btn-action navbar-desktop-only ${isActivityOpen ? 'active-action' : ''}`}
-            onClick={onOpenActivity}
-            title={isActivityOpen ? "Close Project Activity Log" : "View project activity log & timeline"}
-            aria-label="Project Activity"
-            aria-pressed={isActivityOpen}
-          >
-            <Activity size={14} />
-            <span className="btn-text">Activity</span>
-          </button>
-        )}
-
-        {/* Share Button (Desktop) */}
-        <button
-          type="button"
-          className="btn btn-secondary btn-action navbar-desktop-only"
-          onClick={onOpenCollaborators || onShare}
-          title={userRole === 'owner' ? "Invite collaborators & manage permissions" : "Share project & view collaborators"}
-          aria-label="Share Project"
-        >
-          <Share2 size={15} />
-          <span className="btn-text">{userRole === 'owner' ? 'Share & Invite' : 'Share'}</span>
-        </button>
-
-        {/* Code Comments button (Desktop) */}
-        {onToggleComments && (
-          <button
-            type="button"
-            className={`btn btn-secondary btn-action navbar-desktop-only ${isCommentsOpen ? 'active-action' : ''}`}
-            onClick={onToggleComments}
-            title={isCommentsOpen ? 'Close Code Comments' : 'View Code Comments'}
-            aria-label="Code Comments"
-            aria-pressed={isCommentsOpen}
-          >
-            <MessageCircle size={14} />
-            <span className="btn-text">Comments</span>
-            {openCommentsCount > 0 && (
-              <span className="navbar-badge navbar-comment-badge">{openCommentsCount}</span>
-            )}
-          </button>
-        )}
-
-        {/* Team Chat button (Desktop) */}
-        {onToggleChat && (
-          <button
-            type="button"
-            className={`btn btn-secondary btn-action navbar-desktop-only ${isChatOpen ? 'active-action' : ''}`}
-            onClick={onToggleChat}
-            title={isChatOpen ? 'Close Team Chat' : 'Open Team Chat'}
-            aria-label="Team Chat"
-            aria-pressed={isChatOpen}
-          >
-            <MessageSquare size={14} />
-            <span className="btn-text">Chat</span>
-            {unreadChatCount > 0 && (
-              <span className="navbar-badge navbar-chat-badge">{unreadChatCount > 99 ? '99+' : unreadChatCount}</span>
-            )}
-          </button>
-        )}
-
-        {/* Notification Bell (Desktop & Mobile) */}
+        {/* Notification Bell */}
         <NotificationBell
           notifications={notifications}
           unreadCount={unreadNotificationsCount}
@@ -598,16 +511,16 @@ export default function Navbar({
           onNavigateNotification={onNavigateNotification}
         />
 
-        {/* MOBILE TOOLS DROPDOWN TRIGGER (Mobile Only: < 768px) */}
+        {/* Mobile / Responsive More Tools Trigger (<= 1100px) */}
         <div className="navbar-mobile-tools-wrapper" ref={mobileToolsRef}>
           <button
             type="button"
-            className={`btn btn-secondary btn-action btn-mobile-tools ${
+            className={`navbar-icon-btn btn-mobile-tools ${
               isMobileToolsOpen ? 'active' : ''
             }`}
             onClick={() => setIsMobileToolsOpen((v) => !v)}
-            title="Project Tools & Collaboration Menu"
-            aria-label="Project Tools"
+            title="More Options"
+            aria-label="More Options"
             aria-expanded={isMobileToolsOpen}
             aria-haspopup="true"
           >
@@ -619,12 +532,60 @@ export default function Navbar({
             )}
           </button>
 
-          {/* MOBILE TOOLS DROPDOWN MENU */}
+          {/* Mobile Overflow Menu */}
           {isMobileToolsOpen && (
             <div className="navbar-mobile-tools-dropdown" role="menu">
-              {/* Group 1: Project & File History */}
+              {/* 1. Collaborators */}
               <div className="tools-dropdown-section">
-                <span className="tools-dropdown-header">Project & History</span>
+                <span className="tools-dropdown-header">1. Collaborators</span>
+                <button
+                  type="button"
+                  className="tools-dropdown-item"
+                  onClick={() => {
+                    setIsMobileToolsOpen(false);
+                    if (onOpenCollaborators) onOpenCollaborators('collaborators');
+                  }}
+                >
+                  <Users size={14} />
+                  <span>Collaborators ({participantCount})</span>
+                </button>
+                <button
+                  type="button"
+                  className="tools-dropdown-item"
+                  onClick={() => {
+                    setIsMobileToolsOpen(false);
+                    if (onOpenCollaborators) onOpenCollaborators('chat');
+                    else if (onToggleChat) onToggleChat();
+                  }}
+                >
+                  <MessageSquare size={14} />
+                  <span>Chat</span>
+                  {unreadChatCount > 0 && (
+                    <span className="navbar-badge navbar-chat-badge">{unreadChatCount}</span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  className="tools-dropdown-item"
+                  onClick={() => {
+                    setIsMobileToolsOpen(false);
+                    if (onOpenCollaborators) onOpenCollaborators('comments');
+                    else if (onToggleComments) onToggleComments();
+                  }}
+                >
+                  <MessageCircle size={14} />
+                  <span>Comment</span>
+                  {openCommentsCount > 0 && (
+                    <span className="navbar-badge navbar-comment-badge">{openCommentsCount}</span>
+                  )}
+                </button>
+              </div>
+
+              <div className="tools-dropdown-divider" />
+
+              {/* 2. Workspace & History */}
+              <div className="tools-dropdown-section">
+                <span className="tools-dropdown-header">2. Workspace & History</span>
                 {isAuthenticated && onOpenProjects && (
                   <button
                     type="button"
@@ -634,7 +595,7 @@ export default function Navbar({
                       onOpenProjects();
                     }}
                   >
-                    <FolderCode size={15} />
+                    <FolderCode size={14} />
                     <span>My Projects</span>
                   </button>
                 )}
@@ -647,20 +608,20 @@ export default function Navbar({
                       onOpenHistory();
                     }}
                   >
-                    <History size={15} />
+                    <History size={14} />
                     <span>Version History</span>
                   </button>
                 )}
                 {onOpenActivity && (
                   <button
                     type="button"
-                    className={`tools-dropdown-item ${isActivityOpen ? 'active' : ''}`}
+                    className="tools-dropdown-item"
                     onClick={() => {
                       setIsMobileToolsOpen(false);
                       onOpenActivity();
                     }}
                   >
-                    <Activity size={15} />
+                    <Activity size={14} />
                     <span>Activity Log</span>
                   </button>
                 )}
@@ -668,114 +629,34 @@ export default function Navbar({
 
               <div className="tools-dropdown-divider" />
 
-              {/* Group 2: Collaboration & Approvals */}
+              {/* 3. Approvals & Review */}
               <div className="tools-dropdown-section">
-                <span className="tools-dropdown-header">Collaboration & Access</span>
-                <button
-                  type="button"
-                  className="tools-dropdown-item"
-                  onClick={() => {
-                    setIsMobileToolsOpen(false);
-                    if (onOpenCollaborators) onOpenCollaborators();
-                    else if (onShare) onShare();
-                  }}
-                >
-                  <Share2 size={15} />
-                  <span>{userRole === 'owner' ? 'Share & Invite' : 'Share Project'}</span>
-                </button>
-
-                {/* Team Chat mobile item */}
-                {onToggleChat && (
-                  <button
-                    type="button"
-                    className={`tools-dropdown-item ${isChatOpen ? 'active' : ''}`}
-                    onClick={() => {
-                      setIsMobileToolsOpen(false);
-                      onToggleChat();
-                    }}
-                  >
-                    <MessageSquare size={15} />
-                    <span>Team Chat</span>
-                    {unreadChatCount > 0 && (
-                      <span className="navbar-badge navbar-chat-badge">{unreadChatCount}</span>
-                    )}
-                  </button>
+                <span className="tools-dropdown-header">3. Approvals & Review</span>
+                {userRole === 'owner' && onToggleApprovalMode && (
+                  <div className="tools-dropdown-toggle-item">
+                    <div className="tools-toggle-left">
+                      <ShieldCheck
+                        size={14}
+                        className={requiresApproval ? 'text-amber' : 'text-muted'}
+                      />
+                      <span>Strict Review Mode</span>
+                    </div>
+                    <button
+                      type="button"
+                      className={`navbar-approval-quick-toggle ${
+                        requiresApproval ? 'active' : ''
+                      }`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleApprovalMode(!requiresApproval);
+                      }}
+                    >
+                      <span className="quick-toggle-slider" />
+                    </button>
+                  </div>
                 )}
 
-                {/* Code Comments mobile item */}
-                {onToggleComments && (
-                  <button
-                    type="button"
-                    className={`tools-dropdown-item ${isCommentsOpen ? 'active' : ''}`}
-                    onClick={() => {
-                      setIsMobileToolsOpen(false);
-                      onToggleComments();
-                    }}
-                  >
-                    <MessageCircle size={15} />
-                    <span>Code Comments</span>
-                    {openCommentsCount > 0 && (
-                      <span className="navbar-badge navbar-comment-badge">{openCommentsCount}</span>
-                    )}
-                  </button>
-                )}
-
-                {/* Owner Approvals workflow */}
-                {userRole === 'owner' && (
-                  <>
-                    {onToggleApprovalMode && (
-                      <div className="tools-dropdown-toggle-item">
-                        <div className="tools-toggle-left">
-                          <ShieldCheck
-                            size={15}
-                            className={requiresApproval ? 'text-amber' : 'text-muted'}
-                          />
-                          <span>Strict Review Mode</span>
-                        </div>
-                        <button
-                          type="button"
-                          className={`navbar-approval-quick-toggle ${
-                            requiresApproval ? 'active' : ''
-                          }`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onToggleApprovalMode(!requiresApproval);
-                          }}
-                          title={
-                            requiresApproval
-                              ? 'Disable strict review mode'
-                              : 'Enable strict review mode'
-                          }
-                        >
-                          <span className="quick-toggle-slider" />
-                        </button>
-                      </div>
-                    )}
-
-                    {onOpenChangeRequests && (
-                      <button
-                        type="button"
-                        className="tools-dropdown-item"
-                        onClick={() => {
-                          setIsMobileToolsOpen(false);
-                          onOpenChangeRequests();
-                        }}
-                      >
-                        <GitPullRequest
-                          size={15}
-                          className={pendingRequestsCount > 0 ? 'text-amber' : ''}
-                        />
-                        <span>Change Requests</span>
-                        {pendingRequestsCount > 0 && (
-                          <span className="navbar-cr-badge">{pendingRequestsCount}</span>
-                        )}
-                      </button>
-                    )}
-                  </>
-                )}
-
-                {/* Collaborator Approvals workflow */}
-                {userRole !== 'owner' && onOpenChangeRequests && (
+                {onOpenChangeRequests && (
                   <button
                     type="button"
                     className="tools-dropdown-item"
@@ -785,62 +666,39 @@ export default function Navbar({
                     }}
                   >
                     <GitPullRequest
-                      size={15}
-                      className={
-                        pendingRequestsCount > 0 || requiresApproval ? 'text-amber' : ''
-                      }
+                      size={14}
+                      className={pendingRequestsCount > 0 || requiresApproval ? 'text-amber' : ''}
                     />
-                    <span>{requiresApproval ? 'Approvals & Requests' : 'Change Requests'}</span>
+                    <span>Approvals & Requests</span>
                     {pendingRequestsCount > 0 && (
                       <span className="navbar-cr-badge">{pendingRequestsCount}</span>
                     )}
                   </button>
                 )}
               </div>
-
-              {/* Group 3: Sign In CTA if guest */}
-              {!isAuthenticated && onOpenAuth && (
-                <>
-                  <div className="tools-dropdown-divider" />
-                  <div className="tools-dropdown-section">
-                    <button
-                      type="button"
-                      className="tools-dropdown-item"
-                      onClick={() => {
-                        setIsMobileToolsOpen(false);
-                        onOpenAuth('login');
-                      }}
-                    >
-                      <LogIn size={15} />
-                      <span>Sign In</span>
-                    </button>
-                  </div>
-                </>
-              )}
             </div>
           )}
         </div>
 
+        {/* Run Button (Desktop only; on mobile, editor TabBar maintains the single Run button) */}
         <button
           type="button"
-          className={`btn btn-primary btn-action ${isPreviewOpen ? 'active-run' : ''}`}
+          className={`navbar-btn-run ${isPreviewOpen ? 'active-run' : ''}`}
           onClick={onRun}
-          title={isPreviewOpen ? "Re-run Live Preview" : "Run Code (Live Preview)"}
+          title={isPreviewOpen ? "Re-run Live Preview (Ctrl+Enter)" : "Run Code (Live Preview)"}
           aria-label="Run Code"
         >
-          <Play size={15} fill="currentColor" />
-          <span className="btn-text">{isPreviewOpen ? 'Re-Run' : 'Run'}</span>
+          <Play size={12} fill="currentColor" />
+          <span className="btn-run-text">{isPreviewOpen ? 'Re-Run' : 'Run'}</span>
         </button>
 
-        <div className="divider-vertical divider-desktop" />
-
-        {/* User Account / Avatar Dropdown */}
+        {/* Profile Dropdown */}
         <div className="user-menu-container" ref={userMenuRef}>
           <button
             type="button"
             className="user-avatar-trigger"
             onClick={() => setIsUserMenuOpen((prev) => !prev)}
-            title={currentUser.name}
+            title={`${currentUser.name} (${userRole})`}
             aria-label="User account menu"
             aria-expanded={isUserMenuOpen}
             aria-haspopup="true"
@@ -851,7 +709,7 @@ export default function Navbar({
             >
               <span>{currentUser.initials || currentUser.name.slice(0, 2).toUpperCase()}</span>
             </div>
-            <ChevronDown size={12} className="user-caret" />
+            <ChevronDown size={11} className="user-caret" />
           </button>
 
           {isUserMenuOpen && (
@@ -873,49 +731,34 @@ export default function Navbar({
 
               <div className="dropdown-divider" />
 
-              {onOpenActivity && (
+              {/* Settings button only (functionality to be added later) */}
+              <button
+                type="button"
+                className="dropdown-item"
+                onClick={() => {
+                  setIsUserMenuOpen(false);
+                }}
+                role="menuitem"
+              >
+                <Settings size={14} />
+                <span>Settings</span>
+              </button>
+
+              <div className="dropdown-divider" />
+
+              {isAuthenticated ? (
                 <button
                   type="button"
-                  className="dropdown-item"
+                  className="dropdown-item danger"
                   onClick={() => {
                     setIsUserMenuOpen(false);
-                    onOpenActivity();
+                    if (onLogout) onLogout();
                   }}
                   role="menuitem"
                 >
-                  <Activity size={14} />
-                  <span>Activity Log</span>
+                  <LogOut size={14} />
+                  <span>Log Out</span>
                 </button>
-              )}
-
-              {isAuthenticated ? (
-                <>
-                  <button
-                    type="button"
-                    className="dropdown-item"
-                    onClick={() => {
-                      setIsUserMenuOpen(false);
-                      if (onOpenProjects) onOpenProjects();
-                    }}
-                    role="menuitem"
-                  >
-                    <FolderCode size={14} />
-                    <span>My Projects</span>
-                  </button>
-                  <div className="dropdown-divider" />
-                  <button
-                    type="button"
-                    className="dropdown-item danger"
-                    onClick={() => {
-                      setIsUserMenuOpen(false);
-                      if (onLogout) onLogout();
-                    }}
-                    role="menuitem"
-                  >
-                    <LogOut size={14} />
-                    <span>Log Out</span>
-                  </button>
-                </>
               ) : (
                 <>
                   <button
@@ -947,6 +790,7 @@ export default function Navbar({
             </div>
           )}
         </div>
+
       </div>
     </header>
   );

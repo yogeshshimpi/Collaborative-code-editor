@@ -364,7 +364,15 @@ export default function ActivityLogModal({
 
         {/* Toolbar: Filter Pills & Search Box */}
         <div className="activity-toolbar">
-          <div className="activity-filter-pills" role="tablist">
+          <div
+            className="activity-filter-pills"
+            role="tablist"
+            onWheel={(e) => {
+              if (e.deltaY !== 0 && !e.deltaX) {
+                e.currentTarget.scrollLeft += e.deltaY * 0.8;
+              }
+            }}
+          >
             <button
               type="button"
               role="tab"

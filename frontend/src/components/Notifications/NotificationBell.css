@@ -11,21 +11,24 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
-  background: var(--bg-elevated, #1a1c26);
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
-  color: var(--text-secondary, #cbd5e1);
+  width: 28px;
+  height: 28px;
+  border-radius: 5px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary, #b4c2d9);
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
-.notification-bell-btn:hover,
-.notification-bell-btn.active {
-  background: rgba(99, 102, 241, 0.15);
+.notification-bell-btn:hover {
+  background-color: rgba(255, 255, 255, 0.08);
   color: var(--text-primary, #ffffff);
-  border-color: rgba(99, 102, 241, 0.35);
+}
+
+.notification-bell-btn.active {
+  background-color: rgba(109, 93, 252, 0.18);
+  color: var(--accent-hover, #8175ff);
 }
 
 .notif-badge-pill {

@@ -28,11 +28,12 @@
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
   -webkit-overflow-scrolling: touch;
 }
 
 .tab-scroll-container::-webkit-scrollbar {
-  height: 3px;
+  height: 4px;
 }
 
 .tab-scroll-container::-webkit-scrollbar-track {
@@ -40,12 +41,17 @@
 }
 
 .tab-scroll-container::-webkit-scrollbar-thumb {
-  background: var(--border-strong);
-  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  transition: background 0.15s ease;
 }
 
 .tab-scroll-container::-webkit-scrollbar-thumb:hover {
-  background: var(--text-muted);
+  background: var(--accent-primary, #6d5dfc);
+}
+
+.tab-scroll-container::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 .tab-list {
@@ -121,53 +127,39 @@
 }
 
 /* Zone 2: Pinned tab bar actions & grouped toolbar */
+/* Zone 2: Pinned tab bar actions (Run & More Menu) */
 .tab-bar-actions {
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 6px;
   height: 100%;
   padding: 0 8px;
   background-color: var(--bg-surface);
-  border-left: 1px solid var(--border-subtle);
+  border-left: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
   z-index: 5;
-  box-shadow: -4px 0 8px -2px rgba(0, 0, 0, 0.35);
-}
-
-/* Grouped Editor Toolbar Containers & Dividers */
-.tab-toolbar-group {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  padding: 1px;
-  border-radius: 6px;
-  flex-shrink: 0;
-}
-
-.tab-group-divider {
-  width: 1px;
-  height: 16px;
-  background-color: var(--border-subtle, rgba(255, 255, 255, 0.12));
-  margin: 0 3px;
-  flex-shrink: 0;
+  box-sizing: border-box;
 }
 
 .tab-action-btn {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-subtle);
-  color: var(--text-secondary);
+  height: 25px;
+  max-height: 25px;
+  background: var(--bg-elevated, #182235);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.12));
+  color: var(--text-secondary, #b4c2d9);
   font-size: 11.5px;
   font-weight: 500;
-  padding: 3px 8px;
+  padding: 0 8px;
   border-radius: 5px;
   cursor: pointer;
   transition: all 0.15s ease;
   font-family: var(--font-sans);
   white-space: nowrap;
   flex-shrink: 0;
+  box-sizing: border-box;
 }
 
 .tab-action-btn:hover:not(:disabled) {
@@ -189,59 +181,63 @@
   pointer-events: none;
 }
 
+/* Distinct, Non-overlapping Run Button */
 .tab-action-btn.btn-tab-run {
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.24), rgba(129, 140, 248, 0.12));
-  border-color: rgba(99, 102, 241, 0.45);
+  background: rgba(99, 102, 241, 0.14);
+  border: 1px solid rgba(99, 102, 241, 0.38);
   color: #c7d2fe;
   font-weight: 600;
+  height: 25px;
+  padding: 0 9px;
+  gap: 5px;
+  border-radius: 5px;
 }
 
 .tab-action-btn.btn-tab-run:hover:not(:disabled) {
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.4), rgba(129, 140, 248, 0.22));
-  border-color: #818cf8;
+  background: rgba(99, 102, 241, 0.28);
+  border-color: rgba(99, 102, 241, 0.65);
   color: #ffffff;
-  box-shadow: 0 0 10px rgba(99, 102, 241, 0.35);
+  box-shadow: 0 0 8px rgba(99, 102, 241, 0.25);
 }
 
-.tab-action-btn.btn-tab-console:hover:not(:disabled) {
-  background-color: rgba(99, 102, 241, 0.15);
-  border-color: rgba(99, 102, 241, 0.4);
+.tab-action-btn.btn-tab-run .tab-action-icon {
+  color: #818cf8;
+}
+
+.tab-action-btn.btn-tab-run:hover:not(:disabled) .tab-action-icon {
   color: #ffffff;
 }
 
-.tab-action-btn.btn-tab-submit-review {
-  background: rgba(245, 158, 11, 0.14);
-  border-color: rgba(245, 158, 11, 0.45);
-  color: #fbbf24;
-  font-weight: 600;
-  gap: 5px;
-}
-
-.tab-action-btn.btn-tab-submit-review:hover:not(:disabled) {
-  background: rgba(245, 158, 11, 0.25);
-  border-color: #f59e0b;
-  color: #ffffff;
-  box-shadow: 0 0 10px rgba(245, 158, 11, 0.35);
-}
-
-/* More Actions Dropdown Menu in TabBar */
+/* More Actions Dropdown Wrapper & Trigger Button */
 .tab-more-menu-wrapper {
   position: relative;
   display: inline-flex;
   align-items: center;
+  flex-shrink: 0;
 }
 
 .tab-action-btn.btn-tab-more {
   padding: 0;
-  width: 26px;
-  height: 26px;
+  width: 25px;
+  height: 25px;
+  max-height: 25px;
   justify-content: center;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 5px;
+  color: var(--text-secondary, #94a3b8);
+}
+
+.tab-action-btn.btn-tab-more:hover:not(:disabled) {
+  background-color: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.16);
+  color: var(--text-primary, #ffffff);
 }
 
 .tab-action-btn.btn-tab-more.active {
-  background: var(--bg-hover);
-  color: var(--accent-primary);
-  border-color: var(--accent-primary);
+  background-color: rgba(99, 102, 241, 0.2);
+  color: var(--accent-hover, #8175ff);
+  border-color: rgba(99, 102, 241, 0.45);
 }
 
 .tab-dropdown-menu {
@@ -485,9 +481,33 @@
 /* Responsive media queries for TabBar */
 @media (max-width: 1023px) {
   .tab-item {
-    min-height: 36px;
-    padding: 0 10px;
-    font-size: 12.5px;
+    min-height: 35px;
+    padding: 0 9px;
+    font-size: 12px;
+  }
+  .tab-close-btn {
+    width: 20px;
+    height: 20px;
+    min-width: 20px;
+    min-height: 20px;
+    border-radius: 4px;
+    margin-left: 3px;
+  }
+  .tab-action-btn {
+    height: 25px;
+    max-height: 25px;
+  }
+}
+
+@media (max-width: 767px) {
+  .tab-bar {
+    height: 35px;
+    min-height: 35px;
+  }
+  .tab-item {
+    min-height: 35px;
+    padding: 0 8px;
+    font-size: 12px;
   }
   .tab-close-btn {
     width: 22px;
@@ -495,91 +515,75 @@
     min-width: 22px;
     min-height: 22px;
     border-radius: 4px;
-    margin-left: 4px;
+    margin-left: 3px;
   }
-  .tab-action-btn {
-    height: var(--control-height-tablet, 36px);
-    min-height: var(--control-height-tablet, 36px);
-    padding: 0 10px;
-    font-size: 12.5px;
-    border-radius: 6px;
+  .tab-bar-actions {
+    gap: 5px;
+    padding: 0 6px;
   }
-}
-
-@media (max-width: 767px) {
-  /* Tabs and Editor */
-  .tab-item {
-    min-height: 38px;
-    padding: 0 10px;
-    font-size: 13px;
+  .tab-action-btn.btn-tab-run {
+    height: 25px;
+    padding: 0 8px;
+    font-size: 11px;
   }
-  .tab-close-btn {
-    width: 26px;
-    height: 26px;
-    min-width: 26px;
-    min-height: 26px;
-    border-radius: 5px;
-    position: relative;
-    margin-left: 4px;
-  }
-  .tab-close-btn::after {
-    content: '';
-    position: absolute;
-    inset: -8px;
-    min-width: 44px;
-    min-height: 44px;
-  }
-  .tab-action-btn {
-    min-height: 38px;
-    min-width: 38px;
-    padding: 0 10px;
-    font-size: 13px;
-    border-radius: 6px;
+  .tab-action-btn.btn-tab-more {
+    width: 25px;
+    height: 25px;
   }
 }
 
 @media (max-width: 480px) {
-  /* TabBar: History button becomes 44px icon button */
+  .tab-bar {
+    height: 35px;
+    min-height: 35px;
+  }
   .tab-item {
-    min-height: 40px;
-    padding: 0 10px;
-    font-size: 13px;
-    gap: 6px;
+    min-height: 35px;
+    padding: 0 7px;
+    font-size: 11.5px;
+    gap: 4px;
+  }
+  .tab-label {
+    max-width: 80px;
   }
   .tab-close-btn {
-    width: 28px;
-    height: 28px;
-    min-width: 28px;
-    min-height: 28px;
-    border-radius: 6px;
-    position: relative;
-    margin-left: 4px;
-  }
-  .tab-close-btn::after {
-    content: '';
-    position: absolute;
-    inset: -8px;
-    min-width: 44px;
-    min-height: 44px;
+    width: 20px;
+    height: 20px;
+    min-width: 20px;
+    min-height: 20px;
+    border-radius: 4px;
+    margin-left: 2px;
   }
   .tab-close-btn svg {
-    width: 14px;
-    height: 14px;
+    width: 12px;
+    height: 12px;
   }
-  .tab-action-btn {
-    min-width: 44px;
-    min-height: 40px;
-    height: 40px;
-    padding: 0 10px;
-    border-radius: 7px;
-    justify-content: center;
+  .tab-bar-actions {
+    gap: 4px;
+    padding: 0 5px;
   }
-  .tab-action-btn svg {
-    width: 15px;
-    height: 15px;
+  .tab-action-btn.btn-tab-run {
+    height: 24px;
+    padding: 0 7px;
+    font-size: 11px;
+    border-radius: 4px;
   }
-  .tab-action-text {
+  .tab-action-btn.btn-tab-more {
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+  }
+}
+
+@media (max-width: 360px) {
+  .tab-action-btn.btn-tab-run .tab-action-text {
     display: none;
+  }
+  .tab-action-btn.btn-tab-run {
+    padding: 0;
+    width: 24px;
+    height: 24px;
+    justify-content: center;
   }
 }
 

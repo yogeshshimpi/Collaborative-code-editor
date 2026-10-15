@@ -3,6 +3,7 @@ import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import {
   MessageSquare,
   Send,
+  ArrowUp,
   X,
   Edit2,
   Trash2,
@@ -40,6 +41,7 @@ export default function ChatPanel({
   onClose,
   projectId,
   roomId = 'demo-room',
+  projectName = '',
   currentUser = { id: 1, name: 'User', color: '#6366f1' },
   userRole = 'editor',
   activeUsers = [],
@@ -47,10 +49,13 @@ export default function ChatPanel({
   onSendMessage,
   onEditMessage,
   onDeleteMessage,
+  onOpenComments,
+  openCommentsCount = 0,
   socket = null
 }) {
   const [inputText, setInputText] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const [subTab, setSubTab] = useState('chat'); // 'chat' | 'comments' | 'mentions'
 
   // Editing state
   const [editingMessageId, setEditingMessageId] = useState(null);
@@ -260,46 +265,93 @@ export default function ChatPanel({
     });
   };
 
+  const myName = (currentUser?.name || '').toLowerCase();
+  const mentionsMessages = useMemo(() => {
+    return messages.filter(
+      (m) =>
+        !m.isDeleted &&
+        (m.text?.toLowerCase().includes(`@${myName}`) ||
+          m.text?.toLowerCase().includes('@team') ||
+          m.text?.toLowerCase().includes('@everyone'))
+    );
+  }, [messages, myName]);
+  const mentionsCount = mentionsMessages.length;
+
+  const displayedMessages = subTab === 'mentions' ? mentionsMessages : messages;
+
   if (!isOpen) return null;
 
   return (
     <>
       <div className="chat-panel-backdrop" onClick={onClose} aria-hidden="true" />
-      <aside className="chat-panel" aria-label="Project Team Chat">
+      <aside className="chat-panel" aria-label="Project Team Collaboration">
         {/* Panel Header */}
         <div className="chat-panel-header">
           <div className="chat-header-title">
-            <MessageSquare size={16} className="text-accent" />
-            <span>Project Chat</span>
-            <span className="chat-room-badge" title={`Room: ${roomId}`}>
-              #{roomId}
-            </span>
+            <span className="collab-panel-title">Collaboration</span>
           </div>
           <button
             type="button"
             className="action-icon-btn"
             onClick={onClose}
-            title="Close Chat"
-            aria-label="Close Chat"
+            title="Close"
+            aria-label="Close"
           >
             <X size={15} />
           </button>
         </div>
 
+        {/* Collaboration Sub-tabs matching user reference design */}
+        <div className="collab-tabs-bar">
+          <button
+            type="button"
+            className={`collab-tab-btn ${subTab === 'chat' ? 'active' : ''}`}
+            onClick={() => setSubTab('chat')}
+          >
+            Chat
+          </button>
+          <button
+            type="button"
+            className="collab-tab-btn"
+            onClick={() => {
+              if (onOpenComments) onOpenComments();
+            }}
+          >
+            Comments
+            {openCommentsCount > 0 && (
+              <span className="collab-tab-badge badge-comments">{openCommentsCount}</span>
+            )}
+          </button>
+          <button
+            type="button"
+            className={`collab-tab-btn ${subTab === 'mentions' ? 'active' : ''}`}
+            onClick={() => setSubTab('mentions')}
+          >
+            Mentions
+            {mentionsCount > 0 && (
+              <span className="collab-tab-badge badge-mentions">{mentionsCount}</span>
+            )}
+          </button>
+        </div>
+
         {/* Messages List Area */}
         <div className="chat-messages-container">
-          {messages.length === 0 ? (
+          {displayedMessages.length === 0 ? (
             <div className="chat-empty-state">
               <div className="chat-empty-icon-wrap">
                 <MessageSquare size={32} />
               </div>
-              <h4>No messages yet</h4>
-              <p>Start collaborating with your team.</p>
+              <h4>{subTab === 'mentions' ? 'No mentions yet' : 'No messages yet'}</h4>
+              <p>
+                {subTab === 'mentions'
+                  ? 'Messages that mention you with @name will appear here.'
+                  : 'Start collaborating with your team.'}
+              </p>
               <span className="chat-empty-hint">Use @name to mention collaborators</span>
             </div>
           ) : (
             <div className="chat-messages-list">
-              {messages.map((msg) => {
+              {displayedMessages.map((msg) => {
                 const isYou =
                   currentUser?.id && msg.senderId
                     ? String(currentUser.id) === String(msg.senderId)
@@ -482,7 +534,7 @@ export default function ChatPanel({
               <textarea
                 ref={textareaRef}
                 className="chat-textarea"
-                placeholder="Type a message... (@ to mention, Shift+Enter for new line)"
+                placeholder={projectName ? `Message ${projectName}...` : 'Message team... (@ to mention)'}
                 value={inputText}
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
@@ -492,13 +544,13 @@ export default function ChatPanel({
               />
               <button
                 type="button"
-                className="btn-chat-send"
+                className="btn-chat-send round-arrow"
                 onClick={handleSend}
                 disabled={!inputText.trim() || isSending}
                 title={!inputText.trim() ? 'Enter text to send' : 'Send message (Enter)'}
                 aria-label="Send message"
               >
-                <Send size={15} />
+                <ArrowUp size={15} />
               </button>
             </div>
           )}

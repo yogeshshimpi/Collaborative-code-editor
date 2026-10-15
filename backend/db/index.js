@@ -333,6 +333,8 @@ export async function initDatabase() {
           updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
 
+        ALTER TABLE project_code_comments ADD COLUMN IF NOT EXISTS end_line_number INTEGER;
+
         CREATE INDEX IF NOT EXISTS idx_code_comments_file ON project_code_comments(project_id, file_path, line_number);
         CREATE INDEX IF NOT EXISTS idx_code_comments_room ON project_code_comments(room_id);
         CREATE INDEX IF NOT EXISTS idx_code_comments_parent ON project_code_comments(parent_id);

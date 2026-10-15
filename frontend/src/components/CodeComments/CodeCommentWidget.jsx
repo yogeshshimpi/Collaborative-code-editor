@@ -79,6 +79,9 @@ export default function CodeCommentWidget({
           <FileCode size={12} />
           <span>
             {comment.filePath}:{comment.lineNumber}
+            {comment.endLineNumber && Number(comment.endLineNumber) > Number(comment.lineNumber)
+              ? `-${comment.endLineNumber}`
+              : ''}
           </span>
         </div>
 

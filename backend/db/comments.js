@@ -43,7 +43,7 @@ export async function getCodeComments({
       }
 
       const query = `
-        SELECT id, project_id, room_id, file_path, line_number, line_content,
+        SELECT id, project_id, room_id, file_path, line_number, end_line_number, line_content,
                author_id, author_name, author_color, content, is_resolved,
                resolved_by, resolved_at, parent_id, mentions, created_at, updated_at
         FROM project_code_comments
@@ -58,6 +58,7 @@ export async function getCodeComments({
         roomId: r.room_id,
         filePath: r.file_path,
         lineNumber: r.line_number,
+        endLineNumber: r.end_line_number || r.line_number,
         lineContent: r.line_content,
         authorId: r.author_id,
         authorName: r.author_name,
@@ -113,6 +114,7 @@ export async function createCodeComment({
   roomId = 'demo-room',
   filePath,
   lineNumber,
+  endLineNumber = null,
   lineContent = '',
   authorId = null,
   authorName = 'Collaborator',
@@ -125,6 +127,9 @@ export async function createCodeComment({
     throw new Error('Comment content cannot be empty');
   }
 
+  const startLine = Number(lineNumber) || 1;
+  const endLine = endLineNumber ? Math.max(startLine, Number(endLineNumber) || startLine) : startLine;
+
   const detectedMentions = mentions.length > 0 ? mentions : extractMentions(cleanContent);
   const now = new Date();
 
@@ -136,17 +141,18 @@ export async function createCodeComment({
       const res = await pool.query(
         `
         INSERT INTO project_code_comments (
-          project_id, room_id, file_path, line_number, line_content,
+          project_id, room_id, file_path, line_number, end_line_number, line_content,
           author_id, author_name, author_color, content, mentions, created_at, updated_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11, $11)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $12)
         RETURNING *
       `,
         [
           dbProjectId,
           roomId,
           filePath,
-          lineNumber,
+          startLine,
+          endLine,
           lineContent,
           dbAuthorId,
           authorName,
@@ -161,15 +167,16 @@ export async function createCodeComment({
 
       // Record in activity log
       try {
+        const lineLabel = startLine === endLine ? `line ${startLine}` : `lines ${startLine}-${endLine}`;
         await recordProjectActivity({
           projectId,
           roomId,
           userId: authorId,
           userName: authorName,
           actionType: 'comment_create',
-          targetName: `${filePath}:${lineNumber}`,
-          summary: `${authorName} commented on line ${lineNumber} of ${filePath}`,
-          details: { filePath, lineNumber, snippet: lineContent }
+          targetName: `${filePath}:${startLine}${endLine !== startLine ? `-${endLine}` : ''}`,
+          summary: `${authorName} commented on ${lineLabel} of ${filePath}`,
+          details: { filePath, lineNumber: startLine, endLineNumber: endLine, snippet: lineContent }
         });
       } catch {}
 
@@ -179,6 +186,7 @@ export async function createCodeComment({
         roomId: r.room_id,
         filePath: r.file_path,
         lineNumber: r.line_number,
+        endLineNumber: r.end_line_number || r.line_number,
         lineContent: r.line_content,
         authorId: r.author_id,
         authorName: r.author_name,
@@ -204,7 +212,8 @@ export async function createCodeComment({
     projectId,
     roomId,
     filePath,
-    lineNumber,
+    lineNumber: startLine,
+    endLineNumber: endLine,
     lineContent,
     authorId,
     authorName,

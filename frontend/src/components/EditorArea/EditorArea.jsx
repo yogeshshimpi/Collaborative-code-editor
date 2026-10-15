@@ -119,7 +119,7 @@ export default function EditorArea({
       }
     });
 
-    // Add Code Comment context menu action
+    // Add Code Comment context menu action (supports both single line & multiline selection)
     editor.addAction({
       id: 'add-code-comment',
       label: '💬 Add Code Comment',
@@ -127,9 +127,20 @@ export default function EditorArea({
       contextMenuGroupId: 'navigation',
       contextMenuOrder: 1.5,
       run: (ed) => {
-        const pos = ed.getPosition();
-        if (pos && onAddCommentAtLineRef.current) {
-          onAddCommentAtLineRef.current(pos.lineNumber, activeFileRef.current);
+        const selection = ed.getSelection();
+        const model = ed.getModel();
+        if (selection && !selection.isEmpty()) {
+          const startLine = Math.min(selection.startLineNumber, selection.endLineNumber);
+          const endLine = Math.max(selection.startLineNumber, selection.endLineNumber);
+          const snippet = model ? model.getValueInRange(selection) : '';
+          if (onAddCommentAtLineRef.current) {
+            onAddCommentAtLineRef.current(startLine, activeFileRef.current, endLine, snippet);
+          }
+        } else {
+          const pos = ed.getPosition();
+          if (pos && onAddCommentAtLineRef.current) {
+            onAddCommentAtLineRef.current(pos.lineNumber, activeFileRef.current);
+          }
         }
       }
     });
@@ -286,34 +297,35 @@ export default function EditorArea({
     const maxLine = model.getLineCount();
     const fileComments = (codeComments || []).filter((c) => c.filePath === activeFile);
 
-    // Group comments by line number so one glyph per line with combined details
-    const commentsByLine = new Map();
-    fileComments.forEach((c) => {
-      const line = Math.min(Math.max(1, Number(c.lineNumber) || 1), maxLine);
-      if (!commentsByLine.has(line)) {
-        commentsByLine.set(line, []);
-      }
-      commentsByLine.get(line).push(c);
-    });
-
     const newCommentDecorations = [];
-    commentsByLine.forEach((list, line) => {
-      const hasOpen = list.some((c) => !c.isResolved);
-      const isResolved = !hasOpen;
-      const authors = list.map((c) => c.authorName || 'User').join(', ');
-      const previewText = list.map((c) => `• ${c.authorName || 'User'}: ${c.content}`).join('\n');
+    fileComments.forEach((c) => {
+      const startLine = Math.min(Math.max(1, Number(c.lineNumber) || 1), maxLine);
+      const endLine = Math.min(Math.max(startLine, Number(c.endLineNumber) || startLine), maxLine);
+      const isResolved = Boolean(c.isResolved);
+      const lineRangeLabel = startLine === endLine ? `Line ${startLine}` : `Lines ${startLine}-${endLine}`;
 
+      // Glyph margin indicator on the starting line
       newCommentDecorations.push({
-        range: new monaco.Range(line, 1, line, 1),
+        range: new monaco.Range(startLine, 1, startLine, 1),
         options: {
           isWholeLine: false,
           glyphMarginClassName: `monaco-comment-glyph-indicator ${isResolved ? 'resolved' : 'open'}`,
           glyphMarginHoverMessage: {
-            value: `💬 **Comment${list.length > 1 ? 's' : ''} on Line ${line}** (${isResolved ? 'Resolved' : 'Active'})\nBy: ${authors}\n\n${previewText}`
-          },
-          className: hasOpen ? 'monaco-comment-line-highlight' : ''
+            value: `💬 **Comment on ${lineRangeLabel}** (${isResolved ? 'Resolved' : 'Active'})\nBy: ${c.authorName || 'User'}\n\n${c.content}`
+          }
         }
       });
+
+      // Highlight the entire commented line range if open
+      if (!isResolved) {
+        newCommentDecorations.push({
+          range: new monaco.Range(startLine, 1, endLine, model.getLineMaxColumn(endLine)),
+          options: {
+            isWholeLine: true,
+            className: 'monaco-comment-line-highlight'
+          }
+        });
+      }
     });
 
     commentDecorationsRef.current = editor.deltaDecorations(
@@ -497,7 +509,7 @@ export default function EditorArea({
       <div
         className="monaco-viewport-wrapper"
         style={{
-          paddingBottom: isKeyboardDocked ? `${keyboardOffset + 42}px` : undefined,
+          paddingBottom: !isToolbarCollapsed && isKeyboardDocked ? '56px' : undefined,
           boxSizing: 'border-box'
         }}
       >
@@ -538,7 +550,7 @@ export default function EditorArea({
             renderWhitespace: 'selection',
             padding: {
               top: isMobileScreen ? 6 : 10,
-              bottom: isKeyboardDocked ? Math.max(10, keyboardOffset + 48) : (isMobileScreen ? 6 : 10)
+              bottom: !isToolbarCollapsed && isKeyboardDocked ? 56 : (isMobileScreen ? 6 : 10)
             },
             bracketPairColorization: { enabled: true },
             readOnly: Boolean(readOnly),
@@ -558,6 +570,8 @@ export default function EditorArea({
           readOnly={readOnly}
           keyboardOffset={keyboardOffset}
           isKeyboardOpen={isKeyboardOpen}
+          onAddComment={onAddCommentAtLine}
+          activeFile={activeFile}
         />
       </div>
 

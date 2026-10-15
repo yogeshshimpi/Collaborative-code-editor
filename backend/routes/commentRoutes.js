@@ -78,7 +78,7 @@ router.post('/:id/comments', resolveProject, async (req, res) => {
       return res.status(403).json({ error: 'Viewer permission: code comments are disabled.' });
     }
 
-    const { filePath, lineNumber, lineContent, mentions, selectedText } = req.body;
+    const { filePath, lineNumber, endLineNumber, lineContent, mentions, selectedText } = req.body;
     const rawContent = req.body?.content ?? req.body?.message ?? req.body?.text ?? (typeof req.body === 'string' ? req.body : '');
     const cleanContent = typeof rawContent === 'string' ? rawContent.trim() : String(rawContent || '').trim();
     if (!filePath || !lineNumber || !cleanContent) {
@@ -90,6 +90,7 @@ router.post('/:id/comments', resolveProject, async (req, res) => {
       roomId: project.room_id,
       filePath,
       lineNumber: Number(lineNumber),
+      endLineNumber: endLineNumber ? Number(endLineNumber) : null,
       lineContent: lineContent || selectedText || '',
       authorId: req.user.id,
       authorName: req.user.name,
@@ -108,7 +109,7 @@ router.post('/:id/comments', resolveProject, async (req, res) => {
           projectId: project.id,
           roomId: project.room_id,
           type: 'comment_mention',
-          body: content.slice(0, 150),
+          body: cleanContent.slice(0, 150),
           referenceId: newComment.id,
           metadata: { commentId: newComment.id, filePath, lineNumber }
         });

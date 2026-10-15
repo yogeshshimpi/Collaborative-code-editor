@@ -13,7 +13,8 @@ import {
   MoreHorizontal,
   Search,
   Replace,
-  AlignLeft
+  AlignLeft,
+  MessageSquare
 } from 'lucide-react';
 
 export default function TabBar({
@@ -32,7 +33,8 @@ export default function TabBar({
   _requiresApproval = false,
   userRole = 'editor',
   onSubmitForReview,
-  onRequestReview
+  onRequestReview,
+  onAddComment
 }) {
   const tabBarRef = useRef(null);
   const scrollContainerRef = useRef(null);
@@ -193,155 +195,23 @@ export default function TabBar({
         </div>
       </div>
 
-      {/* Zone 2: Grouped Editor Action Toolbar */}
+      {/* Zone 2: Streamlined Editor Action Toolbar (Consistent across ALL screens!) */}
       <div className="tab-bar-actions">
-        {/* GROUP 1: Edit & Format (Undo, Redo, Format Document) */}
-        {!isTight && (
-          <div className="tab-toolbar-group group-edit" title="Edit tools">
-            <button
-              type="button"
-              className="tab-action-btn btn-tab-undo"
-              onClick={onUndo}
-              onMouseDown={(e) => e.preventDefault()}
-              title="Undo (Ctrl+Z)"
-              aria-label="Undo"
-              disabled={readOnly || !activeTab}
-            >
-              <Undo2 size={13} className="tab-action-icon" />
-              {isExtraWide && <span className="tab-action-text">Undo</span>}
-            </button>
-            <button
-              type="button"
-              className="tab-action-btn btn-tab-redo"
-              onClick={onRedo}
-              onMouseDown={(e) => e.preventDefault()}
-              title="Redo (Ctrl+Y)"
-              aria-label="Redo"
-              disabled={readOnly || !activeTab}
-            >
-              <Redo2 size={13} className="tab-action-icon" />
-              {isExtraWide && <span className="tab-action-text">Redo</span>}
-            </button>
-            <button
-              type="button"
-              className="tab-action-btn btn-tab-format"
-              onClick={onFormatDocument}
-              onMouseDown={(e) => e.preventDefault()}
-              title="Format Document (Shift+Alt+F)"
-              aria-label="Format Document"
-              disabled={readOnly || !activeTab}
-            >
-              <AlignLeft size={13} className="tab-action-icon" />
-              {isExtraWide && <span className="tab-action-text">Format</span>}
-            </button>
-          </div>
-        )}
+        {/* Run Code Button */}
+        <button
+          type="button"
+          className="tab-action-btn btn-tab-run"
+          onClick={onRun}
+          onMouseDown={(e) => e.preventDefault()}
+          title="Run Code (Ctrl+Enter)"
+          aria-label="Run Code"
+        >
+          <Play size={12} fill="currentColor" className="tab-action-icon" />
+          <span className="tab-action-text">Run</span>
+        </button>
 
-        {!isTight && <div className="tab-group-divider" />}
-
-        {/* GROUP 2: Search & Replace (Find, Replace) */}
-        {isWide && (
-          <>
-            <div className="tab-toolbar-group group-search" title="Search & Replace">
-              <button
-                type="button"
-                className="tab-action-btn btn-tab-find"
-                onClick={onFind}
-                onMouseDown={(e) => e.preventDefault()}
-                title="Find (Ctrl+F)"
-                aria-label="Find in file"
-                disabled={!activeTab}
-              >
-                <Search size={13} className="tab-action-icon" />
-                {isExtraWide && <span className="tab-action-text">Find</span>}
-              </button>
-              <button
-                type="button"
-                className="tab-action-btn btn-tab-replace"
-                onClick={onReplace}
-                onMouseDown={(e) => e.preventDefault()}
-                title="Replace (Ctrl+H)"
-                aria-label="Replace in file"
-                disabled={readOnly || !activeTab}
-              >
-                <Replace size={13} className="tab-action-icon" />
-                {isExtraWide && <span className="tab-action-text">Replace</span>}
-              </button>
-            </div>
-            <div className="tab-group-divider" />
-          </>
-        )}
-
-        {/* Medium Mode: Direct Find button */}
-        {isMedium && (
-          <>
-            <button
-              type="button"
-              className="tab-action-btn btn-tab-find"
-              onClick={onFind}
-              onMouseDown={(e) => e.preventDefault()}
-              title="Find (Ctrl+F)"
-              aria-label="Find in file"
-              disabled={!activeTab}
-            >
-              <Search size={13} className="tab-action-icon" />
-            </button>
-            <div className="tab-group-divider" />
-          </>
-        )}
-
-        {/* GROUP 3: Execution & Output (Run, Console) */}
-        <div className="tab-toolbar-group group-execution" title="Code Execution">
-          <button
-            type="button"
-            className="tab-action-btn btn-tab-run"
-            onClick={onRun}
-            onMouseDown={(e) => e.preventDefault()}
-            title="Run Code (Ctrl+Enter)"
-            aria-label="Run Code"
-          >
-            <Play size={12} fill="currentColor" className="tab-action-icon" />
-            <span className="tab-action-text">Run</span>
-          </button>
-
-          {isWide && (
-            <button
-              type="button"
-              className="tab-action-btn btn-tab-console"
-              onClick={onConsole}
-              onMouseDown={(e) => e.preventDefault()}
-              title="Open Virtual Console"
-              aria-label="Open Virtual Console"
-            >
-              <Terminal size={13} className="tab-action-icon" />
-              {isExtraWide && <span className="tab-action-text">Console</span>}
-            </button>
-          )}
-        </div>
-
-        {/* GROUP 4: Review Workflow (for editors) */}
-        {isWide && userRole === 'editor' && (onSubmitForReview || onRequestReview) && (
-          <>
-            <div className="tab-group-divider" />
-            <div className="tab-toolbar-group group-review" title="Collaboration Workflow">
-              <button
-                type="button"
-                className="tab-action-btn btn-tab-submit-review"
-                onClick={handleReviewClick}
-                onMouseDown={(e) => e.preventDefault()}
-                title="Request project owner review for current code changes"
-                aria-label="Request Review"
-              >
-                <GitPullRequest size={13} className="tab-action-icon" />
-                <span className="tab-action-text">Request Review</span>
-              </button>
-            </div>
-          </>
-        )}
-
-        {/* More Actions Dropdown (for medium & tight modes, or overflow) */}
-        {(!isWide || isMedium || isTight) && (
-          <div className="tab-more-menu-wrapper" ref={moreMenuRef}>
+        {/* More Actions Dropdown (Streamlined for ALL screen sizes) */}
+        <div className="tab-more-menu-wrapper" ref={moreMenuRef}>
             <button
               type="button"
               className={`tab-action-btn btn-tab-more ${isMoreOpen ? 'active' : ''}`}
@@ -359,32 +229,28 @@ export default function TabBar({
                 {/* Section 1: Edit & Format */}
                 <div className="tab-dropdown-section">
                   <span className="tab-dropdown-section-title">Edit & Format</span>
-                  {isTight && (
-                    <>
-                      <button
-                        type="button"
-                        className="tab-dropdown-item"
-                        onClick={handleUndoClick}
-                        disabled={readOnly || !activeTab}
-                        role="menuitem"
-                      >
-                        <Undo2 size={13} className="dropdown-item-icon" />
-                        <span className="dropdown-item-label">Undo</span>
-                        <kbd className="dropdown-shortcut-badge">Ctrl+Z</kbd>
-                      </button>
-                      <button
-                        type="button"
-                        className="tab-dropdown-item"
-                        onClick={handleRedoClick}
-                        disabled={readOnly || !activeTab}
-                        role="menuitem"
-                      >
-                        <Redo2 size={13} className="dropdown-item-icon" />
-                        <span className="dropdown-item-label">Redo</span>
-                        <kbd className="dropdown-shortcut-badge">Ctrl+Y</kbd>
-                      </button>
-                    </>
-                  )}
+                  <button
+                    type="button"
+                    className="tab-dropdown-item"
+                    onClick={handleUndoClick}
+                    disabled={readOnly || !activeTab}
+                    role="menuitem"
+                  >
+                    <Undo2 size={13} className="dropdown-item-icon" />
+                    <span className="dropdown-item-label">Undo</span>
+                    <kbd className="dropdown-shortcut-badge">Ctrl+Z</kbd>
+                  </button>
+                  <button
+                    type="button"
+                    className="tab-dropdown-item"
+                    onClick={handleRedoClick}
+                    disabled={readOnly || !activeTab}
+                    role="menuitem"
+                  >
+                    <Redo2 size={13} className="dropdown-item-icon" />
+                    <span className="dropdown-item-label">Redo</span>
+                    <kbd className="dropdown-shortcut-badge">Ctrl+Y</kbd>
+                  </button>
                   <button
                     type="button"
                     className="tab-dropdown-item"
@@ -456,6 +322,29 @@ export default function TabBar({
                   </button>
                 </div>
 
+                {/* Section 4: Collaboration Comments */}
+                {onAddComment && (
+                  <>
+                    <div className="tab-dropdown-divider" />
+                    <div className="tab-dropdown-section">
+                      <span className="tab-dropdown-section-title">Collaboration</span>
+                      <button
+                        type="button"
+                        className="tab-dropdown-item"
+                        onClick={() => {
+                          setIsMoreOpen(false);
+                          onAddComment();
+                        }}
+                        disabled={!activeTab}
+                        role="menuitem"
+                      >
+                        <MessageSquare size={13} className="dropdown-item-icon text-accent" />
+                        <span className="dropdown-item-label">Add Comment</span>
+                      </button>
+                    </div>
+                  </>
+                )}
+
                 {/* Section 4: Workflow Review (for editors) */}
                 {userRole === 'editor' && (onSubmitForReview || onRequestReview) && (
                   <>
@@ -477,8 +366,7 @@ export default function TabBar({
               </div>
             )}
           </div>
-        )}
+        </div>
       </div>
-    </div>
   );
 }

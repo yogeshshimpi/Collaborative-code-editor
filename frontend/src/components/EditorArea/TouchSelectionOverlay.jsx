@@ -1,6 +1,5 @@
 import './TouchSelectionOverlay.css';
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Copy, Scissors, ClipboardPaste, CheckSquare, X } from 'lucide-react';
 
 /**
  * TouchSelectionOverlay
@@ -12,7 +11,7 @@ import { Copy, Scissors, ClipboardPaste, CheckSquare, X } from 'lucide-react';
  * - Renders draggable teardrop Start and End handles for multi-line selection
  * - Converts touch coordinates to editor positions via editor.getTargetAtClientPoint
  * - Smooth auto-scrolling when dragging handles near top/bottom edges
- * - Keyboard-aware action bar with Copy, Cut, Paste, Select All, and Cancel
+ * - Keyboard-aware action bar with Copy, Cut, Paste, Comment, Select All, and Cancel
  * - Safe clipboard fallbacks and accessible 44px tap targets
  */
 export default function TouchSelectionOverlay({
@@ -20,7 +19,9 @@ export default function TouchSelectionOverlay({
   monaco,
   readOnly = false,
   keyboardOffset = 0,
-  isKeyboardOpen = false
+  isKeyboardOpen = false,
+  onAddComment,
+  activeFile = ''
 }) {
   const [handleState, setHandleState] = useState(null);
   const [activeDragHandle, setActiveDragHandle] = useState(null);
@@ -89,6 +90,10 @@ export default function TouchSelectionOverlay({
     if (!editor) return;
 
     const selSub = editor.onDidChangeCursorSelection(() => {
+      const sel = editor.getSelection();
+      if (sel && !sel.isEmpty()) {
+        setIsActionBarVisible(true);
+      }
       updateHandlePositions();
     });
 
@@ -394,36 +399,55 @@ export default function TouchSelectionOverlay({
     }
   };
 
-  // Action: Select All code in file
-  const handleSelectAll = () => {
-    if (!editor) return;
-    const model = editor.getModel();
-    if (!model) return;
+  // Action: Run any Monaco action or command
+  const handleMonacoAction = useCallback(
+    (actionId) => {
+      if (!editor) return;
+      try {
+        const action = editor.getAction(actionId);
+        if (action) {
+          action.run();
+        } else {
+          editor.trigger('touch-context-menu', actionId, null);
+        }
+      } catch (err) {
+        console.warn(`Action ${actionId} failed:`, err);
+      }
+      setHandleState(null);
+      setIsActionBarVisible(false);
+    },
+    [editor]
+  );
 
-    const fullRange = model.getFullModelRange();
-    editor.setSelection(fullRange);
-    setIsActionBarVisible(true);
-    showFeedback('Selected all code');
-  };
+  // Dismiss context menu
+  const handleDismissMenu = useCallback((e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    setIsActionBarVisible(false);
+  }, []);
 
-  // Action: Cancel selection
-  const handleCancel = () => {
-    if (!editor) return;
+  // Action: Add code comment on selected code range or current line
+  const handleComment = useCallback(() => {
+    if (!editor || !onAddComment) return;
     const sel = editor.getSelection();
-    if (sel) {
-      // Collapse selection to cursor at current end position
-      editor.setSelection(
-        new monaco.Selection(
-          sel.endLineNumber,
-          sel.endColumn,
-          sel.endLineNumber,
-          sel.endColumn
-        )
-      );
+    const model = editor.getModel();
+
+    if (sel && !sel.isEmpty()) {
+      const startLine = Math.min(sel.startLineNumber, sel.endLineNumber);
+      const endLine = Math.max(sel.startLineNumber, sel.endLineNumber);
+      const selectedText = model ? model.getValueInRange(sel) : '';
+      onAddComment(startLine, activeFile, endLine, selectedText);
+    } else {
+      const pos = editor.getPosition();
+      const line = pos ? pos.lineNumber : 1;
+      const lineText = model ? model.getLineContent(line) : '';
+      onAddComment(line, activeFile, line, lineText);
     }
     setHandleState(null);
     setIsActionBarVisible(false);
-  };
+  }, [editor, onAddComment, activeFile]);
 
   if (!isTouchDevice || !handleState) {
     return null;
@@ -431,24 +455,48 @@ export default function TouchSelectionOverlay({
 
   const { start, end } = handleState;
 
-  // Calculate Action Bar Positioning
-  // If keyboard is open, dock above keyboard using --keyboard-offset
-  // If keyboard is closed, float above the selection
-  const actionBarBottomStyle = isKeyboardOpen
-    ? `calc(var(--keyboard-offset, ${keyboardOffset}px) + 50px + env(safe-area-inset-bottom, 0px))`
-    : undefined;
+  // Calculate Vertical Context Menu Positioning
+  let menuStyle = {};
 
-  let actionBarTopStyle;
-  let actionBarLeftStyle = '50%';
+  if (isKeyboardOpen) {
+    menuStyle = {
+      position: 'fixed',
+      bottom: `calc(var(--keyboard-offset, ${keyboardOffset}px) + 12px + env(safe-area-inset-bottom, 0px))`,
+      left: '50%',
+      transform: 'translateX(-50%)'
+    };
+  } else if (start) {
+    const domNode = editor?.getDomNode?.();
+    const containerW = domNode ? domNode.clientWidth : (typeof window !== 'undefined' ? window.innerWidth : 360);
+    const containerH = domNode ? domNode.clientHeight : (typeof window !== 'undefined' ? window.innerHeight : 640);
+    const menuWidth = 260;
+    const halfWidth = menuWidth / 2;
 
-  if (!isKeyboardOpen && start) {
-    if (start.top > 64) {
-      actionBarTopStyle = `${Math.max(10, start.top - 52)}px`;
-      actionBarLeftStyle = `${Math.max(140, start.left)}px`;
-    } else if (end) {
-      actionBarTopStyle = `${end.top + end.height + 14}px`;
-      actionBarLeftStyle = `${Math.max(140, end.left)}px`;
+    const startY = start.top;
+    const endY = end ? end.top + end.height : start.top + 20;
+
+    let topPos;
+    let bottomPos;
+
+    // Check if there is enough space below the end coordinate for the menu
+    if (containerH - endY >= 350 || endY < containerH / 2) {
+      topPos = `${endY + 6}px`;
+    } else {
+      bottomPos = `calc(100% - ${Math.max(6, startY - 6)}px)`;
     }
+
+    const touchX = start.left || containerW / 2;
+    const clampedCenterX = Math.min(
+      Math.max(halfWidth + 8, touchX),
+      containerW - halfWidth - 8
+    );
+
+    menuStyle = {
+      top: topPos,
+      bottom: bottomPos,
+      left: `${clampedCenterX}px`,
+      transform: 'translateX(-50%)'
+    };
   }
 
   return (
@@ -503,83 +551,165 @@ export default function TouchSelectionOverlay({
         </div>
       )}
 
-      {/* 3. Touch Selection Action Bar */}
-      {isActionBarVisible && (
+      {/* 3. Invisible Backdrop to dismiss context menu on tap outside */}
+      {isActionBarVisible && !activeDragHandle && (
+        <div
+          className="touch-context-menu-backdrop"
+          onClick={handleDismissMenu}
+          onTouchStart={handleDismissMenu}
+        />
+      )}
+
+      {/* 4. Exact Monaco/VS Code Right Click Context Menu */}
+      {isActionBarVisible && !activeDragHandle && (
         <div
           className={`touch-selection-action-bar ${isKeyboardOpen ? 'is-docked-above-keyboard' : ''}`}
-          style={{
-            bottom: actionBarBottomStyle,
-            top: !isKeyboardOpen ? actionBarTopStyle : undefined,
-            left: actionBarLeftStyle
-          }}
+          style={menuStyle}
           role="toolbar"
-          aria-label="Touch code selection actions"
+          aria-label="Touch code selection context menu"
         >
-          {/* Feedback notice toast */}
+          {/* Transient feedback toast */}
           {feedbackMessage && (
             <div className="touch-selection-toast" role="status">
               {feedbackMessage}
             </div>
           )}
 
-          <div className="touch-action-buttons-group">
+          <div className="touch-context-menu" role="menu" aria-label="Editor Context Menu">
+            {/* Group 1: Navigation & Commenting */}
             <button
               type="button"
-              className="touch-action-btn"
+              className="context-menu-item"
+              onClick={() => handleMonacoAction('editor.action.revealDefinition')}
+              role="menuitem"
+            >
+              <span className="context-item-label">Go to Definition</span>
+              <span className="context-item-shortcut">Ctrl+F12</span>
+            </button>
+
+            <button
+              type="button"
+              className="context-menu-item"
+              onClick={() => handleMonacoAction('editor.action.goToReferences')}
+              role="menuitem"
+            >
+              <span className="context-item-label">Go to References</span>
+              <span className="context-item-shortcut">Shift+F12</span>
+            </button>
+
+            <button
+              type="button"
+              className="context-menu-item item-comment-action"
+              onClick={handleComment}
+              role="menuitem"
+            >
+              <div className="context-item-left">
+                <span className="context-item-emoji">💬</span>
+                <span className="context-item-label">Add Code Comment</span>
+              </div>
+              <span className="context-item-shortcut">Ctrl+Alt+M</span>
+            </button>
+
+            <button
+              type="button"
+              className="context-menu-item"
+              onClick={() => handleMonacoAction('editor.action.quickOutline')}
+              role="menuitem"
+            >
+              <span className="context-item-label">Go to Symbol...</span>
+              <span className="context-item-shortcut">Ctrl+Shift+O</span>
+            </button>
+
+            <button
+              type="button"
+              className="context-menu-item"
+              onClick={() => handleMonacoAction('editor.action.peekDefinition')}
+              role="menuitem"
+            >
+              <span className="context-item-label">Peek</span>
+              <span className="context-item-chevron">&gt;</span>
+            </button>
+
+            <div className="context-menu-divider" />
+
+            {/* Group 2: Symbol & Code Formatting */}
+            <button
+              type="button"
+              className="context-menu-item"
+              onClick={() => handleMonacoAction('editor.action.rename')}
+              disabled={readOnly}
+              role="menuitem"
+            >
+              <span className="context-item-label">Rename Symbol</span>
+              <span className="context-item-shortcut">F2</span>
+            </button>
+
+            <button
+              type="button"
+              className="context-menu-item"
+              onClick={() => handleMonacoAction('editor.action.changeAll')}
+              disabled={readOnly}
+              role="menuitem"
+            >
+              <span className="context-item-label">Change All Occurrences</span>
+              <span className="context-item-shortcut">Ctrl+F2</span>
+            </button>
+
+            <button
+              type="button"
+              className="context-menu-item"
+              onClick={() => handleMonacoAction('editor.action.formatDocument')}
+              disabled={readOnly}
+              role="menuitem"
+            >
+              <span className="context-item-label">Format Document</span>
+              <span className="context-item-shortcut">Ctrl+Shift+I</span>
+            </button>
+
+            <button
+              type="button"
+              className="context-menu-item"
+              onClick={() => handleMonacoAction('editor.action.formatSelection')}
+              disabled={readOnly}
+              role="menuitem"
+            >
+              <span className="context-item-label">Format Selection</span>
+              <span className="context-item-shortcut">Ctrl+K Ctrl+F</span>
+            </button>
+
+            <div className="context-menu-divider" />
+
+            {/* Group 3: Clipboard Actions */}
+            <button
+              type="button"
+              className="context-menu-item"
+              onClick={handleCut}
+              disabled={readOnly}
+              role="menuitem"
+            >
+              <span className="context-item-label">Cut</span>
+            </button>
+
+            <button
+              type="button"
+              className="context-menu-item"
               onClick={handleCopy}
-              aria-label="Copy selected code"
-              title="Copy"
+              role="menuitem"
             >
-              <Copy size={15} />
-              <span>Copy</span>
+              <span className="context-item-label">Copy</span>
             </button>
 
-            {!readOnly && (
-              <button
-                type="button"
-                className="touch-action-btn"
-                onClick={handleCut}
-                aria-label="Cut selected code"
-                title="Cut"
-              >
-                <Scissors size={15} />
-                <span>Cut</span>
-              </button>
-            )}
+            <div className="context-menu-divider" />
 
-            {!readOnly && (
-              <button
-                type="button"
-                className="touch-action-btn"
-                onClick={handlePaste}
-                aria-label="Paste from clipboard"
-                title="Paste"
-              >
-                <ClipboardPaste size={15} />
-                <span>Paste</span>
-              </button>
-            )}
-
+            {/* Group 4: Command Palette */}
             <button
               type="button"
-              className="touch-action-btn"
-              onClick={handleSelectAll}
-              aria-label="Select all code in file"
-              title="Select All"
+              className="context-menu-item"
+              onClick={() => handleMonacoAction('editor.action.quickCommand')}
+              role="menuitem"
             >
-              <CheckSquare size={15} />
-              <span>Select All</span>
-            </button>
-
-            <button
-              type="button"
-              className="touch-action-btn btn-cancel"
-              onClick={handleCancel}
-              aria-label="Cancel selection"
-              title="Cancel"
-            >
-              <X size={15} />
-              <span>Cancel</span>
+              <span className="context-item-label">Command Palette</span>
+              <span className="context-item-shortcut">F1</span>
             </button>
           </div>
         </div>

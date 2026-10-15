@@ -6,27 +6,66 @@ export default function AddCommentModal({
   isOpen,
   onClose,
   filePath,
-  lineNumber,
+  lineNumber = 1,
+  endLineNumber = null,
   codeSnippet = '',
+  fileContent = '',
   activeUsers = [],
   onSubmit,
   isViewer = false
 }) {
   const [content, setContent] = useState('');
+  const [startLine, setStartLine] = useState(lineNumber || 1);
+  const [endLine, setEndLine] = useState(endLineNumber || lineNumber || 1);
+  const [snippetText, setSnippetText] = useState(codeSnippet || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [mentionQuery, setMentionQuery] = useState(null);
   const textareaRef = useRef(null);
 
   useEffect(() => {
     if (isOpen) {
+      const s = Math.max(1, Number(lineNumber) || 1);
+      const e = endLineNumber ? Math.max(s, Number(endLineNumber) || s) : s;
+      setStartLine(s);
+      setEndLine(e);
       setContent('');
       setIsSubmitting(false);
       setMentionQuery(null);
+
+      if (codeSnippet) {
+        setSnippetText(codeSnippet);
+      } else if (fileContent) {
+        const lines = fileContent.split('\n');
+        setSnippetText(lines.slice(s - 1, e).join('\n'));
+      } else {
+        setSnippetText('');
+      }
+
       setTimeout(() => {
         textareaRef.current?.focus();
       }, 50);
     }
-  }, [isOpen, filePath, lineNumber]);
+  }, [isOpen, filePath, lineNumber, endLineNumber, codeSnippet, fileContent]);
+
+  const handleStartLineChange = (val) => {
+    const num = Math.max(1, Number(val) || 1);
+    setStartLine(num);
+    const newEnd = Math.max(num, endLine);
+    setEndLine(newEnd);
+    if (fileContent) {
+      const lines = fileContent.split('\n');
+      setSnippetText(lines.slice(num - 1, newEnd).join('\n'));
+    }
+  };
+
+  const handleEndLineChange = (val) => {
+    const num = Math.max(startLine, Number(val) || startLine);
+    setEndLine(num);
+    if (fileContent) {
+      const lines = fileContent.split('\n');
+      setSnippetText(lines.slice(startLine - 1, num).join('\n'));
+    }
+  };
 
   // Mention autocomplete suggestions
   const mentionSuggestions = useMemo(() => {
@@ -80,29 +119,35 @@ export default function AddCommentModal({
     }, 10);
   };
 
+  const isSubmittingRef = useRef(false);
+
   const handleSubmit = async (e) => {
     e?.preventDefault();
-    if (isViewer || !content.trim() || isSubmitting) return;
+    if (isViewer || !content.trim() || isSubmitting || isSubmittingRef.current) return;
 
     setIsSubmitting(true);
+    isSubmittingRef.current = true;
     try {
       await onSubmit({
         filePath,
-        lineNumber,
+        lineNumber: startLine,
+        endLineNumber: endLine,
         content: content.trim(),
-        selectedText: codeSnippet
+        selectedText: snippetText
       });
       onClose();
     } catch (err) {
       alert(err.message || 'Failed to add comment');
     } finally {
       setIsSubmitting(false);
+      isSubmittingRef.current = false;
     }
   };
 
   const handleKeyDown = (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-      handleSubmit();
+      e.preventDefault();
+      handleSubmit(e);
     } else if (e.key === 'Escape') {
       onClose();
     }
@@ -125,7 +170,7 @@ export default function AddCommentModal({
             <h3 id="add-comment-title">Add Code Comment</h3>
             <span className="location-pill">
               <FileCode size={12} />
-              {filePath}:{lineNumber}
+              {filePath}:{startLine}{endLine !== startLine ? `-${endLine}` : ''}
             </span>
           </div>
           <button
@@ -138,10 +183,47 @@ export default function AddCommentModal({
           </button>
         </div>
 
-        {codeSnippet && (
+        {/* Multi-line code comment range selector */}
+        <div className="comment-line-range-bar">
+          <span className="range-label">Comment Lines:</span>
+          <div className="range-inputs-group">
+            <label className="range-input-label">
+              <span>Start:</span>
+              <input
+                type="number"
+                min="1"
+                value={startLine}
+                onChange={(e) => handleStartLineChange(e.target.value)}
+                className="range-number-input"
+                title="Start line"
+              />
+            </label>
+            <span className="range-separator">to</span>
+            <label className="range-input-label">
+              <span>End:</span>
+              <input
+                type="number"
+                min={startLine}
+                value={endLine}
+                onChange={(e) => handleEndLineChange(e.target.value)}
+                className="range-number-input"
+                title="End line"
+              />
+            </label>
+            {endLine > startLine && (
+              <span className="multi-line-badge">
+                {endLine - startLine + 1} lines selected
+              </span>
+            )}
+          </div>
+        </div>
+
+        {snippetText && (
           <div className="add-comment-snippet">
-            <div className="snippet-line-num">{lineNumber}</div>
-            <pre className="snippet-code">{codeSnippet}</pre>
+            <div className="snippet-line-num">
+              {startLine === endLine ? startLine : `${startLine}-${endLine}`}
+            </div>
+            <pre className="snippet-code">{snippetText}</pre>
           </div>
         )}
 

@@ -1,6 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
 :root {
+  color-scheme: dark;
   /* Theme redesign: Linear, VS Code & Vercel inspired dark developer-tool theme */
   --bg-app: #090d16;
   --bg-sidebar: #0d1320;
@@ -10,7 +11,7 @@
 
   /* Aliases for surfaces and workspace areas */
   --bg-active: #202d43;
-  --bg-editor: #0c121e;
+  --bg-editor: #1e1e1e;
   --bg-statusbar: #070a12;
   --bg-surface-hover: var(--bg-hover);
 
