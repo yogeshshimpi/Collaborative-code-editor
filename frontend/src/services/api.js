@@ -27,16 +27,42 @@ export const setStoredToken = (token) => {
   } catch {}
 };
 
+const sanitizeApiUrl = (url) => {
+  if (!url) return '';
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    const isLocal =
+      host === 'localhost' ||
+      host === '127.0.0.1' ||
+      host.startsWith('10.') ||
+      host.startsWith('192.168.') ||
+      /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(host);
+
+    if (parsed.port === '5000' && (!isLocal || parsed.protocol === 'https:')) {
+      parsed.port = '';
+      return parsed.origin;
+    }
+    return url.replace(/\/$/, '');
+  } catch {
+    return url.replace(/\/$/, '');
+  }
+};
+
 const resolveApiBase = () => {
   if (import.meta.env.DEV) {
     // In dev, always use Vite's local /api proxy for seamless same-origin cookies and LAN IP support
     return '';
   }
-  const configured = import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL;
+  const configured =
+    import.meta.env.VITE_API_URL ||
+    import.meta.env.VITE_BACKEND_URL ||
+    import.meta.env.VITE_SOCKET_SERVER_URL;
+
   if (configured) {
-    return configured.replace(/\/$/, '');
+    return sanitizeApiUrl(configured);
   }
-  return (import.meta.env.VITE_SOCKET_SERVER_URL || '').replace(/\/$/, '');
+  return '';
 };
 
 const API_BASE = resolveApiBase();

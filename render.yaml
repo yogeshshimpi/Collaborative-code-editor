@@ -1,9 +1,38 @@
 services:
-  # Frontend Static Site
+  # Backend Web Service (Node.js API & Socket.IO Real-time Engine)
+  - type: web
+    name: collaborative-code-editor-backend
+    runtime: node
+    plan: free
+    buildCommand: cd backend && npm install
+    startCommand: cd backend && npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: CLIENT_URL
+        fromService:
+          type: static
+          name: collaborative-code-editor-frontend
+          property: host
+
+  # Frontend Static Site (SPA)
   - type: static
     name: collaborative-code-editor-frontend
     buildCommand: cd frontend && npm install && npm run build
     staticPublishPath: frontend/dist
+    envVars:
+      - key: VITE_SOCKET_SERVER_URL
+        fromService:
+          type: web
+          name: collaborative-code-editor-backend
+          property: host
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: collaborative-code-editor-backend
+          property: host
     routes:
       - type: rewrite
         source: /*
