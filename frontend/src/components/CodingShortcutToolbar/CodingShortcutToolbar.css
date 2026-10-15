@@ -6,8 +6,8 @@
 .mobile-coding-toolbar {
   height: 56px;
   min-height: 56px;
-  background-color: #12141a;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background-color: var(--bg-surface);
+  border-top: 1px solid var(--border-subtle);
   display: flex;
   align-items: center;
   justify-content: flex-start;
@@ -34,8 +34,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
   border-radius: 7px;
   color: var(--text-muted);
   cursor: pointer;
@@ -44,9 +44,9 @@
 }
 
 .shortcut-action-btn.btn-hide-toolbar:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #ffffff;
-  border-color: rgba(255, 255, 255, 0.2);
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--border-strong);
 }
 
 .shortcut-action-btn.btn-hide-toolbar:active {
@@ -90,7 +90,7 @@
 
 .shortcut-toolbar-symbols-scroll::-webkit-scrollbar-thumb:hover,
 .mobile-toolbar-scroll-container::-webkit-scrollbar-thumb:hover {
-  background: rgba(109, 93, 252, 0.6);
+  background: var(--accent-primary);
 }
 
 /* --------------------------------------------------------------------------
@@ -101,8 +101,8 @@
   width: 54px;
   min-width: 54px;
   height: 44px;
-  background-color: #2b2e35;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background-color: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
   border-radius: 9px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.35);
   display: flex;
@@ -114,7 +114,7 @@
 }
 
 .shortcut-key-card:hover {
-  border-color: rgba(255, 255, 255, 0.22);
+  border-color: var(--border-strong);
   box-shadow: 0 3px 8px rgba(0, 0, 0, 0.5);
 }
 
@@ -131,7 +131,7 @@
   background: transparent;
   border: none;
   outline: none;
-  color: #ffffff;
+  color: var(--text-primary);
   font-family: var(--font-mono), 'JetBrains Mono', 'Fira Code', monospace;
   font-size: 13.5px;
   font-weight: 500;

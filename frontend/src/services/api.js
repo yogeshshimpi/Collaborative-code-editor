@@ -5,24 +5,38 @@
 // Authentication and REST APIs must use the backend origin. Socket.IO already
 // uses VITE_SOCKET_SERVER_URL, so use it as a safe fallback when a separate
 // VITE_API_URL was not configured during the Vite build.
+const TOKEN_STORAGE_KEY = 'codecollab_token';
+
+export const getStoredToken = () => {
+  if (typeof window === 'undefined') return null;
+  try {
+    return localStorage.getItem(TOKEN_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+};
+
+export const setStoredToken = (token) => {
+  if (typeof window === 'undefined') return;
+  try {
+    if (token) {
+      localStorage.setItem(TOKEN_STORAGE_KEY, token);
+    } else {
+      localStorage.removeItem(TOKEN_STORAGE_KEY);
+    }
+  } catch {}
+};
+
 const resolveApiBase = () => {
+  if (import.meta.env.DEV) {
+    // In dev, always use Vite's local /api proxy for seamless same-origin cookies and LAN IP support
+    return '';
+  }
   const configured = import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL;
   if (configured) {
-    if (typeof window !== 'undefined' && window.location.hostname && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-      try {
-        const u = new URL(configured);
-        if (u.hostname === 'localhost' || u.hostname === '127.0.0.1') {
-          u.hostname = window.location.hostname;
-          return u.origin;
-        }
-      } catch {}
-    }
     return configured.replace(/\/$/, '');
   }
-  if (typeof window !== 'undefined' && window.location.hostname && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-    return `${window.location.protocol}//${window.location.hostname}:5000`;
-  }
-  return (import.meta.env.DEV ? '' : (import.meta.env.VITE_SOCKET_SERVER_URL || '')).replace(/\/$/, '');
+  return (import.meta.env.VITE_SOCKET_SERVER_URL || '').replace(/\/$/, '');
 };
 
 const API_BASE = resolveApiBase();
@@ -31,13 +45,20 @@ export const apiUrl = (endpoint) => `${API_BASE}${endpoint}`;
 
 async function request(endpoint, options = {}) {
   const url = apiUrl(endpoint);
+  const headers = {
+    'Content-Type': 'application/json',
+    ...options.headers
+  };
+
+  const storedToken = getStoredToken();
+  if (storedToken && !headers['Authorization']) {
+    headers['Authorization'] = `Bearer ${storedToken}`;
+  }
+
   const config = {
     ...options,
     credentials: 'include', // Include HttpOnly cookies on all requests
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers
-    }
+    headers
   };
 
   const response = await fetch(url, config);
@@ -60,20 +81,29 @@ async function request(endpoint, options = {}) {
 export const api = {
   // Authentication
   async register({ email, password, name }) {
-    return request('/api/auth/register', {
+    const res = await request('/api/auth/register', {
       method: 'POST',
       body: JSON.stringify({ email, password, name })
     });
+    if (res?.token) {
+      setStoredToken(res.token);
+    }
+    return res;
   },
 
   async login({ email, password }) {
-    return request('/api/auth/login', {
+    const res = await request('/api/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password })
     });
+    if (res?.token) {
+      setStoredToken(res.token);
+    }
+    return res;
   },
 
   async logout() {
+    setStoredToken(null);
     return request('/api/auth/logout', {
       method: 'POST'
     });
@@ -336,6 +366,96 @@ export const api = {
   async markAllNotificationsRead() {
     return request('/api/notifications/read-all', {
       method: 'PATCH'
+    });
+  },
+
+  // User Settings & Preferences
+  async getSettings() {
+    return request('/api/settings', {
+      method: 'GET'
+    });
+  },
+
+  async updateProfileSettings({ displayName, avatarUrl, bio }) {
+    return request('/api/settings/profile', {
+      method: 'PUT',
+      body: JSON.stringify({ displayName, avatarUrl, bio })
+    });
+  },
+
+  async updateThemeSettings({ projectTheme, editorTheme }) {
+    return request('/api/settings/theme', {
+      method: 'PUT',
+      body: JSON.stringify({ projectTheme, editorTheme })
+    });
+  },
+
+  async updateEditorSettings({
+    editorFontSize,
+    tabSize,
+    wordWrap,
+    showLineNumbers,
+    showMinimap,
+    editorTheme
+  }) {
+    return request('/api/settings/editor', {
+      method: 'PUT',
+      body: JSON.stringify({
+        editorFontSize,
+        tabSize,
+        wordWrap,
+        showLineNumbers,
+        showMinimap,
+        editorTheme
+      })
+    });
+  },
+
+  async updateCollaborationSettings({
+    showLiveCursors,
+    showCollaboratorLabels,
+    autosaveDelay
+  }) {
+    return request('/api/settings/collaboration', {
+      method: 'PUT',
+      body: JSON.stringify({
+        showLiveCursors,
+        showCollaboratorLabels,
+        autosaveDelay
+      })
+    });
+  },
+
+  async updateNotificationSettings({
+    chatNotifications,
+    mentionNotifications,
+    commentNotifications,
+    invitationNotifications,
+    notificationSound
+  }) {
+    return request('/api/settings/notifications', {
+      method: 'PUT',
+      body: JSON.stringify({
+        chatNotifications,
+        mentionNotifications,
+        commentNotifications,
+        invitationNotifications,
+        notificationSound
+      })
+    });
+  },
+
+  async changePassword({ currentPassword, newPassword, confirmPassword }) {
+    return request('/api/auth/change-password', {
+      method: 'PUT',
+      body: JSON.stringify({ currentPassword, newPassword, confirmPassword })
+    });
+  },
+
+  async deleteAccount({ password, confirmText }) {
+    return request('/api/settings/account', {
+      method: 'DELETE',
+      body: JSON.stringify({ password, confirmText })
     });
   }
 };

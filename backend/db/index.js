@@ -356,6 +356,34 @@ export async function initDatabase() {
 
         CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON user_notifications(user_id, is_read, created_at DESC);
         CREATE INDEX IF NOT EXISTS idx_notifications_project ON user_notifications(project_id);
+
+        -- User preferences & settings table
+        CREATE TABLE IF NOT EXISTS user_settings (
+          user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+          display_name VARCHAR(100),
+          avatar_url TEXT,
+          bio TEXT,
+          editor_font_size INTEGER NOT NULL DEFAULT 14,
+          tab_size INTEGER NOT NULL DEFAULT 2,
+          word_wrap BOOLEAN NOT NULL DEFAULT TRUE,
+          show_line_numbers BOOLEAN NOT NULL DEFAULT TRUE,
+          show_minimap BOOLEAN NOT NULL DEFAULT TRUE,
+          editor_theme VARCHAR(20) NOT NULL DEFAULT 'dark',
+          project_theme VARCHAR(50) NOT NULL DEFAULT 'navy',
+          show_live_cursors BOOLEAN NOT NULL DEFAULT TRUE,
+          show_collaborator_labels BOOLEAN NOT NULL DEFAULT TRUE,
+          autosave_delay INTEGER NOT NULL DEFAULT 2,
+          chat_notifications BOOLEAN NOT NULL DEFAULT TRUE,
+          mention_notifications BOOLEAN NOT NULL DEFAULT TRUE,
+          comment_notifications BOOLEAN NOT NULL DEFAULT TRUE,
+          invitation_notifications BOOLEAN NOT NULL DEFAULT TRUE,
+          notification_sound BOOLEAN NOT NULL DEFAULT TRUE,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+
+        -- Ensure project_theme column exists if table was pre-existing
+        ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS project_theme VARCHAR(50) NOT NULL DEFAULT 'navy';
       `);
       dbConnected = true;
       logger.info('Connected to Neon PostgreSQL database and verified tables.');

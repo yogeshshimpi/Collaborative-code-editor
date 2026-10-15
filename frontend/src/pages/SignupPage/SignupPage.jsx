@@ -1,11 +1,13 @@
 import './SignupPage.css';
 import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Code2, Mail, Lock, User, ArrowRight, AlertCircle, Loader2 } from 'lucide-react';
+import { Code2, Mail, Lock, User, ArrowRight, AlertCircle, Loader2, Palette } from 'lucide-react';
 import { useAuth } from '../../context/useAuth';
+import { useSettings } from '../../context/SettingsContext';
 
 export default function SignupPage() {
   const { register } = useAuth();
+  const { settings, changeTheme } = useSettings();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
@@ -17,6 +19,8 @@ export default function SignupPage() {
 
   // Target path to redirect after successful authentication
   const redirectTarget = searchParams.get('redirect') || '/projects';
+
+  const currentTheme = settings?.project_theme || 'navy';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -57,6 +61,27 @@ export default function SignupPage() {
 
   return (
     <div className="auth-page-container">
+      {/* Quick Theme Selector on Auth Page */}
+      <div className="auth-theme-bar" title="Change application theme">
+        <span className="auth-theme-label">
+          <Palette size={13} />
+          Theme:
+        </span>
+        <select
+          className="auth-theme-select"
+          value={currentTheme}
+          onChange={(e) => changeTheme(e.target.value)}
+          aria-label="Select theme"
+        >
+          <option value="navy">Navy</option>
+          <option value="midnight">Midnight</option>
+          <option value="cyberpunk">Cyberpunk</option>
+          <option value="emerald">Emerald</option>
+          <option value="ocean">Ocean</option>
+          <option value="light">Light</option>
+        </select>
+      </div>
+
       <div className="auth-page-card">
         {/* Brand Header */}
         <div className="auth-page-header">

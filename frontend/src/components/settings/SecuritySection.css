@@ -1,0 +1,111 @@
+/* Security Section Styles */
+.security-password-form {
+  display: flex;
+  flex-direction: column;
+}
+
+.form-input.has-toggle {
+  padding-right: 2.5rem;
+}
+
+.password-toggle-btn {
+  position: absolute;
+  right: 0.75rem;
+  background: transparent;
+  border: none;
+  color: var(--text-muted, #94a3b8);
+  cursor: pointer;
+  padding: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: color 0.15s ease;
+}
+
+.password-toggle-btn:hover {
+  color: var(--text-main, #f8fafc);
+}
+
+.password-mismatch-error {
+  font-size: 0.78rem;
+  color: #f43f5e;
+  margin-top: 0.25rem;
+}
+
+/* Two-Factor Card */
+.two-factor-card {
+  border-color: rgba(99, 102, 241, 0.25);
+  background: linear-gradient(180deg, rgba(99, 102, 241, 0.04) 0%, rgba(22, 25, 38, 0.95) 100%);
+}
+
+.two-factor-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.badge-coming-soon {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #818cf8;
+  background: rgba(129, 140, 248, 0.14);
+  padding: 2px 8px;
+  border-radius: 9999px;
+  border: 1px solid rgba(129, 140, 248, 0.25);
+}
+
+/* Session Management Row */
+.session-logout-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem;
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  flex-wrap: wrap;
+}
+
+.session-device-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.device-title {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--text-main, #f8fafc);
+}
+
+.device-status {
+  font-size: 0.78rem;
+  color: #10b981;
+}
+
+.btn-logout-device {
+  min-height: 40px;
+  padding: 0 1rem;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+@media (max-width: 768px) {
+  .session-logout-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .btn-logout-device {
+    width: 100%;
+    min-height: 44px;
+    justify-content: center;
+  }
+}

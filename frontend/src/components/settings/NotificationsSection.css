@@ -1,0 +1,11 @@
+/* Notifications Section Styles */
+.toggle-title-with-icon {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.item-icon-accent {
+  color: var(--accent, #818cf8);
+  flex-shrink: 0;
+}

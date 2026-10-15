@@ -1,5 +1,6 @@
 import './Navbar.css';
 import { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Code2,
   Play,
@@ -65,6 +66,7 @@ export default function Navbar({
   onMarkAllNotificationsRead,
   onNavigateNotification
 }) {
+  const navigate = useNavigate();
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleInput, setTitleInput] = useState(projectName);
 
@@ -731,12 +733,13 @@ export default function Navbar({
 
               <div className="dropdown-divider" />
 
-              {/* Settings button only (functionality to be added later) */}
+              {/* Settings entry */}
               <button
                 type="button"
                 className="dropdown-item"
                 onClick={() => {
                   setIsUserMenuOpen(false);
+                  navigate('/settings');
                 }}
                 role="menuitem"
               >

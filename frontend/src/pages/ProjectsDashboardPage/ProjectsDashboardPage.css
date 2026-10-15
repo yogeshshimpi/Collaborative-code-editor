@@ -118,7 +118,7 @@
   gap: 16px;
   padding: 14px 18px;
   background: var(--accent-subtle);
-  border: 1px solid rgba(109, 93, 252, 0.25);
+  border: 1px solid var(--accent-primary);
   border-radius: 10px;
   margin-bottom: 20px;
   flex-wrap: wrap;
@@ -134,7 +134,7 @@
   width: 32px;
   height: 32px;
   border-radius: 8px;
-  background: rgba(109, 93, 252, 0.2);
+  background: var(--accent-subtle);
   color: var(--accent-hover);
   display: flex;
   align-items: center;
@@ -268,7 +268,7 @@
 }
 
 .dashboard-invitations-btn.has-invites {
-  border-color: rgba(109, 93, 252, 0.4);
+  border-color: var(--accent-primary);
   color: var(--accent-hover);
   background: var(--accent-subtle);
 }
@@ -367,10 +367,16 @@
 }
 
 .project-card:hover {
-  background-color: #171d2b;
-  border-color: var(--border-strong);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-md);
+  background-color: var(--bg-hover);
+  border-color: var(--accent-primary);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md), 0 0 0 1px var(--accent-subtle);
+}
+
+.project-card:hover .project-card-icon {
+  background: var(--accent-primary);
+  color: #ffffff;
+  box-shadow: 0 2px 8px var(--accent-subtle);
 }
 
 .project-card-top {
@@ -555,7 +561,7 @@
 
 .project-card:hover .btn-open-workspace {
   background: var(--accent-subtle);
-  border-color: rgba(109, 93, 252, 0.35);
+  border-color: var(--accent-primary);
   color: var(--accent-hover);
 }
 

@@ -1,0 +1,237 @@
+/* Danger Zone Section Styles */
+.text-danger-title {
+  color: #f43f5e;
+}
+
+.danger-card {
+  border-color: rgba(244, 63, 94, 0.35);
+  background: linear-gradient(180deg, rgba(244, 63, 94, 0.05) 0%, rgba(22, 25, 38, 0.95) 100%);
+}
+
+.danger-card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.danger-icon-badge {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: rgba(244, 63, 94, 0.15);
+  color: #f43f5e;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.danger-header-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.danger-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #f43f5e;
+  margin: 0;
+}
+
+.danger-desc {
+  font-size: 0.85rem;
+  color: var(--text-muted, #94a3b8);
+  margin: 0;
+  line-height: 1.45;
+}
+
+.danger-consequences-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin: 1.25rem 0;
+  padding: 1rem;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(244, 63, 94, 0.2);
+  border-radius: 8px;
+}
+
+.consequence-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+  color: #cbd5e1;
+  line-height: 1.4;
+}
+
+.consequence-bullet {
+  color: #f43f5e;
+  font-weight: 700;
+}
+
+.danger-action-row {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.btn-delete-trigger {
+  min-height: 42px;
+  padding: 0 1.25rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Confirmation Modal */
+.danger-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+  animation: fadeIn 0.15s ease-out;
+}
+
+.danger-modal-card {
+  width: 100%;
+  max-width: 460px;
+  background: #181b28;
+  border: 1px solid rgba(244, 63, 94, 0.4);
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.65);
+  animation: scaleUp 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.danger-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.85rem;
+}
+
+.modal-title-with-icon {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.modal-title-with-icon h3 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #f43f5e;
+  margin: 0;
+}
+
+.danger-shield-icon {
+  color: #f43f5e;
+}
+
+.modal-close-icon {
+  background: transparent;
+  border: none;
+  color: var(--text-muted, #94a3b8);
+  cursor: pointer;
+  padding: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+}
+
+.modal-close-icon:hover {
+  color: var(--text-main, #f8fafc);
+}
+
+.danger-modal-intro {
+  font-size: 0.85rem;
+  color: var(--text-muted, #94a3b8);
+  line-height: 1.45;
+  margin: 0 0 1rem 0;
+}
+
+.danger-modal-intro code {
+  font-family: var(--font-mono, monospace);
+  color: #f43f5e;
+  font-weight: 700;
+  background: rgba(244, 63, 94, 0.12);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.delete-code-highlight {
+  font-family: var(--font-mono, monospace);
+  color: #f43f5e;
+  font-weight: 700;
+}
+
+.danger-modal-error {
+  padding: 0.65rem 0.85rem;
+  background: rgba(244, 63, 94, 0.15);
+  border: 1px solid rgba(244, 63, 94, 0.35);
+  border-radius: 6px;
+  font-size: 0.82rem;
+  color: #fca5a5;
+  margin-bottom: 1rem;
+}
+
+.danger-modal-form {
+  display: flex;
+  flex-direction: column;
+}
+
+.danger-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+
+.btn-confirm-delete {
+  min-height: 40px;
+  padding: 0 1rem;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scaleUp {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@media (max-width: 768px) {
+  .danger-card-header {
+    flex-direction: column;
+  }
+
+  .btn-delete-trigger {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .danger-modal-actions {
+    flex-direction: column;
+  }
+
+  .danger-modal-actions .btn {
+    width: 100%;
+    min-height: 44px;
+    justify-content: center;
+  }
+}

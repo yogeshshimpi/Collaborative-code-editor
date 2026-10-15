@@ -6,6 +6,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="description" content="CodeCollab - Professional Real-Time Collaborative Code Editor" />
     <title>CodeCollab - Collaborative Code Editor</title>
+    <script>
+      (function() {
+        try {
+          var t = localStorage.getItem('codecollab_theme');
+          var valid = ['navy', 'midnight', 'cyberpunk', 'emerald', 'ocean', 'light'];
+          if (t && valid.indexOf(t) !== -1) {
+            document.documentElement.setAttribute('data-theme', t);
+            document.documentElement.style.colorScheme = t === 'light' ? 'light' : 'dark';
+          } else {
+            document.documentElement.setAttribute('data-theme', 'navy');
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -12,7 +12,8 @@ export const register = asyncHandler(async (req, res) => {
       id: user.id,
       email: user.email,
       name: user.name
-    }
+    },
+    token
   });
 });
 
@@ -26,7 +27,8 @@ export const login = asyncHandler(async (req, res) => {
       id: user.id,
       email: user.email,
       name: user.name
-    }
+    },
+    token
   });
 });
 
@@ -58,9 +60,17 @@ export const getMe = asyncHandler(async (req, res) => {
   });
 });
 
+export const changePassword = asyncHandler(async (req, res) => {
+  const { currentPassword, newPassword, confirmPassword } = req.body;
+  const { changeUserPassword } = await import('../services/authService.js');
+  const result = await changeUserPassword(req.user.id, { currentPassword, newPassword, confirmPassword });
+  res.json(result);
+});
+
 export default {
   register,
   login,
   logout,
-  getMe
+  getMe,
+  changePassword
 };

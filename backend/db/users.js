@@ -67,8 +67,102 @@ export async function findUserById(id) {
   return null;
 }
 
+export async function findUserWithPasswordById(id) {
+  if (!id) return null;
+
+  if (isDbConnected() && pool) {
+    const query = `
+      SELECT id, email, password_hash, name, created_at
+      FROM users
+      WHERE id = $1;
+    `;
+    const res = await pool.query(query, [id]);
+    return res.rows[0] || null;
+  }
+
+  // Fallback in-memory
+  for (const user of inMemoryUsers.values()) {
+    if (user.id === id) {
+      return { ...user };
+    }
+  }
+  return null;
+}
+
+export async function updateUserPassword(id, passwordHash) {
+  if (!id || !passwordHash) return false;
+
+  if (isDbConnected() && pool) {
+    const query = `
+      UPDATE users
+      SET password_hash = $2
+      WHERE id = $1;
+    `;
+    const res = await pool.query(query, [id, passwordHash]);
+    return res.rowCount > 0;
+  }
+
+  // Fallback in-memory
+  for (const user of inMemoryUsers.values()) {
+    if (user.id === id) {
+      user.password_hash = passwordHash;
+      return true;
+    }
+  }
+  return false;
+}
+
+export async function updateUserName(id, name) {
+  if (!id || !name) return false;
+
+  if (isDbConnected() && pool) {
+    const query = `
+      UPDATE users
+      SET name = $2
+      WHERE id = $1;
+    `;
+    const res = await pool.query(query, [id, name.trim()]);
+    return res.rowCount > 0;
+  }
+
+  // Fallback in-memory
+  for (const user of inMemoryUsers.values()) {
+    if (user.id === id) {
+      user.name = name.trim();
+      return true;
+    }
+  }
+  return false;
+}
+
+export async function deleteUserById(id) {
+  if (!id) return false;
+
+  if (isDbConnected() && pool) {
+    const query = `
+      DELETE FROM users
+      WHERE id = $1;
+    `;
+    const res = await pool.query(query, [id]);
+    return res.rowCount > 0;
+  }
+
+  // Fallback in-memory
+  for (const [email, user] of inMemoryUsers.entries()) {
+    if (user.id === id) {
+      inMemoryUsers.delete(email);
+      return true;
+    }
+  }
+  return false;
+}
+
 export default {
   createUser,
   findUserByEmail,
-  findUserById
+  findUserById,
+  findUserWithPasswordById,
+  updateUserPassword,
+  updateUserName,
+  deleteUserById
 };

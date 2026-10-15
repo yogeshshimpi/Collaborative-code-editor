@@ -4,6 +4,8 @@ import Editor from '@monaco-editor/react';
 import { Loader2 } from 'lucide-react';
 import CodingShortcutToolbar from '../CodingShortcutToolbar/CodingShortcutToolbar';
 import TouchSelectionOverlay from './TouchSelectionOverlay';
+import { useSettings } from '../../context/useSettings';
+import { defineAllMonacoThemes, getMonacoThemeName } from '../../utils/monacoThemes';
 
 // Convert hex color to semi-transparent rgba for clean selection highlight
 function hexToRgba(color, alpha = 0.22) {
@@ -49,6 +51,7 @@ export default function EditorArea({
   const onGutterCommentClickRef = useRef(onGutterCommentClick);
   const onAddCommentAtLineRef = useRef(onAddCommentAtLine);
   const activeFileRef = useRef(activeFile);
+  const { settings } = useSettings();
 
   useEffect(() => {
     onRunRef.current = onRun;
@@ -76,12 +79,32 @@ export default function EditorArea({
     isKeyboardOpenRef.current = isKeyboardOpen;
   }, [isKeyboardOpen]);
 
+  // Calculate active Monaco theme based on project and editor preferences
+  const activeMonacoTheme = getMonacoThemeName(
+    settings?.project_theme || 'navy',
+    settings?.editor_theme || 'dark'
+  );
+
+  const handleBeforeMount = useCallback((monaco) => {
+    defineAllMonacoThemes(monaco);
+  }, []);
+
+  // Dynamically update Monaco editor theme whenever project_theme or editor_theme changes
+  useEffect(() => {
+    if (monacoRef.current?.editor) {
+      defineAllMonacoThemes(monacoRef.current);
+      monacoRef.current.editor.setTheme(activeMonacoTheme);
+    }
+  }, [activeMonacoTheme]);
+
   const handleEditorDidMount = (editor, monaco) => {
     editorRef.current = editor;
     if (externalEditorRef) {
       externalEditorRef.current = editor;
     }
     monacoRef.current = monaco;
+    defineAllMonacoThemes(monaco);
+    monaco.editor.setTheme(activeMonacoTheme);
     setIsEditorReady(true);
 
     // Bind Ctrl+Enter / Cmd+Enter to run code / project
@@ -209,6 +232,13 @@ export default function EditorArea({
     const model = editor.getModel();
     if (!model) return;
 
+    // Respect live cursor toggle from settings
+    if (settings?.show_live_cursors === false) {
+      decorationsRef.current = editor.deltaDecorations(decorationsRef.current, []);
+      return;
+    }
+
+    const showLabels = settings?.show_collaborator_labels !== false;
     const maxLine = model.getLineCount();
     const newDecorations = [];
     const styleRules = [];
@@ -233,6 +263,7 @@ export default function EditorArea({
         .remote-cursor-${safeId}::after {
           content: "${escapedName}";
           background-color: ${color};
+          display: ${showLabels ? 'block' : 'none !important'};
         }
         .remote-selection-${safeId} {
           background-color: ${hexToRgba(color, 0.22)} !important;
@@ -283,7 +314,7 @@ export default function EditorArea({
 
     // Atomically replace previous decorations
     decorationsRef.current = editor.deltaDecorations(decorationsRef.current, newDecorations);
-  }, [remoteCursors, activeFile, isEditorReady]);
+  }, [remoteCursors, activeFile, isEditorReady, settings?.show_live_cursors, settings?.show_collaborator_labels]);
 
   // Render Monaco glyph margin comment indicators and line highlights
   useEffect(() => {
@@ -518,7 +549,8 @@ export default function EditorArea({
           width="100%"
           language={language}
           value={content}
-          theme="vs-dark"
+          theme={activeMonacoTheme}
+          beforeMount={handleBeforeMount}
           onChange={onChange}
           onMount={handleEditorDidMount}
           loading={
@@ -528,21 +560,21 @@ export default function EditorArea({
             </div>
           }
           options={{
-            fontSize: isMobileScreen ? 12.5 : 13.5,
+            fontSize: settings?.editor_font_size ? Number(settings.editor_font_size) : (isMobileScreen ? 12.5 : 13.5),
             fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace",
             fontLigatures: true,
             minimap: {
-              enabled: !isMobileScreen,
+              enabled: !isMobileScreen && settings?.show_minimap !== false,
               side: 'right'
             },
-            lineNumbers: 'on',
+            lineNumbers: settings?.show_line_numbers === false ? 'off' : 'on',
             lineNumbersMinChars: isMobileScreen ? 2 : 3,
             glyphMargin: true,
             folding: !isMobileScreen,
             automaticLayout: true,
             scrollBeyondLastLine: false,
-            tabSize: 2,
-            wordWrap: 'on',
+            tabSize: Number(settings?.tab_size) === 4 ? 4 : 2,
+            wordWrap: settings?.word_wrap === false ? 'off' : 'on',
             smoothScrolling: true,
             cursorBlinking: 'smooth',
             cursorSmoothCaretAnimation: 'on',

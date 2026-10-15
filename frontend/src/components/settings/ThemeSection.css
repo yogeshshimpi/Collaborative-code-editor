@@ -1,0 +1,411 @@
+/* ThemeSection.css - Appearance & Theme Styles */
+
+.theme-section-wrapper {
+  animation: fadeInTheme 0.2s ease-out;
+}
+
+@keyframes fadeInTheme {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.theme-header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.theme-active-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.85rem;
+  background: var(--bg-surface, #121a29);
+  border: 1px solid var(--border-subtle, #26344d);
+  border-radius: 9999px;
+  font-size: 0.82rem;
+  color: var(--text-secondary, #b4c2d9);
+  flex-shrink: 0;
+}
+
+.theme-active-indicator strong {
+  color: var(--text-primary, #ffffff);
+}
+
+.theme-dot-pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  box-shadow: 0 0 8px currentColor;
+  display: inline-block;
+}
+
+/* ==========================================================================
+   Live Mockup Workspace Card
+   ========================================================================== */
+.theme-mock-card {
+  padding: 1.25rem;
+  margin-bottom: 1.75rem;
+}
+
+.theme-mock-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.85rem;
+}
+
+.theme-mock-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-primary, #f2f6ff);
+}
+
+.theme-mock-badge {
+  font-size: 0.72rem;
+  color: var(--accent-primary, #6d5dfc);
+  background: var(--accent-subtle, rgba(109, 93, 252, 0.12));
+  padding: 0.2rem 0.55rem;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.theme-preview-workspace {
+  border-radius: 8px;
+  border-width: 1px;
+  border-style: solid;
+  overflow: hidden;
+  box-shadow: var(--shadow-md, 0 4px 14px -2px rgba(0, 0, 0, 0.6));
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.mock-navbar {
+  height: 34px;
+  border-bottom-width: 1px;
+  border-bottom-style: solid;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 0.85rem;
+}
+
+.mock-nav-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.mock-brand-icon {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mock-brand-text {
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.mock-nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.mock-pill {
+  font-size: 0.68rem;
+  padding: 2px 7px;
+  border-radius: 4px;
+  border-width: 1px;
+  border-style: solid;
+  font-family: var(--font-mono, monospace);
+}
+
+.mock-btn-accent {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #ffffff;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.mock-workspace-body {
+  display: flex;
+  height: 110px;
+}
+
+.mock-sidebar {
+  width: 100px;
+  border-right-width: 1px;
+  border-right-style: solid;
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  flex-shrink: 0;
+}
+
+.mock-sidebar-title {
+  font-size: 0.62rem;
+  font-weight: 700;
+  opacity: 0.6;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.15rem;
+}
+
+.mock-file-item {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.68rem;
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-family: var(--font-mono, monospace);
+}
+
+.mock-editor {
+  flex: 1;
+  padding: 0.65rem 0.85rem;
+  overflow: hidden;
+}
+
+.mock-editor-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.mock-editor-lines .line-num {
+  display: inline-block;
+  width: 16px;
+  opacity: 0.35;
+  user-select: none;
+}
+
+/* ==========================================================================
+   Theme Cards Grid
+   ========================================================================== */
+.theme-cards-intro {
+  margin-bottom: 1.25rem;
+}
+
+.theme-cards-intro .card-heading-sub {
+  display: block;
+  font-size: 0.82rem;
+  color: var(--text-muted, #7d8da8);
+  margin-top: 0.25rem;
+}
+
+.theme-grid-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.theme-card-option {
+  position: relative;
+  background: var(--bg-surface, #121a29);
+  border: 1.5px solid var(--border-subtle, #26344d);
+  border-radius: 10px;
+  padding: 1.1rem 1.1rem 1rem 1.1rem;
+  cursor: pointer;
+  outline: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+}
+
+.theme-card-option:hover {
+  border-color: var(--border-strong, #3a4d6d);
+  background: var(--bg-elevated, #182235);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md, 0 4px 14px -2px rgba(0, 0, 0, 0.4));
+}
+
+.theme-card-option.is-selected {
+  border-color: var(--accent-primary, #6d5dfc);
+  background: var(--bg-elevated, #182235);
+  box-shadow: 0 0 0 1px var(--accent-primary, #6d5dfc), var(--shadow-md);
+}
+
+.theme-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.theme-name-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.theme-card-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-primary, #f2f6ff);
+}
+
+.theme-card-badge {
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-secondary, #b4c2d9);
+}
+
+.theme-selected-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--accent-primary, #6d5dfc);
+  background: var(--accent-subtle, rgba(109, 93, 252, 0.15));
+  padding: 0.2rem 0.55rem;
+  border-radius: 9999px;
+}
+
+.theme-card-tagline {
+  font-size: 0.78rem;
+  color: var(--text-secondary, #b4c2d9);
+  line-height: 1.4;
+  margin: 0;
+  min-height: 2.2em;
+}
+
+.theme-swatch-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.25rem;
+}
+
+.theme-swatch-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  flex-shrink: 0;
+  display: inline-block;
+}
+
+.theme-swatch-hint {
+  font-size: 0.68rem;
+  color: var(--text-muted, #7d8da8);
+  margin-left: 0.35rem;
+}
+
+.theme-card-visual-bar {
+  height: 3px;
+  width: 100%;
+  border-radius: 2px;
+  margin-top: 0.35rem;
+  opacity: 0.8;
+}
+
+/* ==========================================================================
+   Monaco Editor Sync Selector
+   ========================================================================== */
+.editor-sync-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.sync-option-btn {
+  width: 100%;
+  background: var(--bg-surface, #121a29);
+  border: 1px solid var(--border-subtle, #26344d);
+  border-radius: 8px;
+  padding: 0.85rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  color: var(--text-secondary, #b4c2d9);
+}
+
+.sync-option-btn:hover {
+  background: var(--bg-elevated, #182235);
+  border-color: var(--border-strong, #3a4d6d);
+  color: var(--text-primary, #f2f6ff);
+}
+
+.sync-option-btn.active {
+  background: var(--bg-elevated, #182235);
+  border-color: var(--accent-primary, #6d5dfc);
+  color: var(--text-primary, #f2f6ff);
+  box-shadow: 0 0 0 1px var(--accent-primary, #6d5dfc);
+}
+
+.sync-btn-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-primary, #6d5dfc);
+  flex-shrink: 0;
+}
+
+.sync-btn-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  flex: 1;
+}
+
+.sync-btn-title {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-primary, #f2f6ff);
+}
+
+.sync-btn-desc {
+  font-size: 0.74rem;
+  color: var(--text-muted, #7d8da8);
+}
+
+.sync-check {
+  color: var(--accent-primary, #6d5dfc);
+  flex-shrink: 0;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .theme-grid-container {
+    grid-template-columns: 1fr;
+  }
+
+  .mock-sidebar {
+    width: 70px;
+  }
+}

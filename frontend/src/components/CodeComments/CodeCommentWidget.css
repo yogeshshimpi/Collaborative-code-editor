@@ -1,19 +1,19 @@
 /* Code Comments Thread Widget Styles */
 
 .code-comment-thread-card {
-  background: #181a24;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
   border-radius: 8px;
   padding: 10px 12px;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--shadow-md);
   transition: border-color 0.15s ease;
 }
 
 .code-comment-thread-card.is-open {
-  border-left: 3px solid var(--accent-primary, #6366f1);
+  border-left: 3px solid var(--accent-primary);
 }
 
 .code-comment-thread-card.is-resolved {
@@ -111,13 +111,13 @@
 
 /* Code Snippet */
 .thread-code-snippet {
-  background: #111218;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--bg-app);
+  border: 1px solid var(--border-subtle);
   border-radius: 4px;
   padding: 4px 8px;
   font-family: var(--font-mono, monospace);
   font-size: 11px;
-  color: #94a3b8;
+  color: var(--text-secondary);
   overflow-x: auto;
   white-space: pre;
 }
@@ -203,8 +203,8 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  background: #111218;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--bg-app);
+  border: 1px solid var(--border-subtle);
   border-radius: 5px;
   padding: 3px 6px;
 }
@@ -214,18 +214,18 @@
   background: transparent;
   border: none;
   font-size: 11.5px;
-  color: var(--text-primary, #f8fafc);
+  color: var(--text-primary);
   outline: none;
 }
 
 .reply-input::placeholder {
-  color: var(--text-muted, #7c829d);
+  color: var(--text-muted);
 }
 
 .btn-send-reply {
   background: transparent;
   border: none;
-  color: var(--accent-primary, #6366f1);
+  color: var(--accent-primary);
   cursor: pointer;
   padding: 3px;
   border-radius: 3px;
@@ -235,7 +235,7 @@
 }
 
 .btn-send-reply:hover:not(:disabled) {
-  background: rgba(99, 102, 241, 0.15);
+  background: var(--accent-subtle);
 }
 
 .btn-send-reply:disabled {
@@ -260,12 +260,12 @@
 }
 
 .add-comment-modal {
-  background: #181a24;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
   border-radius: 12px;
   width: 480px;
   max-width: 100%;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+  box-shadow: var(--shadow-lg);
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -307,8 +307,8 @@
 
 .add-comment-snippet {
   display: flex;
-  background: #101117;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--bg-app);
+  border: 1px solid var(--border-subtle);
   border-radius: 6px;
   overflow: hidden;
   font-family: var(--font-mono, monospace);
@@ -357,11 +357,11 @@
 .add-comment-textarea {
   width: 100%;
   box-sizing: border-box;
-  background: #111218;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--bg-app);
+  border: 1px solid var(--border-subtle);
   border-radius: 6px;
   padding: 10px 12px;
-  color: var(--text-primary, #f8fafc);
+  color: var(--text-primary);
   font-size: 13px;
   line-height: 1.5;
   resize: vertical;
@@ -371,8 +371,8 @@
 }
 
 .add-comment-textarea:focus {
-  border-color: var(--accent-primary, #6366f1);
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px var(--accent-subtle);
 }
 
 .mention-autocomplete-menu {
@@ -381,10 +381,10 @@
   left: 0;
   right: 0;
   margin-bottom: 6px;
-  background: #1e202d;
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
   border-radius: 8px;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-lg);
   max-height: 180px;
   overflow-y: auto;
   z-index: 100;
@@ -397,8 +397,8 @@
   font-size: 10.5px;
   font-weight: 600;
   text-transform: uppercase;
-  color: var(--text-muted, #7c829d);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .mention-menu-item {
@@ -408,7 +408,7 @@
   padding: 7px 12px;
   background: transparent;
   border: none;
-  color: var(--text-primary, #f8fafc);
+  color: var(--text-primary);
   font-size: 12.5px;
   text-align: left;
   cursor: pointer;
@@ -416,8 +416,8 @@
 }
 
 .mention-menu-item:hover {
-  background: rgba(99, 102, 241, 0.2);
-  color: #fff;
+  background: var(--accent-subtle);
+  color: var(--accent-primary);
 }
 
 .mention-avatar-dot {
@@ -487,10 +487,10 @@
 
 .range-number-input {
   width: 54px;
-  background: #111422;
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: var(--bg-app);
+  border: 1px solid var(--border-subtle);
   border-radius: 4px;
-  color: #ffffff;
+  color: var(--text-primary);
   padding: 2px 6px;
   font-size: 11.5px;
   font-family: inherit;
@@ -500,11 +500,12 @@
 }
 
 .range-number-input:focus {
-  border-color: #6366f1;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px var(--accent-subtle);
 }
 
 .range-separator {
-  color: #64748b;
+  color: var(--text-muted);
   font-size: 11px;
 }
 
@@ -512,9 +513,9 @@
   font-size: 10px;
   font-weight: 600;
   padding: 1px 6px;
-  background: rgba(99, 102, 241, 0.2);
-  color: #818cf8;
+  background: var(--accent-subtle);
+  color: var(--accent-primary);
   border-radius: 4px;
-  border: 1px solid rgba(99, 102, 241, 0.35);
+  border: 1px solid var(--accent-subtle);
   margin-left: 4px;
 }

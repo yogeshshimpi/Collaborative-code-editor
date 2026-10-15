@@ -1,0 +1,304 @@
+/* Editor Preferences Section Styles */
+.slider-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.font-size-badge {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--accent-primary);
+  background: var(--accent-subtle);
+  padding: 0.2rem 0.65rem;
+  border-radius: 6px;
+  border: 1px solid var(--accent-subtle);
+}
+
+.slider-container {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.slider-bound-label {
+  font-size: 0.78rem;
+  color: var(--text-muted, #94a3b8);
+  font-family: var(--font-mono, monospace);
+  flex-shrink: 0;
+}
+
+.settings-range-slider {
+  flex: 1;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  outline: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+
+.settings-range-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent, #6366f1);
+  border: 2px solid #ffffff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+  cursor: grab;
+  transition: transform 0.1s ease;
+}
+
+.settings-range-slider::-webkit-slider-thumb:active {
+  transform: scale(1.2);
+  cursor: grabbing;
+}
+
+/* Font Live Preview Box */
+.font-preview-box {
+  margin-top: 1.25rem;
+  background: #0f111a;
+  border: 1px solid var(--border-color, #282f44);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.font-preview-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.85rem;
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--text-muted, #94a3b8);
+}
+
+.font-preview-lang {
+  margin-left: auto;
+  font-size: 0.7rem;
+  color: #818cf8;
+  background: rgba(129, 140, 248, 0.12);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.font-preview-code {
+  margin: 0;
+  padding: 1rem;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace;
+  line-height: 1.5;
+  color: #e2e8f0;
+  overflow-x: auto;
+}
+
+.syn-keyword { color: #f43f5e; font-weight: 600; }
+.syn-func { color: #60a5fa; }
+.syn-param { color: #f59e0b; }
+.syn-comment { color: #64748b; font-style: italic; }
+.syn-return { color: #a855f7; font-weight: 600; }
+
+/* Tab Size Radio Group */
+.tab-size-selector {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.tab-size-btn {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 0.85rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.tab-size-btn:hover {
+  border-color: var(--accent-primary);
+  background: var(--bg-hover);
+}
+
+.tab-size-btn.active {
+  border-color: var(--accent-primary);
+  background: var(--accent-subtle);
+  box-shadow: 0 0 0 1px var(--accent-primary);
+}
+
+.tab-btn-title {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--text-main, #f8fafc);
+}
+
+.tab-btn-desc {
+  font-size: 0.78rem;
+  color: var(--text-muted, #94a3b8);
+}
+
+/* Modern Toggle List */
+.settings-toggle-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.15rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+}
+
+.toggle-label-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.toggle-title {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--text-main, #f8fafc);
+}
+
+.toggle-desc {
+  font-size: 0.82rem;
+  color: var(--text-muted, #94a3b8);
+  line-height: 1.4;
+}
+
+/* Modern Toggle Switch */
+.modern-toggle-switch {
+  position: relative;
+  width: 46px;
+  height: 26px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 2px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  outline: none;
+}
+
+.modern-toggle-switch:focus-visible {
+  box-shadow: 0 0 0 3px var(--accent-subtle);
+}
+
+.modern-toggle-switch .toggle-knob {
+  display: block;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.modern-toggle-switch.is-on {
+  background: var(--accent-primary);
+  border-color: var(--accent-hover);
+}
+
+.modern-toggle-switch.is-on .toggle-knob {
+  transform: translateX(20px);
+}
+
+/* Theme Selector Grid */
+.theme-selector-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.85rem;
+}
+
+.theme-card-btn {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  position: relative;
+}
+
+.theme-card-btn:hover {
+  border-color: var(--accent-primary);
+  background: var(--bg-hover);
+}
+
+.theme-card-btn.active {
+  border-color: var(--accent-primary);
+  background: var(--accent-subtle);
+  box-shadow: 0 0 0 1px var(--accent-primary);
+}
+
+.theme-icon-wrap {
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.theme-dark-icon { background: rgba(99, 102, 241, 0.15); color: #818cf8; }
+.theme-light-icon { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
+.theme-system-icon { background: rgba(56, 189, 248, 0.15); color: #38bdf8; }
+
+.theme-card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  text-align: left;
+}
+
+.theme-name {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--text-main, #f8fafc);
+}
+
+.theme-tag {
+  font-size: 0.75rem;
+  color: var(--text-muted, #94a3b8);
+}
+
+.theme-check-icon {
+  margin-left: auto;
+  color: var(--accent-primary);
+}
+
+@media (max-width: 768px) {
+  .theme-selector-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .tab-size-selector {
+    grid-template-columns: 1fr;
+  }
+
+  .toggle-row {
+    align-items: flex-start;
+  }
+
+  .modern-toggle-switch {
+    margin-top: 0.2rem;
+  }
+}

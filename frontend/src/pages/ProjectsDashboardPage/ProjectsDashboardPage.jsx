@@ -21,7 +21,8 @@ import {
   Mail,
   Shield,
   ShieldCheck,
-  ShieldAlert
+  ShieldAlert,
+  Settings
 } from 'lucide-react';
 import { useAuth } from '../../context/useAuth';
 import CollaboratorsModal from '../../components/CollaboratorsModal/CollaboratorsModal';
@@ -172,6 +173,16 @@ export default function ProjectsDashboardPage() {
           </div>
 
           <div className="divider-vertical" />
+
+          <button
+            type="button"
+            className="btn btn-secondary btn-action"
+            onClick={() => navigate('/settings')}
+            title="Account & Workspace Settings"
+          >
+            <Settings size={14} />
+            <span className="btn-text">Settings</span>
+          </button>
 
           <button
             type="button"

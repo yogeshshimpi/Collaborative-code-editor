@@ -25,6 +25,7 @@ import executionRoutes from './routes/executionRoutes.js';
 import chatRoutes from './routes/chatRoutes.js';
 import commentRoutes from './routes/commentRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
+import settingsRoutes from './routes/settingsRoutes.js';
 
 const app = express();
 const server = http.createServer(app);
@@ -49,6 +50,7 @@ registerSocketHandlers(io);
 // Mount API routes
 app.use('/api', healthRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/settings', settingsRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/projects', workspaceRoutes);
 app.use('/api/projects', versionRoutes);

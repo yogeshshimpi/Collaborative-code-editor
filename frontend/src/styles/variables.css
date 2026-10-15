@@ -2,7 +2,7 @@
 
 :root {
   color-scheme: dark;
-  /* Theme redesign: Linear, VS Code & Vercel inspired dark developer-tool theme */
+  /* Default: Dark Navy developer theme */
   --bg-app: #090d16;
   --bg-sidebar: #0d1320;
   --bg-surface: #121a29;
@@ -11,7 +11,7 @@
 
   /* Aliases for surfaces and workspace areas */
   --bg-active: #202d43;
-  --bg-editor: #1e1e1e;
+  --bg-editor: #0c121d;
   --bg-statusbar: #070a12;
   --bg-surface-hover: var(--bg-hover);
 
@@ -36,7 +36,12 @@
   --danger: #f06070;
   --info: #54a6ff;
 
-  /* Backward-compatibility aliases */
+  /* Universal backwards-compatibility aliases */
+  --bg-primary: var(--bg-app);
+  --bg-card: var(--bg-surface);
+  --border-color: var(--border-subtle);
+  --text-main: var(--text-primary);
+  --accent: var(--accent-primary);
   --color-success: var(--success);
   --color-warning: var(--warning);
   --color-error: var(--danger);
@@ -70,4 +75,192 @@
   --navbar-height: var(--navbar-height-desktop);
   --focus-ring: 2px solid var(--accent-primary);
   --focus-ring-offset: 2px;
+}
+
+/* ==========================================================================
+   WHOLE-PROJECT THEME VARIANTS
+   Cascades across Navbar, Sidebar, Editor, Modals, Cards, Dashboard & Settings
+   ========================================================================== */
+
+/* 1. Dark Navy Theme (Default) */
+:root[data-theme='navy'],
+[data-theme='navy'] {
+  color-scheme: dark;
+  --bg-app: #090d16;
+  --bg-sidebar: #0d1320;
+  --bg-surface: #121a29;
+  --bg-elevated: #182235;
+  --bg-hover: #202d43;
+  --bg-active: #26354f;
+  --bg-editor: #0c121d;
+  --bg-statusbar: #070a12;
+  --bg-surface-hover: var(--bg-hover);
+  --border-subtle: #26344d;
+  --border-strong: #3a4d6d;
+  --border-focus: #6d5dfc;
+  --text-primary: #f2f6ff;
+  --text-secondary: #b4c2d9;
+  --text-muted: #7d8da8;
+  --accent-primary: #6d5dfc;
+  --accent-hover: #8175ff;
+  --accent-subtle: rgba(109, 93, 252, 0.16);
+
+  --bg-primary: var(--bg-app);
+  --bg-card: var(--bg-surface);
+  --border-color: var(--border-subtle);
+  --text-main: var(--text-primary);
+  --accent: var(--accent-primary);
+}
+
+/* 2. Midnight OLED Theme */
+:root[data-theme='midnight'],
+[data-theme='midnight'] {
+  color-scheme: dark;
+  --bg-app: #000000;
+  --bg-sidebar: #09090b;
+  --bg-surface: #111114;
+  --bg-elevated: #18181c;
+  --bg-hover: #232329;
+  --bg-active: #2b2b33;
+  --bg-editor: #000000;
+  --bg-statusbar: #020202;
+  --bg-surface-hover: var(--bg-hover);
+  --border-subtle: #222228;
+  --border-strong: #383842;
+  --border-focus: #818cf8;
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-muted: #64748b;
+  --accent-primary: #6366f1;
+  --accent-hover: #818cf8;
+  --accent-subtle: rgba(99, 102, 241, 0.2);
+
+  --bg-primary: var(--bg-app);
+  --bg-card: var(--bg-surface);
+  --border-color: var(--border-subtle);
+  --text-main: var(--text-primary);
+  --accent: var(--accent-primary);
+}
+
+/* 3. Cyberpunk Synthwave Theme */
+:root[data-theme='cyberpunk'],
+[data-theme='cyberpunk'] {
+  color-scheme: dark;
+  --bg-app: #0c0618;
+  --bg-sidebar: #130a24;
+  --bg-surface: #1b0e33;
+  --bg-elevated: #261447;
+  --bg-hover: #351c61;
+  --bg-active: #44247d;
+  --bg-editor: #0c0618;
+  --bg-statusbar: #080310;
+  --bg-surface-hover: var(--bg-hover);
+  --border-subtle: #3a1e64;
+  --border-strong: #592e99;
+  --border-focus: #d946ef;
+  --text-primary: #fdf4ff;
+  --text-secondary: #e879f9;
+  --text-muted: #c084fc;
+  --accent-primary: #d946ef;
+  --accent-hover: #f472b6;
+  --accent-subtle: rgba(217, 70, 239, 0.22);
+
+  --bg-primary: var(--bg-app);
+  --bg-card: var(--bg-surface);
+  --border-color: var(--border-subtle);
+  --text-main: var(--text-primary);
+  --accent: var(--accent-primary);
+}
+
+/* 4. Emerald Matrix Theme */
+:root[data-theme='emerald'],
+[data-theme='emerald'] {
+  color-scheme: dark;
+  --bg-app: #030d08;
+  --bg-sidebar: #06160e;
+  --bg-surface: #0b2216;
+  --bg-elevated: #113121;
+  --bg-hover: #19442e;
+  --bg-active: #21593c;
+  --bg-editor: #030d08;
+  --bg-statusbar: #020905;
+  --bg-surface-hover: var(--bg-hover);
+  --border-subtle: #19412d;
+  --border-strong: #256043;
+  --border-focus: #10b981;
+  --text-primary: #f0fdf4;
+  --text-secondary: #bbf7d0;
+  --text-muted: #4ade80;
+  --accent-primary: #10b981;
+  --accent-hover: #34d399;
+  --accent-subtle: rgba(16, 185, 129, 0.22);
+
+  --bg-primary: var(--bg-app);
+  --bg-card: var(--bg-surface);
+  --border-color: var(--border-subtle);
+  --text-main: var(--text-primary);
+  --accent: var(--accent-primary);
+}
+
+/* 5. Ocean Deep Teal Theme */
+:root[data-theme='ocean'],
+[data-theme='ocean'] {
+  color-scheme: dark;
+  --bg-app: #03131c;
+  --bg-sidebar: #061c29;
+  --bg-surface: #0a2738;
+  --bg-elevated: #0f364e;
+  --bg-hover: #154a6b;
+  --bg-active: #1b5e87;
+  --bg-editor: #03131c;
+  --bg-statusbar: #020d14;
+  --bg-surface-hover: var(--bg-hover);
+  --border-subtle: #164661;
+  --border-strong: #21678f;
+  --border-focus: #06b6d4;
+  --text-primary: #f0fdfa;
+  --text-secondary: #99f6e4;
+  --text-muted: #2dd4bf;
+  --accent-primary: #06b6d4;
+  --accent-hover: #22d3ee;
+  --accent-subtle: rgba(6, 182, 212, 0.22);
+
+  --bg-primary: var(--bg-app);
+  --bg-card: var(--bg-surface);
+  --border-color: var(--border-subtle);
+  --text-main: var(--text-primary);
+  --accent: var(--accent-primary);
+}
+
+/* 6. Clean Daytime Light Theme */
+:root[data-theme='light'],
+[data-theme='light'] {
+  color-scheme: light;
+  --bg-app: #f4f6fa;
+  --bg-sidebar: #eef2f7;
+  --bg-surface: #ffffff;
+  --bg-elevated: #f8fafc;
+  --bg-hover: #e2e8f0;
+  --bg-active: #cbd5e1;
+  --bg-editor: #ffffff;
+  --bg-statusbar: #e2e8f0;
+  --bg-surface-hover: var(--bg-hover);
+  --border-subtle: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --border-focus: #4f46e5;
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --text-muted: #64748b;
+  --accent-primary: #4f46e5;
+  --accent-hover: #4338ca;
+  --accent-subtle: rgba(79, 70, 229, 0.12);
+  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 12px -2px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 16px 32px -4px rgba(0, 0, 0, 0.12);
+
+  --bg-primary: var(--bg-app);
+  --bg-card: var(--bg-surface);
+  --border-color: var(--border-subtle);
+  --text-main: var(--text-primary);
+  --accent: var(--accent-primary);
 }
