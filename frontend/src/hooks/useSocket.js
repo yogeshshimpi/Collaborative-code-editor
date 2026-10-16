@@ -634,9 +634,16 @@ export function useSocket({
   }, [roomId]);
 
   // Real-time Chat Emit Helpers
-  const emitSendChatMessage = useCallback((message) => {
-    if (socketRef.current && socketRef.current.connected && message) {
-      socketRef.current.emit('chat:send-message', { roomId, message });
+  const emitSendChatMessage = useCallback((payload) => {
+    if (socketRef.current && socketRef.current.connected && payload) {
+      const msg = typeof payload === 'string' ? payload : payload.message;
+      const targetRoom = typeof payload === 'object' && payload.roomId ? payload.roomId : roomId;
+      const projId = typeof payload === 'object' && payload.projectId ? payload.projectId : undefined;
+      socketRef.current.emit('chat:send-message', {
+        roomId: targetRoom,
+        projectId: projId,
+        message: msg
+      });
     }
   }, [roomId]);
 

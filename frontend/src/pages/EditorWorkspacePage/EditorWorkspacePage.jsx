@@ -743,7 +743,10 @@ export default function EditorWorkspacePage() {
     emitRenameFolder,
     emitDeleteFile,
     emitDeleteFolder,
-    emitMoveItem
+    emitMoveItem,
+    emitSendChatMessage,
+    emitEditChatMessage,
+    emitDeleteChatMessage
   } = useSocket({
     roomId: activeRoomId,
     user: currentUser,
@@ -843,12 +846,20 @@ export default function EditorWorkspacePage() {
         'warning'
       );
     },
-    // Real-time Chat Events
+    // Real-time Chat Events (instant live delivery)
     onNewChatMessage: (data) => {
       const msg = data?.message && typeof data.message === 'object' ? data.message : data;
-      if (!msg || !msg.id) return;
+      if (!msg) return;
       setChatMessages((prev) => {
-        if (prev.some((m) => m.id === msg.id)) return prev;
+        // Reconcile optimistic messages by tempId or matching message text
+        const existingIdx = prev.findIndex(
+          (m) => m.id === msg.id || (m.status === 'sending' && m.message === msg.message)
+        );
+        if (existingIdx !== -1) {
+          const updated = [...prev];
+          updated[existingIdx] = { ...updated[existingIdx], ...msg, status: 'sent' };
+          return updated;
+        }
         return [...prev, msg];
       });
       if (!isCollabDrawerOpen || collabDrawerTab !== 'chat') {
@@ -1074,6 +1085,20 @@ export default function EditorWorkspacePage() {
   hasUnsavedChangesRef.current = hasUnsavedChanges;
   markFileSavedRef.current = markFileSaved;
 
+  // Instant Save Keyboard Shortcut (Ctrl+S / Cmd+S -> 0ms delay)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        if (activeFile && !isViewer && !isEditorRestricted) {
+          saveImmediately(activeFile);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeFile, isViewer, isEditorRestricted, saveImmediately]);
+
   // Conflict Resolution Action Handlers
   const handleConflictKeepMine = useCallback(async () => {
     if (!conflictState.fileName) return;
@@ -1168,19 +1193,55 @@ export default function EditorWorkspacePage() {
     async (text) => {
       const projId = currentProject?.id || matchedInContext?.id || roomId;
       if (!projId) return;
-      const res = await api.sendChatMessage(projId, {
-        message: typeof text === 'string' ? text : text?.message,
-        senderColor: currentUser?.color || '#6366f1'
-      });
-      if (res?.message) {
-        setChatMessages((prev) => {
-          if (prev.some((m) => m.id === res.message.id)) return prev;
-          return [...prev, res.message];
+      const rawText = typeof text === 'string' ? text : text?.message;
+      if (!rawText || !rawText.trim()) return;
+
+      // 1. Optimistic UI update: instantly display on sender's screen at 0ms delay
+      const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+      const optimisticMsg = {
+        id: tempId,
+        message: rawText,
+        sender_id: currentUser?.id,
+        sender_name: currentUser?.name || 'You',
+        sender_color: currentUser?.color || '#6366f1',
+        senderName: currentUser?.name || 'You',
+        senderColor: currentUser?.color || '#6366f1',
+        created_at: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        status: 'sending'
+      };
+
+      setChatMessages((prev) => [...prev, optimisticMsg]);
+
+      // 2. Broadcast immediately over WebSockets for instant peer delivery
+      if (emitSendChatMessage) {
+        emitSendChatMessage({
+          roomId: activeRoomId,
+          projectId: projId,
+          message: rawText
         });
       }
-      return res;
+
+      // 3. Persist to PostgreSQL in background and reconcile real message ID
+      try {
+        const res = await api.sendChatMessage(projId, {
+          message: rawText,
+          senderColor: currentUser?.color || '#6366f1'
+        });
+        if (res?.message) {
+          setChatMessages((prev) =>
+            prev.map((m) => (m.id === tempId ? { ...res.message, status: 'sent' } : m))
+          );
+        }
+        return res;
+      } catch (err) {
+        setChatMessages((prev) =>
+          prev.map((m) => (m.id === tempId ? { ...m, status: 'error' } : m))
+        );
+        throw err;
+      }
     },
-    [currentProject?.id, matchedInContext?.id, roomId, currentUser?.color]
+    [currentProject?.id, matchedInContext?.id, roomId, activeRoomId, currentUser, emitSendChatMessage]
   );
 
   const handleEditChatMessage = useCallback(

@@ -37,6 +37,7 @@ export function useAutoSave({
   const [dirtyFiles, setDirtyFiles] = useState(() => new Set());
 
   const debounceTimerRef = useRef(null);
+  const localDraftTimerRef = useRef(null);
   const pendingContentRef = useRef({}); // fileName -> content
   const isSavingRef = useRef(false);
 
@@ -203,7 +204,7 @@ export function useAutoSave({
     [roomId, userId, setFileMeta, onSaveSuccess, onSaveError, onConflict]
   );
 
-  // 3. Trigger Change (debounced 1000ms after user stops typing)
+  // 3. Trigger Change (debounced 400ms after user stops typing)
   const triggerChange = useCallback(
     (fileName, newContent) => {
       if (!fileName || isViewerRef.current) return;
@@ -211,13 +212,18 @@ export function useAutoSave({
       const cleanContent = newContent ?? '';
       pendingContentRef.current[fileName] = cleanContent;
 
-      // Immediately persist local draft for offline recovery
-      saveLocalDraft(userId, roomId, fileName, {
-        content: cleanContent,
-        baseVersion: fileMetaRef.current[fileName]?.version || 1,
-        timestamp: Date.now(),
-        synced: false
-      });
+      // Debounce local draft writes so synchronous localStorage.setItem does not block the UI thread on every single keypress
+      if (localDraftTimerRef.current) {
+        clearTimeout(localDraftTimerRef.current);
+      }
+      localDraftTimerRef.current = setTimeout(() => {
+        saveLocalDraft(userId, roomId, fileName, {
+          content: cleanContent,
+          baseVersion: fileMetaRef.current[fileName]?.version || 1,
+          timestamp: Date.now(),
+          synced: false
+        });
+      }, 300);
 
       // Mark file as having unsaved dirty changes
       setDirtyFiles((prev) => {
@@ -232,7 +238,7 @@ export function useAutoSave({
         return;
       }
 
-      // Reset debounce timer
+      // Reset auto-save debounce timer - 400ms for fast responsive auto-save
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);
       }
@@ -241,12 +247,12 @@ export function useAutoSave({
         debounceTimerRef.current = null;
         const contentToSave = pendingContentRef.current[fileName];
         performSave(fileName, contentToSave);
-      }, 1000);
+      }, 400);
     },
     [roomId, userId, performSave]
   );
 
-  // 4. Immediate Save (for manual Retry button or immediate flush)
+  // 4. Immediate Save (for Ctrl+S shortcut, manual Retry button, or immediate flush)
   const saveImmediately = useCallback(
     (fileName) => {
       const targetFile = fileName || activeFile;
@@ -256,15 +262,27 @@ export function useAutoSave({
         clearTimeout(debounceTimerRef.current);
         debounceTimerRef.current = null;
       }
+      if (localDraftTimerRef.current) {
+        clearTimeout(localDraftTimerRef.current);
+        localDraftTimerRef.current = null;
+      }
 
       const content =
         pendingContentRef.current[targetFile] ??
         filesStateRef.current[targetFile]?.content ??
         '';
 
+      // Persist draft immediately on manual flush
+      saveLocalDraft(userId, roomId, targetFile, {
+        content,
+        baseVersion: fileMetaRef.current[targetFile]?.version || 1,
+        timestamp: Date.now(),
+        synced: false
+      });
+
       return performSave(targetFile, content);
     },
-    [activeFile, performSave]
+    [activeFile, roomId, userId, performSave]
   );
 
   // 5. Auto-upload queued changes when network or socket reconnects

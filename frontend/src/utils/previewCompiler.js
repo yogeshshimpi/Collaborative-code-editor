@@ -282,12 +282,47 @@ export function parsePackageDependencies(files) {
 }
 
 /**
+ * Checks whether an npm package is a Node-only build/lint tool that cannot run in a browser sandbox.
+ */
+export function isNodeOnlyPackage(pkg) {
+  if (!pkg || typeof pkg !== 'string') return true;
+  const lower = pkg.trim().toLowerCase();
+  return (
+    lower === 'react' ||
+    lower === 'react-dom' ||
+    lower === 'vite' ||
+    lower.startsWith('@vitejs/') ||
+    lower.startsWith('@types/') ||
+    lower === 'typescript' ||
+    lower === 'eslint' ||
+    lower.startsWith('eslint-') ||
+    lower.startsWith('@eslint/') ||
+    lower === 'globals' ||
+    lower === 'prettier' ||
+    lower.startsWith('prettier-') ||
+    lower.startsWith('@babel/') ||
+    lower === 'postcss' ||
+    lower === 'autoprefixer' ||
+    lower === 'tailwindcss' ||
+    lower === 'rollup' ||
+    lower.startsWith('rollup-') ||
+    lower === 'webpack' ||
+    lower.startsWith('webpack-')
+  );
+}
+
+/**
  * Scans all JavaScript/TypeScript/JSX files for external package imports.
  */
 export function detectImportedPackages(files) {
   if (!files || typeof files !== 'object') return [];
   const importedPkgs = new Set();
   const importRegex = /(?:import\s+(?:[\s\S]*?from\s+)?['"]([^'"]+)['"]|require\s*\(\s*['"]([^'"]+)['"]\s*\))/g;
+
+  // Normalized list of project file paths (replacing backslashes with slashes, removing leading ./ and /)
+  const normalizedPaths = Object.keys(files).map((f) =>
+    f.replace(/\\/g, '/').replace(/^\.\//, '').replace(/^\//, '')
+  );
 
   for (const [path, fileObj] of Object.entries(files)) {
     if (!fileObj || typeof fileObj.content !== 'string') continue;
@@ -296,10 +331,23 @@ export function detectImportedPackages(files) {
 
     let match;
     while ((match = importRegex.exec(fileObj.content)) !== null) {
-      const spec = match[1] || match[2];
+      const rawSpec = match[1] || match[2];
+      if (!rawSpec) continue;
+      const spec = rawSpec.trim();
       if (!spec) continue;
-      // Skip relative paths, absolute paths, protocols
-      if (spec.startsWith('.') || spec.startsWith('/') || spec.startsWith('http:') || spec.startsWith('https:') || spec.startsWith('data:')) continue;
+
+      // Skip relative paths, absolute paths, protocols, and data URIs
+      if (
+        spec.startsWith('.') ||
+        spec.startsWith('/') ||
+        spec.startsWith('http:') ||
+        spec.startsWith('https:') ||
+        spec.startsWith('data:')
+      ) continue;
+
+      // Skip common project path aliases: @/..., ~/..., #/...
+      if (spec.startsWith('@/') || spec.startsWith('~/') || spec.startsWith('#/')) continue;
+
       // Skip built-in react runtime modules
       if (
         spec === 'react' ||
@@ -309,7 +357,12 @@ export function detectImportedPackages(files) {
         spec === 'react/jsx-dev-runtime'
       ) continue;
 
-      // Extract the root package name (handling scoped packages like @lucide/lab or subpaths like lodash/debounce)
+      // Check if spec points to a CSS file that is local
+      if (spec.endsWith('.css') && normalizedPaths.some((f) => f === spec || f === `src/${spec}`)) {
+        continue;
+      }
+
+      // Extract the root package name (handling scoped packages like @supabase/supabase-js or subpaths like lodash/debounce)
       let rootPkg = spec;
       if (spec.startsWith('@')) {
         const parts = spec.split('/');
@@ -318,17 +371,25 @@ export function detectImportedPackages(files) {
         rootPkg = spec.split('/')[0];
       }
 
-      // Check if rootPkg matches an existing project folder or file (e.g. "components", "pages", "src")
-      const matchesLocal = Object.keys(files).some((f) => {
-        const cleanF = f.replace(/^\.\//, '').replace(/^\//, '');
+      // Check if rootPkg or spec matches an existing project file or directory (e.g. "components", "pages", "src", "utils", etc.)
+      const isLocal = normalizedPaths.some((cleanF) => {
         return (
+          cleanF === spec ||
           cleanF === rootPkg ||
+          cleanF.startsWith(`${spec}/`) ||
           cleanF.startsWith(`${rootPkg}/`) ||
+          cleanF.startsWith(`src/${spec}/`) ||
           cleanF.startsWith(`src/${rootPkg}/`) ||
-          cleanF.replace(/\.(jsx?|tsx?)$/, '') === rootPkg
+          cleanF.replace(/\.(jsx?|tsx?)$/, '') === spec ||
+          cleanF.replace(/\.(jsx?|tsx?)$/, '') === rootPkg ||
+          cleanF.replace(/\.(jsx?|tsx?)$/, '') === `src/${spec}` ||
+          cleanF.replace(/\.(jsx?|tsx?)$/, '') === `src/${rootPkg}`
         );
       });
-      if (matchesLocal) continue;
+      if (isLocal) continue;
+
+      // Also skip known build-only packages
+      if (isNodeOnlyPackage(rootPkg)) continue;
 
       importedPkgs.add(rootPkg);
     }
@@ -345,25 +406,6 @@ export function detectExternalPackages(files) {
   const { declaredDependencies } = parsePackageDependencies(files);
   const importedPackages = detectImportedPackages(files);
   const allPackages = new Set();
-
-  const isNodeOnlyPackage = (pkg) => {
-    if (!pkg || typeof pkg !== 'string') return true;
-    const lower = pkg.toLowerCase();
-    return (
-      lower === 'react' ||
-      lower === 'react-dom' ||
-      lower === 'vite' ||
-      lower.startsWith('@vitejs/') ||
-      lower.startsWith('@types/') ||
-      lower === 'typescript' ||
-      lower === 'eslint' ||
-      lower.startsWith('eslint-') ||
-      lower.startsWith('@eslint/') ||
-      lower === 'prettier' ||
-      lower.startsWith('prettier-') ||
-      lower.startsWith('@babel/')
-    );
-  };
 
   declaredDependencies.forEach((pkg) => {
     if (!isNodeOnlyPackage(pkg)) {
@@ -894,22 +936,15 @@ export function buildPreviewDocument(files, selectedHtmlFile, _renderNonce, init
 
       // 2. Validate dependencies: if an external package is imported but NOT declared in package.json
       const missingDependencies = importedExternalPackages.filter(
-        (pkg) => !declaredDependencies.has(pkg) && !declaredDependencies.has(pkg.split('/')[0])
+        (pkg) => !isNodeOnlyPackage(pkg) && !declaredDependencies.has(pkg) && !declaredDependencies.has(pkg.split('/')[0])
       );
 
       if (missingDependencies.length > 0) {
         return renderMissingDependencyDocument(missingDependencies[0], telemetryScript);
       }
 
-      // Collect all packages to load (declared in package.json + imported in project)
-      const packagesToLoad = new Set();
-      declaredDependencies.forEach((pkg) => {
-        if (pkg !== 'react' && pkg !== 'react-dom' && pkg !== 'vite' && !pkg.startsWith('@vitejs/')) {
-          packagesToLoad.add(pkg);
-        }
-      });
-      importedExternalPackages.forEach((pkg) => packagesToLoad.add(pkg));
-      const detectedPkgs = Array.from(packagesToLoad);
+      // Collect all packages to load (filtered of node-only / build packages)
+      const detectedPkgs = detectExternalPackages(files);
 
       // Transpile all JSX and JS files into CommonJS modules using Babel
       const compiledModules = {};
@@ -927,14 +962,16 @@ export function buildPreviewDocument(files, selectedHtmlFile, _renderNonce, init
         });
 
         const code = transformed.code;
+        const normalizedPath = path.replace(/\\/g, '/');
         compiledModules[path] = code;
+        compiledModules[normalizedPath] = code;
 
-        const clean = path.replace(/^\.\//, '').replace(/^\//, '');
+        const clean = normalizedPath.replace(/^\.\//, '').replace(/^\//, '');
         compiledModules[clean] = code;
         compiledModules[`./${clean}`] = code;
         compiledModules[`/${clean}`] = code;
 
-        // If file is inside src/ (e.g. src/components/Sidebar.jsx), also register without src/
+        // If file is inside src/ (e.g. src/components/Sidebar.jsx), also register without src/ and with @/ alias
         if (clean.startsWith('src/')) {
           const stripped = clean.slice(4);
           compiledModules[stripped] = code;
@@ -942,6 +979,25 @@ export function buildPreviewDocument(files, selectedHtmlFile, _renderNonce, init
           compiledModules[`/${stripped}`] = code;
           compiledModules[stripped.replace(/\.(jsx?|tsx?)$/, '')] = code;
           compiledModules[`./${stripped.replace(/\.(jsx?|tsx?)$/, '')}`] = code;
+
+          const atAlias = `@/${stripped}`;
+          compiledModules[atAlias] = code;
+          compiledModules[atAlias.replace(/\.(jsx?|tsx?)$/, '')] = code;
+        }
+
+        // Directory index resolution (e.g. pages/index.jsx -> pages, src/pages/index.jsx -> pages, @/pages)
+        if (clean.endsWith('/index.jsx') || clean.endsWith('/index.js') || clean.endsWith('/index.tsx') || clean.endsWith('/index.ts')) {
+          const dir = clean.replace(/\/index\.(jsx?|tsx?)$/, '');
+          compiledModules[dir] = code;
+          compiledModules[`./${dir}`] = code;
+          compiledModules[`/${dir}`] = code;
+          if (dir.startsWith('src/')) {
+            const strippedDir = dir.slice(4);
+            compiledModules[strippedDir] = code;
+            compiledModules[`./${strippedDir}`] = code;
+            compiledModules[`/${strippedDir}`] = code;
+            compiledModules[`@/${strippedDir}`] = code;
+          }
         }
 
         const baseName = clean.split('/').pop();
@@ -967,7 +1023,14 @@ var externalPackages = ${JSON.stringify(detectedPkgs)};
 var externalModules = {};
 
 function wrapModule(mod, pkgName) {
-  if (!mod || typeof mod !== 'object') return mod;
+  if (!mod) return mod;
+  if (typeof mod === 'function') {
+    try {
+      mod.default = mod;
+      mod.__esModule = true;
+    } catch(e) {}
+    return mod;
+  }
   var target = {};
   try {
     Object.assign(target, mod);
@@ -1093,19 +1156,29 @@ function customRequire(name) {
       cleanName = cleanName.slice(1);
     }
   }
+  var aliasName = cleanName.startsWith('@/') ? 'src/' + cleanName.slice(2) : cleanName;
   var modFn = modules[name] ||
               modules[cleanName] ||
+              modules[aliasName] ||
               modules['./' + cleanName] ||
               modules['src/' + cleanName] ||
               modules['./src/' + cleanName] ||
               modules[cleanName + '.jsx'] ||
               modules[cleanName + '.js'] ||
+              modules[aliasName + '.jsx'] ||
+              modules[aliasName + '.js'] ||
               modules['./' + cleanName + '.jsx'] ||
               modules['./' + cleanName + '.js'] ||
               modules['src/' + cleanName + '.jsx'] ||
               modules['src/' + cleanName + '.js'] ||
               modules['./src/' + cleanName + '.jsx'] ||
-              modules['./src/' + cleanName + '.js'];
+              modules['./src/' + cleanName + '.js'] ||
+              modules[cleanName + '/index.jsx'] ||
+              modules[cleanName + '/index.js'] ||
+              modules[aliasName + '/index.jsx'] ||
+              modules[aliasName + '/index.js'] ||
+              modules['src/' + cleanName + '/index.jsx'] ||
+              modules['src/' + cleanName + '/index.js'];
 
   if (!modFn) {
     console.warn('[CodeCollab React Sandbox] Module not found: ' + name);
@@ -1127,36 +1200,23 @@ async function startApp() {
     loadingBanner.innerHTML = '<span style="display:inline-block;width:10px;height:10px;border:2px solid #60a5fa;border-top-color:transparent;border-radius:50%;animation:spin 0.8s linear infinite;"></span><span>Resolving packages (' + externalPackages.length + ')...</span><style>@keyframes spin{to{transform:rotate(360deg)}}</style>';
     document.body.appendChild(loadingBanner);
 
-
-
     await Promise.all(externalPackages.map(async function(pkg) {
       try {
         var importUrl = 'https://esm.sh/' + pkg + '?bundle&external=react,react-dom';
         if (pkg === 'react-router-dom' || pkg === 'react-router') {
           importUrl = 'https://esm.sh/react-router-dom@6.28.0/X-ZXJlYWN0LHJlYWN0LWRvbQ/es2022/react-router-dom.bundle.mjs';
-        } else {
-          try {
-            var checkRes = await fetch(importUrl);
-            if (checkRes.ok) {
-              var checkText = await checkRes.text();
-              var starIdx = checkText.indexOf('export * from ');
-              if (starIdx !== -1) {
-                var afterStar = checkText.slice(starIdx + 14).trim();
-                var quoteChar = afterStar.charAt(0);
-                if (quoteChar === '"' || quoteChar === "'") {
-                  var endQuoteIdx = afterStar.indexOf(quoteChar, 1);
-                  if (endQuoteIdx !== -1) {
-                    var targetPath = afterStar.slice(1, endQuoteIdx);
-                    if (targetPath.startsWith('/')) {
-                      importUrl = 'https://esm.sh' + targetPath;
-                    }
-                  }
-                }
-              }
-            }
-          } catch(e) {}
         }
-        var mod = await import(importUrl);
+        var mod;
+        try {
+          mod = await import(importUrl);
+        } catch(directErr) {
+          // If bundle with external failed, try direct esm.sh bundle or fallback
+          try {
+            mod = await import('https://esm.sh/' + pkg + '?bundle');
+          } catch(bundleErr) {
+            mod = await import('https://esm.sh/' + pkg);
+          }
+        }
         var wrapped = wrapModule(mod, pkg);
         externalModules[pkg] = wrapped;
         var parts = pkg.split('/');
@@ -1230,8 +1290,8 @@ if (document.readyState === 'loading') {
 </script>
 `;
 
-      // Inject React importmap, telemetry, styles, and bundle into HTML
-      const headInjection = `\n${telemetryScript}\n${importMapScript}\n<style>\n${combinedCss}\n</style>\n`;
+      // Inject React importmap, telemetry, styles, and bundle into HTML (importmap must come first)
+      const headInjection = `\n${importMapScript}\n${telemetryScript}\n<style>\n${combinedCss}\n</style>\n`;
       if (/<head\b[^>]*>/i.test(htmlContent)) {
         htmlContent = htmlContent.replace(/<head\b[^>]*>/i, `$&${headInjection}`);
       } else {

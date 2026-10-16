@@ -26,7 +26,32 @@ export async function handleChatMessage(io, socket, data) {
     const senderName = user.name || 'Anonymous';
     const senderColor = user.color || '#6366f1';
 
-    const newMsg = await createChatMessage({
+    // Generate immediate broadcast payload with unique client-safe ID
+    const immediateId = `msg-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const immediateMsg = {
+      id: immediateId,
+      projectId,
+      roomId: targetRoom,
+      senderId,
+      senderName,
+      senderColor,
+      sender_id: senderId,
+      sender_name: senderName,
+      sender_color: senderColor,
+      message,
+      mentions: mentions || [],
+      createdAt: new Date().toISOString(),
+      created_at: new Date().toISOString()
+    };
+
+    // 1. Broadcast to room immediately (~10ms delivery)
+    socket.to(targetRoom).emit('chat:new-message', { message: immediateMsg });
+    if (projectId && projectId !== targetRoom) {
+      socket.to(projectId).emit('chat:new-message', { message: immediateMsg });
+    }
+
+    // 2. Persist to PostgreSQL in background asynchronously
+    createChatMessage({
       projectId,
       roomId: targetRoom,
       senderId,
@@ -34,36 +59,39 @@ export async function handleChatMessage(io, socket, data) {
       senderColor,
       message,
       mentions
-    });
+    }).then(async (persistedMsg) => {
+      // Confirm persistence to sender socket
+      socket.emit('chat:message-confirmed', {
+        tempId: immediateId,
+        message: persistedMsg
+      });
 
-    // Notify mentioned collaborators
-    if (newMsg.mentions && newMsg.mentions.length > 0) {
-      try {
-        const notifs = await createMentionNotifications({
-          mentions: newMsg.mentions,
-          senderId,
-          senderName,
-          projectId,
-          roomId: targetRoom,
-          type: 'chat_mention',
-          body: message.slice(0, 150),
-          referenceId: newMsg.id,
-          metadata: { messageId: newMsg.id }
-        });
+      // Dispatch mention notifications if needed
+      if (persistedMsg.mentions && persistedMsg.mentions.length > 0) {
+        try {
+          const notifs = await createMentionNotifications({
+            mentions: persistedMsg.mentions,
+            senderId,
+            senderName,
+            projectId,
+            roomId: targetRoom,
+            type: 'chat_mention',
+            body: message.slice(0, 150),
+            referenceId: persistedMsg.id,
+            metadata: { messageId: persistedMsg.id }
+          });
 
-        for (const n of notifs) {
-          io.to(`user:${n.userId}`).emit('notification:new', { notification: n });
+          for (const n of notifs) {
+            io.to(`user:${n.userId}`).emit('notification:new', { notification: n });
+          }
+        } catch (err) {
+          logger.warn('[Socket Chat] Mention dispatch error:', err.message);
         }
-      } catch (err) {
-        logger.warn('[Socket Chat] Mention dispatch error:', err.message);
       }
-    }
-
-    // Broadcast to room
-    io.to(targetRoom).emit('chat:new-message', { message: newMsg });
-    if (projectId && projectId !== targetRoom) {
-      io.to(projectId).emit('chat:new-message', { message: newMsg });
-    }
+    }).catch((err) => {
+      logger.error('[Socket Chat] Background persist error:', err.message);
+      socket.emit('chat:error', { message: 'Failed to persist message' });
+    });
   } catch (err) {
     logger.error('[Socket Chat] Error handling chat message:', err.message);
     socket.emit('chat:error', { message: err.message });
