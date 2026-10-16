@@ -30,6 +30,7 @@ function spaFallbackPlugin() {
 export default defineConfig({
   plugins: [react(), spaFallbackPlugin()],
   server: {
+    cors: true,
     proxy: {
       '/api': {
         target: 'http://localhost:5000',

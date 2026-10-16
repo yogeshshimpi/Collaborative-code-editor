@@ -47,7 +47,7 @@
   align-items: center;
   gap: 6px;
   min-width: 0;
-  flex-shrink: 1;
+  flex-shrink: 0;
 }
 
 .preview-status-indicator {
@@ -85,19 +85,19 @@
   }
 }
 
-@container (max-width: 620px) {
+@container (max-width: 580px) {
   .viewport-switcher-group {
     display: none;
   }
 }
 
-@container (max-width: 520px) {
+@container (max-width: 860px) {
   .preview-control-btn.preview-btn-labeled .preview-btn-label {
-    display: none;
+    display: none !important;
   }
   .preview-control-btn.preview-btn-labeled {
-    padding: 0;
-    width: 26px;
+    padding: 0 !important;
+    width: 26px !important;
   }
 }
 
@@ -181,6 +181,7 @@
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
+  margin-left: auto;
 }
 
 .viewport-switcher-group {
@@ -515,6 +516,112 @@
   height: 100%;
   overflow: auto;
   position: relative;
+}
+
+.preview-canvas-pane.is-react-workspace,
+.preview-canvas-pane.is-browser-frame {
+  flex-direction: column;
+  overflow: hidden;
+  align-items: stretch;
+  justify-content: flex-start;
+  background-color: #0b0f19;
+}
+
+.preview-canvas-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  position: relative;
+}
+
+/* Phase 1: Browser-like toolbar above React Live Preview */
+.preview-browser-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  background-color: var(--bg-sidebar);
+  border-bottom: 1px solid var(--border-subtle);
+  min-height: 34px;
+  height: 34px;
+  width: 100%;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  z-index: 15;
+}
+
+.preview-toolbar-nav-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.preview-toolbar-btn {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid transparent;
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.15s ease;
+}
+
+.preview-toolbar-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--border-subtle);
+}
+
+.preview-toolbar-btn:active {
+  transform: scale(0.95);
+}
+
+.preview-route-field-wrapper {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 60px;
+  height: 25px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 0 8px;
+  transition: all 0.18s ease;
+}
+
+.preview-route-field-wrapper:focus-within {
+  border-color: rgba(99, 102, 241, 0.6);
+  background: var(--bg-elevated);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+}
+
+.preview-route-field-input {
+  flex: 1;
+  min-width: 40px;
+  height: 100%;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11.5px;
+  padding: 0;
+  outline: none;
+}
+
+.preview-route-field-input::placeholder {
+  color: var(--text-muted);
 }
 
 .preview-canvas-pane.hidden {

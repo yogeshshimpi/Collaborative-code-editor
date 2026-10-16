@@ -1,4 +1,6 @@
 import { pool, isDbConnected, STARTER_FILES } from './index.js';
+import { inMemoryProjects } from './projects.js';
+import { PROJECT_STARTER_TEMPLATES } from '../config/starterTemplates.js';
 import { normalizePath, isValidFilePath, isValidFolderPath, getParentFolderPaths } from '../utils/filePath.js';
 import { createFileVersion } from './versions.js';
 import { logger } from '../utils/logger.js';
@@ -6,6 +8,48 @@ import { logger } from '../utils/logger.js';
 export const inMemoryStore = new Map();
 export const inMemoryFolders = new Map(); // roomId -> Set<folderPath>
 const pendingSaves = new Map();
+
+/**
+ * Seed starter files and folders for a specific project type.
+ */
+export async function seedWorkspaceForProjectType(roomId, projectType = 'html') {
+  if (!roomId || typeof roomId !== 'string') return;
+  const cleanRoomId = roomId.trim();
+  const template = PROJECT_STARTER_TEMPLATES[projectType] || PROJECT_STARTER_TEMPLATES.html;
+  const files = template.files || {};
+  const folders = template.folders || [];
+
+  if (isDbConnected() && pool) {
+    try {
+      // Insert folders first
+      for (const folder of folders) {
+        await pool.query(
+          `INSERT INTO room_folders (room_id, folder_path, created_at)
+           VALUES ($1, $2, CURRENT_TIMESTAMP)
+           ON CONFLICT (room_id, folder_path) DO NOTHING;`,
+          [cleanRoomId, folder]
+        );
+      }
+
+      // Insert starter files
+      for (const [name, content] of Object.entries(files)) {
+        await pool.query(
+          `INSERT INTO room_files (room_id, file_name, content, updated_at, version)
+           VALUES ($1, $2, $3, CURRENT_TIMESTAMP, 1)
+           ON CONFLICT (room_id, file_name) DO UPDATE
+           SET content = EXCLUDED.content, updated_at = CURRENT_TIMESTAMP, version = room_files.version + 1;`,
+          [cleanRoomId, name, content]
+        );
+      }
+    } catch (err) {
+      logger.error(`Error seeding starter workspace for room "${cleanRoomId}":`, err.message);
+    }
+  }
+
+  // Set memory store
+  inMemoryStore.set(cleanRoomId, { ...files });
+  inMemoryFolders.set(cleanRoomId, new Set(folders));
+}
 
 /**
  * Retrieve entire workspace (files map and folders list) for a given room.
@@ -31,24 +75,37 @@ export async function getRoomWorkspace(roomId) {
       const hasFiles = filesRes.rows.length > 0;
       const hasFolders = foldersRes.rows.length > 0;
 
-      // If workspace is completely empty (brand new room), seed starter files
+      // If workspace is completely empty (brand new room), check project type or seed default
       if (!hasFiles && !hasFolders) {
-        for (const [name, content] of Object.entries(STARTER_FILES)) {
-          await pool.query(
-            `INSERT INTO room_files (room_id, file_name, content, updated_at, version)
-             VALUES ($1, $2, $3, CURRENT_TIMESTAMP, 1)
-             ON CONFLICT (room_id, file_name) DO NOTHING;`,
-            [cleanRoomId, name, content]
+        let projType = null;
+        try {
+          const projectRes = await pool.query(
+            'SELECT project_type FROM projects WHERE room_id = $1 OR id::text = $1 LIMIT 1;',
+            [cleanRoomId]
           );
+          if (projectRes.rows.length > 0) {
+            projType = projectRes.rows[0].project_type;
+          }
+        } catch (queryErr) {
+          logger.warn(`Could not query project_type for room "${cleanRoomId}":`, queryErr.message);
         }
 
-        const seededFiles = { ...STARTER_FILES };
+        if (projType === 'blank') {
+          inMemoryStore.set(cleanRoomId, {});
+          inMemoryFolders.set(cleanRoomId, new Set());
+          return { files: {}, folders: [], fileMeta: {} };
+        }
+
+        const templateType = projType || 'html';
+        await seedWorkspaceForProjectType(cleanRoomId, templateType);
+
+        const template = PROJECT_STARTER_TEMPLATES[templateType] || PROJECT_STARTER_TEMPLATES.html;
+        const seededFiles = { ...(template.files || {}) };
         const seededMeta = {};
         for (const name of Object.keys(seededFiles)) {
           seededMeta[name] = { updatedAt: new Date().toISOString(), version: 1 };
         }
-        inMemoryStore.set(cleanRoomId, { ...seededFiles });
-        return { files: seededFiles, folders: [], fileMeta: seededMeta };
+        return { files: seededFiles, folders: [...(template.folders || [])], fileMeta: seededMeta };
       }
 
       const files = {};
@@ -79,8 +136,16 @@ export async function getRoomWorkspace(roomId) {
 
   // Fallback in-memory store
   if (!inMemoryStore.has(cleanRoomId) && !inMemoryFolders.has(cleanRoomId)) {
-    inMemoryStore.set(cleanRoomId, { ...STARTER_FILES });
-    inMemoryFolders.set(cleanRoomId, new Set());
+    const memProj = inMemoryProjects.get(cleanRoomId);
+    const projType = memProj?.project_type;
+    if (projType === 'blank') {
+      inMemoryStore.set(cleanRoomId, {});
+      inMemoryFolders.set(cleanRoomId, new Set());
+    } else {
+      const template = PROJECT_STARTER_TEMPLATES[projType || 'html'] || PROJECT_STARTER_TEMPLATES.html;
+      inMemoryStore.set(cleanRoomId, { ...(template.files || {}) });
+      inMemoryFolders.set(cleanRoomId, new Set(template.folders || []));
+    }
   }
 
   const memFiles = inMemoryStore.get(cleanRoomId) || {};

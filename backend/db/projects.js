@@ -4,17 +4,19 @@ import { inMemoryUsers } from './users.js';
 export const inMemoryProjects = new Map();
 export const inMemoryMembers = new Map(); // projectId -> Array<{ id, project_id, user_id, role, created_at }>
 
-export async function createProject({ id, name, ownerId }) {
+export async function createProject({ id, name, ownerId, description = '', projectType = 'html' }) {
   const cleanRoomId = id.trim();
   const cleanName = name.trim();
+  const cleanDescription = (description && typeof description === 'string') ? description.trim() : '';
+  const cleanType = (projectType && typeof projectType === 'string') ? projectType.trim().toLowerCase() : 'html';
 
   if (isDbConnected() && pool) {
     const query = `
-      INSERT INTO projects (room_id, name, owner_id)
-      VALUES ($1, $2, $3)
-      RETURNING id, room_id, name, owner_id, COALESCE(requires_approval, FALSE) AS requires_approval, COALESCE(protected_files, '[]'::jsonb) AS protected_files, created_at, updated_at;
+      INSERT INTO projects (room_id, name, owner_id, description, project_type)
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING id, room_id, name, description, COALESCE(project_type, 'html') AS project_type, owner_id, COALESCE(requires_approval, FALSE) AS requires_approval, COALESCE(protected_files, '[]'::jsonb) AS protected_files, created_at, updated_at;
     `;
-    const res = await pool.query(query, [cleanRoomId, cleanName, ownerId]);
+    const res = await pool.query(query, [cleanRoomId, cleanName, ownerId, cleanDescription, cleanType]);
     return res.rows[0];
   }
 
@@ -23,6 +25,8 @@ export async function createProject({ id, name, ownerId }) {
     id: `proj-${Date.now()}`,
     room_id: cleanRoomId,
     name: cleanName,
+    description: cleanDescription,
+    project_type: cleanType,
     owner_id: ownerId,
     requires_approval: false,
     protected_files: [],
@@ -41,6 +45,8 @@ export async function getUserProjects(userId) {
         p.id, 
         p.room_id, 
         p.name, 
+        p.description,
+        COALESCE(p.project_type, 'html') AS project_type,
         p.owner_id,
         COALESCE(p.requires_approval, FALSE) AS requires_approval,
         COALESCE(p.protected_files, '[]'::jsonb) AS protected_files,
@@ -78,6 +84,8 @@ export async function getUserProjects(userId) {
       const ownerUser = Array.from(inMemoryUsers.values()).find((u) => u.id === project.owner_id);
       list.push({
         ...project,
+        description: project.description || '',
+        project_type: project.project_type || 'html',
         owner_name: ownerUser?.name || 'Unknown',
         owner_email: ownerUser?.email || '',
         role
@@ -98,6 +106,8 @@ export async function getProjectById(id, userId = null) {
         p.id, 
         p.room_id, 
         p.name, 
+        p.description,
+        COALESCE(p.project_type, 'html') AS project_type,
         p.owner_id,
         COALESCE(p.requires_approval, FALSE) AS requires_approval,
         COALESCE(p.protected_files, '[]'::jsonb) AS protected_files,
@@ -199,6 +209,8 @@ export async function getProjectById(id, userId = null) {
   const ownerUser = Array.from(inMemoryUsers.values()).find((u) => u.id === p.owner_id);
   return {
     ...p,
+    description: p.description || '',
+    project_type: p.project_type || 'html',
     owner_name: ownerUser?.name || 'Unknown',
     owner_email: ownerUser?.email || '',
     role
@@ -324,7 +336,7 @@ export async function updateProject(idOrRoomId, { name, roomId }, ownerId) {
         `UPDATE projects
          SET name = $1, room_id = $2, updated_at = CURRENT_TIMESTAMP
          WHERE id = $3 AND owner_id = $4
-         RETURNING id, room_id, name, owner_id, created_at, updated_at;`,
+         RETURNING id, room_id, name, description, COALESCE(project_type, 'html') AS project_type, owner_id, created_at, updated_at;`,
         [cleanName, targetRoomId, project.id, ownerId]
       );
 

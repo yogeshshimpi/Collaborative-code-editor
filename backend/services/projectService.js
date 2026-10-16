@@ -11,7 +11,8 @@ import {
   updateProjectApprovalMode,
   updateProjectProtectedFiles
 } from '../db/projects.js';
-import { getRoomFiles } from '../db/workspace.js';
+import { getRoomFiles, seedWorkspaceForProjectType } from '../db/workspace.js';
+import { ALLOWED_PROJECT_TYPES } from '../config/starterTemplates.js';
 import { getProjectInvitations } from '../db/invitations.js';
 import { findUserById } from '../db/users.js';
 import { ApiError } from '../utils/apiError.js';
@@ -20,10 +21,25 @@ export async function listUserProjects(userId) {
   return getUserProjects(userId);
 }
 
-export async function createNewProject({ name, roomId, userId }) {
+export async function createNewProject({ name, roomId, userId, description = '', projectType = 'html' }) {
   if (!name || typeof name !== 'string' || !name.trim()) {
     throw new ApiError(400, 'Project name is required.');
   }
+
+  const cleanType = (projectType && typeof projectType === 'string')
+    ? projectType.trim().toLowerCase()
+    : 'html';
+
+  if (!ALLOWED_PROJECT_TYPES.includes(cleanType)) {
+    throw new ApiError(
+      400,
+      `Invalid project type "${projectType}". Supported types are: ${ALLOWED_PROJECT_TYPES.join(', ')}`
+    );
+  }
+
+  const cleanDescription = (description && typeof description === 'string')
+    ? description.trim().slice(0, 500)
+    : '';
 
   const targetRoomId = (roomId && typeof roomId === 'string' && roomId.trim())
     ? roomId.trim().slice(0, 64)
@@ -32,11 +48,13 @@ export async function createNewProject({ name, roomId, userId }) {
   const project = await dbCreateProject({
     id: targetRoomId,
     name: name.trim().slice(0, 100),
+    description: cleanDescription,
+    projectType: cleanType,
     ownerId: userId
   });
 
-  // Ensure default starter files exist for this project room
-  await getRoomFiles(targetRoomId);
+  // Ensure starter files exist for this project type (for blank, leaves empty workspace)
+  await seedWorkspaceForProjectType(targetRoomId, cleanType);
 
   return project;
 }

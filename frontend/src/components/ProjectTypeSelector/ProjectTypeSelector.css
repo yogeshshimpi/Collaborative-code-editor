@@ -1,0 +1,220 @@
+/* Project Type Selector Responsive Design */
+.project-type-selector-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.project-type-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.project-type-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary, #cbd5e1);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.required-star {
+  color: #ef4444;
+  font-weight: 700;
+}
+
+.project-type-hint {
+  font-size: 11px;
+  color: var(--text-muted, #94a3b8);
+}
+
+/* Grid Layout */
+.project-type-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Responsive Breakpoints */
+@media (max-width: 960px) {
+  .project-type-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+}
+
+@media (max-width: 600px) {
+  .project-type-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    max-height: 280px;
+    overflow-y: auto;
+    padding-right: 2px;
+  }
+}
+
+/* Individual Card */
+.project-type-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background-color: var(--bg-surface, #161922);
+  border: 1px solid var(--border-subtle, #282f44);
+  border-radius: 9px;
+  padding: 12px 14px;
+  min-height: 112px;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  outline: none;
+  box-sizing: border-box;
+}
+
+.project-type-card:hover:not(.disabled) {
+  background-color: var(--bg-elevated, #1c2130);
+  border-color: var(--border-strong, #3b4256);
+  transform: translateY(-1px);
+}
+
+.project-type-card:focus-visible {
+  box-shadow: 0 0 0 2px var(--accent-primary, #6366f1);
+}
+
+/* Selected Active State with Purple Accent */
+.project-type-card.selected {
+  background-color: rgba(99, 102, 241, 0.1);
+  border: 1.5px solid var(--accent-primary, #6366f1);
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.4), 0 4px 14px rgba(99, 102, 241, 0.16);
+}
+
+.project-type-card.disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* Card Header */
+.card-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.card-icon-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  border: 1px solid transparent;
+  flex-shrink: 0;
+}
+
+.card-tag-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card-tag {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 9999px;
+  letter-spacing: 0.02em;
+}
+
+/* Radio Indicator */
+.card-radio {
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border-strong, #3b4256);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: transparent;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.project-type-card:hover .card-radio {
+  border-color: var(--accent-primary, #6366f1);
+}
+
+.card-radio.active {
+  background-color: var(--accent-primary, #6366f1);
+  border-color: var(--accent-primary, #6366f1);
+}
+
+.radio-check {
+  color: #ffffff;
+}
+
+/* Card Body */
+.card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: 8px;
+}
+
+.card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary, #f8fafc);
+  margin: 0;
+  line-height: 1.25;
+}
+
+.project-type-card.selected .card-title {
+  color: #ffffff;
+}
+
+.card-desc {
+  font-size: 11px;
+  color: var(--text-secondary, #94a3b8);
+  margin: 0;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Card Footer */
+.card-footer-files {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  color: var(--text-muted, #64748b);
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  padding-top: 6px;
+  margin-top: auto;
+}
+
+.starter-label {
+  font-weight: 600;
+  color: var(--text-muted, #64748b);
+  flex-shrink: 0;
+}
+
+.starter-value {
+  color: var(--text-secondary, #94a3b8);
+  font-family: 'JetBrains Mono', Consolas, monospace;
+  font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

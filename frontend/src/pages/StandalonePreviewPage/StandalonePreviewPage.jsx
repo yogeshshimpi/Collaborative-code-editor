@@ -19,7 +19,7 @@ import {
   ChevronDown,
   ShieldCheck
 } from 'lucide-react';
-import { buildPreviewDocument } from '../../utils/previewCompiler';
+import { buildPreviewDocument, validatePreviewRoute } from '../../utils/previewCompiler';
 import { INITIAL_FILES, getLanguageFromFile } from '../../data/initialFiles';
 import { api } from '../../services/api';
 
@@ -104,6 +104,27 @@ export default function StandalonePreviewPage() {
   const [isTopBarCollapsed, setIsTopBarCollapsed] = useState(false);
   const [isLoading, setIsLoading] = useState(() => Object.keys(files).length === 0);
   const [loadError, setLoadError] = useState('');
+
+  const [previewHash, setPreviewHash] = useState(() => {
+    const raw = typeof window !== 'undefined' ? window.location.hash : '';
+    const validation = validatePreviewRoute(raw);
+    if (validation.isValid && validation.hash && validation.hash !== '#/' && validation.hash !== '#') {
+      return validation.hash;
+    }
+    try {
+      const cached = localStorage.getItem(`codecollab_preview_${rawRoomId}`);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed.previewHash) {
+          const v = validatePreviewRoute(parsed.previewHash);
+          if (v.isValid) return v.hash;
+        }
+      }
+    } catch {}
+    return validation.isValid ? validation.hash : '#/';
+  });
+  const previewHashRef = useRef(previewHash);
+  previewHashRef.current = previewHash;
 
   const iframeRef = useRef(null);
 
@@ -221,6 +242,13 @@ export default function StandalonePreviewPage() {
         if (!entryQuery && payload.selectedHtmlFile) {
           setSelectedHtmlFile(payload.selectedHtmlFile);
         }
+        if (payload.previewHash) {
+          const v = validatePreviewRoute(payload.previewHash);
+          if (v.isValid) {
+            setPreviewHash(v.hash);
+            previewHashRef.current = v.hash;
+          }
+        }
         setLoadError('');
         setIsLoading(false);
         setRenderNonce((n) => n + 1);
@@ -262,6 +290,35 @@ export default function StandalonePreviewPage() {
   useEffect(() => {
     const handleMessage = (event) => {
       if (event.data && event.data.source === 'codecollab-preview') {
+        if (event.data.type === 'preview-page-navigate') {
+          const targetPage = event.data.page;
+          const targetHash = event.data.hash || '';
+          if (targetPage && (files[targetPage] || htmlFiles.includes(targetPage))) {
+            setSelectedHtmlFile(targetPage);
+            setPreviewHash(targetHash);
+            previewHashRef.current = targetHash;
+            const newSearch = targetPage === 'index.html' ? '' : `?entry=${encodeURIComponent(targetPage)}`;
+            if (typeof window !== 'undefined') {
+              window.history.replaceState(null, '', `${window.location.pathname}${newSearch}${targetHash}`);
+            }
+          }
+          return;
+        }
+
+        if (event.data.type === 'preview-hash-change') {
+          const rawHash = event.data.hash || '#/';
+          const validation = validatePreviewRoute(rawHash);
+          if (validation.isValid) {
+            const h = validation.hash;
+            setPreviewHash(h);
+            previewHashRef.current = h;
+            if (typeof window !== 'undefined' && window.location.hash !== h) {
+              window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${h}`);
+            }
+          }
+          return;
+        }
+
         const { type, messages, meta, timestamp } = event.data;
         const newEntry = {
           id: `log-${timestamp}-${Math.random().toString(36).substring(2, 7)}`,
@@ -286,7 +343,11 @@ export default function StandalonePreviewPage() {
   };
 
   const handleCopyLink = async () => {
-    const url = window.location.href;
+    const raw = typeof window !== 'undefined' ? window.location.hash : '';
+    const v = validatePreviewRoute(raw || previewHashRef.current || '#/');
+    const safeHash = v.isValid ? v.hash : '#/';
+    const base = `${window.location.origin}${window.location.pathname}${window.location.search}`;
+    const url = `${base}${safeHash && safeHash !== '#' ? safeHash : '#/'}`;
     let copied = false;
     try {
       if (navigator.clipboard?.writeText) {
@@ -317,7 +378,7 @@ export default function StandalonePreviewPage() {
 
   // Compile the HTML document
   const compiledHtml = useMemo(() => {
-    return buildPreviewDocument(files, selectedHtmlFile, renderNonce);
+    return buildPreviewDocument(files, selectedHtmlFile, renderNonce, previewHashRef.current);
   }, [files, selectedHtmlFile, renderNonce]);
 
   const errorCount = consoleLogs.filter(

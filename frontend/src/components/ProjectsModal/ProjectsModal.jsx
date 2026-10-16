@@ -14,6 +14,8 @@ import {
   Hash
 } from 'lucide-react';
 import { useAuth } from '../../context/useAuth';
+import ProjectTypeSelector from '../ProjectTypeSelector/ProjectTypeSelector';
+import { getProjectTypeConfig, DEFAULT_PROJECT_TYPE } from '../../constants/projectTypes';
 
 export default function ProjectsModal({
   isOpen,
@@ -25,6 +27,8 @@ export default function ProjectsModal({
   const { projects, projectsLoading, createProject, renameProject, deleteProject, user } = useAuth();
 
   const [newProjectName, setNewProjectName] = useState('');
+  const [newProjectDescription, setNewProjectDescription] = useState('');
+  const [newProjectType, setNewProjectType] = useState(DEFAULT_PROJECT_TYPE);
   const [saveCurrentRoom, setSaveCurrentRoom] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editingName, setEditingName] = useState('');
@@ -53,16 +57,27 @@ export default function ProjectsModal({
       return;
     }
 
+    if (!newProjectType) {
+      setError('Please select a project type.');
+      return;
+    }
+
     setError(null);
     setIsSubmitting(true);
     try {
       // If saveCurrentRoom is checked, use the current active room ID
       const roomIdToUse = saveCurrentRoom ? currentRoomId : null;
-      const created = await createProject(newProjectName.trim(), roomIdToUse);
+      const typeConfig = getProjectTypeConfig(newProjectType);
+      const created = await createProject(newProjectName.trim(), roomIdToUse, {
+        description: newProjectDescription.trim(),
+        projectType: newProjectType
+      });
       setNewProjectName('');
+      setNewProjectDescription('');
+      setNewProjectType(DEFAULT_PROJECT_TYPE);
       setSaveCurrentRoom(false);
       if (onShowToast) {
-        onShowToast(`Project "${created.name}" created successfully!`, 'success');
+        onShowToast(`Project "${created.name}" (${typeConfig.name}) created successfully!`, 'success');
       }
       if (onSelectProject) {
         onSelectProject(created);
@@ -160,36 +175,57 @@ export default function ProjectsModal({
         {/* Create new project card */}
         <div className="new-project-card">
           <form onSubmit={handleCreateProject} className="new-project-form">
-            <div className="new-project-input-row">
-              <input
-                type="text"
-                className="modal-input"
-                placeholder="New project name (e.g. Algorithm Visualizer)"
-                value={newProjectName}
-                onChange={(e) => setNewProjectName(e.target.value)}
+            <div className="new-project-inputs-group">
+              <div className="new-project-name-row">
+                <input
+                  type="text"
+                  className="modal-input flex-2"
+                  placeholder="New project name (e.g. Algorithm Visualizer)"
+                  value={newProjectName}
+                  onChange={(e) => setNewProjectName(e.target.value)}
+                  disabled={isSubmitting}
+                  required
+                />
+                <input
+                  type="text"
+                  className="modal-input flex-1"
+                  placeholder="Description (optional)"
+                  value={newProjectDescription}
+                  onChange={(e) => setNewProjectDescription(e.target.value)}
+                  disabled={isSubmitting}
+                />
+              </div>
+
+              {/* Project Type / Language Selector */}
+              <ProjectTypeSelector
+                selectedType={newProjectType}
+                onChange={setNewProjectType}
                 disabled={isSubmitting}
               />
+            </div>
+
+            <div className="new-project-footer-row">
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={saveCurrentRoom}
+                  onChange={(e) => setSaveCurrentRoom(e.target.checked)}
+                  disabled={isSubmitting}
+                />
+                <span>
+                  Link to current room (<code>{currentRoomId}</code>)
+                </span>
+              </label>
+
               <button
                 type="submit"
                 className="btn btn-primary"
-                disabled={isSubmitting || !newProjectName.trim()}
+                disabled={isSubmitting || !newProjectName.trim() || !newProjectType}
               >
                 {isSubmitting ? <Loader2 size={15} className="spinning" /> : <Plus size={15} />}
-                <span>Create</span>
+                <span>Create Project</span>
               </button>
             </div>
-
-            <label className="checkbox-label">
-              <input
-                type="checkbox"
-                checked={saveCurrentRoom}
-                onChange={(e) => setSaveCurrentRoom(e.target.checked)}
-                disabled={isSubmitting}
-              />
-              <span>
-                Link to current room (<code>{currentRoomId}</code>)
-              </span>
-            </label>
           </form>
         </div>
 
@@ -265,6 +301,24 @@ export default function ProjectsModal({
                       )}
 
                       <div className="project-meta-row">
+                        {(() => {
+                          const typeConfig = getProjectTypeConfig(project.project_type);
+                          const { Icon: TypeIcon } = typeConfig;
+                          return (
+                            <span
+                              className="project-type-chip-modal"
+                              style={{
+                                color: typeConfig.color,
+                                backgroundColor: typeConfig.bgTint,
+                                borderColor: typeConfig.borderColor
+                              }}
+                              title={`Project Type: ${typeConfig.name}`}
+                            >
+                              <TypeIcon size={10} />
+                              <span>{typeConfig.shortName || typeConfig.badgeText}</span>
+                            </span>
+                          );
+                        })()}
                         <span className="project-meta-chip">
                           <Hash size={11} />
                           <span>{project.room_id}</span>

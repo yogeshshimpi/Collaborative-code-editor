@@ -416,19 +416,39 @@ export default function EditorWorkspacePage() {
       .then((res) => {
         if (!isMounted || !res?.files) return;
         isRemoteChangeRef.current = true;
-        setFilesState((prev) => {
-          const next = { ...prev };
-          for (const [name, content] of Object.entries(res.files)) {
-            if (typeof content === 'string') {
-              next[name] = {
-                name,
-                language: getLanguageFromFile(name),
-                content
-              };
-            }
+        const next = {};
+        for (const [name, content] of Object.entries(res.files)) {
+          if (typeof content === 'string') {
+            next[name] = {
+              name,
+              language: getLanguageFromFile(name),
+              content
+            };
           }
-          return next;
-        });
+        }
+        setFilesState(next);
+
+        const fileKeys = Object.keys(next);
+        if (fileKeys.length > 0) {
+          const preferred =
+            fileKeys.find((k) => k === 'src/App.jsx') ||
+            fileKeys.find((k) => k === 'main.py') ||
+            fileKeys.find((k) => k === 'Main.java') ||
+            fileKeys.find((k) => k === 'main.cpp') ||
+            fileKeys.find((k) => k === 'main.js') ||
+            fileKeys.find((k) => k === 'index.html') ||
+            fileKeys[0];
+
+          setActiveFile((curr) => (curr && fileKeys.includes(curr) ? curr : preferred));
+          setOpenTabs((prevTabs) => {
+            const valid = prevTabs.filter((t) => fileKeys.includes(t));
+            return valid.length > 0 ? valid : fileKeys.slice(0, 5);
+          });
+        } else {
+          setActiveFile(null);
+          setOpenTabs([]);
+        }
+
         if (Array.isArray(res.folders)) {
           setFoldersState(res.folders);
         }
@@ -459,11 +479,13 @@ export default function EditorWorkspacePage() {
   const handleRemoteCodeChange = useCallback(({ fileName, content }) => {
     if (!fileName || typeof content !== 'string') return;
 
+    const normalize = (str) => (typeof str === 'string' ? str.replace(/\r\n/g, '\n') : '');
+
     // Conflict safety: check if teammate edited the active file while we have unsaved local edits
     if (
       activeFileRef.current === fileName &&
       hasUnsavedChangesRef.current &&
-      filesStateRef.current[fileName]?.content !== content
+      normalize(filesStateRef.current[fileName]?.content) !== normalize(content)
     ) {
       setConflictState({
         isOpen: true,
@@ -477,7 +499,7 @@ export default function EditorWorkspacePage() {
 
     isRemoteChangeRef.current = true;
     setFilesState((prev) => {
-      if (prev[fileName]?.content === content) return prev;
+      if (normalize(prev[fileName]?.content) === normalize(content)) return prev;
       return {
         ...prev,
         [fileName]: {
@@ -516,14 +538,26 @@ export default function EditorWorkspacePage() {
 
     const fileNames = Object.keys(incomingFiles);
     if (fileNames.length > 0) {
+      const preferred =
+        fileNames.find((k) => k === 'src/App.jsx') ||
+        fileNames.find((k) => k === 'main.py') ||
+        fileNames.find((k) => k === 'Main.java') ||
+        fileNames.find((k) => k === 'main.cpp') ||
+        fileNames.find((k) => k === 'main.js') ||
+        fileNames.find((k) => k === 'index.html') ||
+        fileNames[0];
+
       setActiveFile((current) => {
         if (current && fileNames.includes(current)) return current;
-        return fileNames[0];
+        return preferred;
       });
       setOpenTabs((prevTabs) => {
         const valid = prevTabs.filter((t) => fileNames.includes(t));
-        return valid.length > 0 ? valid : [fileNames[0]];
+        return valid.length > 0 ? valid : fileNames.slice(0, 5);
       });
+    } else {
+      setActiveFile(null);
+      setOpenTabs([]);
     }
   }, []);
 
@@ -669,9 +703,14 @@ export default function EditorWorkspacePage() {
 
   const setSaveStatusRef = useRef(null);
   const flushPendingDraftsRef = useRef(null);
+  const markFileSavedRef = useRef(null);
+  const participantCountRef = useRef(1);
+  const activeUsersRef = useRef([]);
 
   const handleSaveStatus = useCallback(({ status, version, savedAt, fileName }) => {
-    if (setSaveStatusRef.current) {
+    if (status === 'saved' && fileName && markFileSavedRef.current) {
+      markFileSavedRef.current(fileName, version, savedAt);
+    } else if (setSaveStatusRef.current) {
       if (status === 'saving' || status === 'saved' || status === 'error') {
         setSaveStatusRef.current(status);
       }
@@ -873,6 +912,9 @@ export default function EditorWorkspacePage() {
     }
   });
 
+  participantCountRef.current = participantCount;
+  activeUsersRef.current = activeUsers;
+
   // Throttled cursor and selection activity broadcaster (~35ms throttle for smooth real-time rendering)
   const cursorThrottleTimerRef = useRef(null);
   const pendingCursorPayloadRef = useRef(null);
@@ -950,7 +992,8 @@ export default function EditorWorkspacePage() {
     hasUnsavedChanges,
     triggerChange,
     saveImmediately,
-    flushPendingDrafts
+    flushPendingDrafts,
+    markFileSaved
   } = useAutoSave({
     roomId: activeRoomId,
     userId: currentUser?.id,
@@ -968,13 +1011,59 @@ export default function EditorWorkspacePage() {
         showToast(`Could not save "${activeFile}". Changes are saved locally.`, 'warning');
       }
     },
-    onConflict: ({ fileName, localContent, serverDetails }) => {
+    onConflict: async ({ fileName, localContent, serverDetails }) => {
+      const normalize = (str) => (typeof str === 'string' ? str.replace(/\r\n/g, '\n') : '');
+      const serverContent = serverDetails?.serverContent;
+
+      // 1. Silent sync if content is identical (e.g. from rapid socket save)
+      if (typeof serverContent === 'string' && normalize(serverContent) === normalize(localContent)) {
+        if (serverDetails?.serverVersion) {
+          setFileMeta((prev) => ({
+            ...prev,
+            [fileName]: {
+              version: serverDetails.serverVersion,
+              updatedAt: serverDetails.serverUpdatedAt || new Date().toISOString()
+            }
+          }));
+        }
+        removeLocalDraft(currentUser?.id, activeRoomId, fileName);
+        setSaveStatus('saved');
+        return;
+      }
+
+      // 2. If user is alone in workspace (no collaborators), auto-resolve by saving
+      const totalParticipants = activeUsersRef.current?.length || participantCountRef.current || 1;
+      if (totalParticipants <= 1) {
+        try {
+          const res = await api.saveProjectFileContent(activeRoomId, {
+            fileName,
+            content: localContent
+          });
+          const savedFile = res?.file || res;
+          if (savedFile?.version) {
+            setFileMeta((prev) => ({
+              ...prev,
+              [fileName]: {
+                version: savedFile.version,
+                updatedAt: savedFile.updatedAt || new Date().toISOString()
+              }
+            }));
+          }
+          removeLocalDraft(currentUser?.id, activeRoomId, fileName);
+          setSaveStatus('saved');
+          return;
+        } catch {
+          // If silent save fails, fall through to modal
+        }
+      }
+
+      // 3. Genuine conflict with another collaborator
       setConflictState({
         isOpen: true,
         fileName,
         localContent,
         remoteContent: serverDetails?.serverContent || '',
-        remoteAuthor: 'Another collaborator'
+        remoteAuthor: serverDetails?.remoteAuthor || 'Another collaborator'
       });
     }
   });
@@ -983,6 +1072,7 @@ export default function EditorWorkspacePage() {
   setSaveStatusRef.current = setSaveStatus;
   flushPendingDraftsRef.current = flushPendingDrafts;
   hasUnsavedChangesRef.current = hasUnsavedChanges;
+  markFileSavedRef.current = markFileSaved;
 
   // Conflict Resolution Action Handlers
   const handleConflictKeepMine = useCallback(async () => {
@@ -2016,6 +2106,7 @@ export default function EditorWorkspacePage() {
       <Navbar
         projectName={projectName}
         roomId={activeRoomId}
+        projectType={currentProject?.project_type || matchedInContext?.project_type || 'html'}
         activeFile={activeFile}
         onChangeRoom={handleChangeRoom}
         onRenameProject={handleRenameProject}

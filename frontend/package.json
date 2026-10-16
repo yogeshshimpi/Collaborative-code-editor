@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@babel/standalone": "^8.0.7",
     "@monaco-editor/react": "^4.7.0",
     "lucide-react": "^1.55.0",
     "react": "^19.2.8",

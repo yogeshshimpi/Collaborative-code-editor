@@ -2,13 +2,9 @@ export const INITIAL_FILES = {
   'main.js': {
     name: 'main.js',
     language: 'javascript',
-    content: `// Welcome to CodeCollab - Professional Collaborative Code Editor
-// Milestone 1: Monaco Editor Integration
-
+    content: `// Welcome to CodeCollab - Collaborative Code Editor
 function calculateProjectStats(project) {
   const { name, teamSize, status } = project;
-  console.log(\`🚀 Initializing workspace for "\${name}"...\`);
-  
   return {
     projectName: name,
     collaborators: teamSize,
@@ -20,12 +16,10 @@ function calculateProjectStats(project) {
 }
 
 const currentSession = calculateProjectStats({
-  name: 'CodeCollab Major Project',
-  teamSize: 4,
+  name: 'CodeCollab Project',
+  teamSize: 1,
   status: 'active'
 });
-
-console.log('Session Summary:', currentSession);
 `
   },
   'index.html': {

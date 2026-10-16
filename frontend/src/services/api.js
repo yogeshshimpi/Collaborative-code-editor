@@ -148,10 +148,10 @@ export const api = {
     });
   },
 
-  async createProject({ name, roomId }) {
+  async createProject({ name, roomId, description, projectType }) {
     return request('/api/projects', {
       method: 'POST',
-      body: JSON.stringify({ name, roomId })
+      body: JSON.stringify({ name, roomId, description, projectType })
     });
   },
 

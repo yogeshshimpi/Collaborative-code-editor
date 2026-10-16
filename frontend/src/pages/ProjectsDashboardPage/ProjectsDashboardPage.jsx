@@ -28,6 +28,8 @@ import { useAuth } from '../../context/useAuth';
 import CollaboratorsModal from '../../components/CollaboratorsModal/CollaboratorsModal';
 import IncomingInvitationsModal from '../../components/IncomingInvitationsModal/IncomingInvitationsModal';
 import Toast from '../../components/Toast/Toast';
+import ProjectTypeSelector from '../../components/ProjectTypeSelector/ProjectTypeSelector';
+import { getProjectTypeConfig, DEFAULT_PROJECT_TYPE } from '../../constants/projectTypes';
 
 export default function ProjectsDashboardPage() {
   const {
@@ -46,6 +48,8 @@ export default function ProjectsDashboardPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
+  const [newProjectDescription, setNewProjectDescription] = useState('');
+  const [newProjectType, setNewProjectType] = useState(DEFAULT_PROJECT_TYPE);
   const [newRoomId, setNewRoomId] = useState('');
   const [editingId, setEditingId] = useState(null);
   const [editingName, setEditingName] = useState('');
@@ -77,15 +81,26 @@ export default function ProjectsDashboardPage() {
       return;
     }
 
+    if (!newProjectType) {
+      setError('Please select a project type.');
+      return;
+    }
+
     setError(null);
     setIsSubmitting(true);
     try {
       const targetRoom = newRoomId.trim() || undefined;
-      const created = await createProject(newProjectName.trim(), targetRoom);
+      const typeConfig = getProjectTypeConfig(newProjectType);
+      const created = await createProject(newProjectName.trim(), targetRoom, {
+        description: newProjectDescription.trim(),
+        projectType: newProjectType
+      });
       setNewProjectName('');
+      setNewProjectDescription('');
+      setNewProjectType(DEFAULT_PROJECT_TYPE);
       setNewRoomId('');
       setIsCreating(false);
-      showToast(`Created "${created.name}"! Opening editor...`, 'success');
+      showToast(`Created ${typeConfig.name} project "${created.name}"! Opening editor...`, 'success');
       setTimeout(() => {
         navigate(`/projects/${created.room_id}`);
       }, 400);
@@ -322,7 +337,10 @@ export default function ProjectsDashboardPage() {
             <form onSubmit={handleCreateProject} className="create-project-form">
               <div className="create-inputs-row">
                 <div className="form-group flex-2">
-                  <label htmlFor="new-proj-name">Project Name</label>
+                  <label htmlFor="new-proj-name" className="create-field-label">
+                    <span>Project Name</span>
+                    <span className="required-star" aria-hidden="true">*</span>
+                  </label>
                   <input
                     id="new-proj-name"
                     type="text"
@@ -336,7 +354,7 @@ export default function ProjectsDashboardPage() {
                 </div>
 
                 <div className="form-group flex-1">
-                  <label htmlFor="new-proj-room">Custom Room ID (Optional)</label>
+                  <label htmlFor="new-proj-room" className="create-field-label">Custom Room ID (Optional)</label>
                   <input
                     id="new-proj-room"
                     type="text"
@@ -347,6 +365,26 @@ export default function ProjectsDashboardPage() {
                   />
                 </div>
               </div>
+
+              {/* Optional Description */}
+              <div className="form-group">
+                <label htmlFor="new-proj-desc" className="create-field-label">Description (Optional)</label>
+                <input
+                  id="new-proj-desc"
+                  type="text"
+                  className="modal-input"
+                  placeholder="Short description of this project's purpose or features..."
+                  value={newProjectDescription}
+                  onChange={(e) => setNewProjectDescription(e.target.value)}
+                />
+              </div>
+
+              {/* Project Type / Primary Language Selection */}
+              <ProjectTypeSelector
+                selectedType={newProjectType}
+                onChange={setNewProjectType}
+                disabled={isSubmitting}
+              />
 
               <div className="create-actions-row">
                 <button
@@ -359,7 +397,7 @@ export default function ProjectsDashboardPage() {
                 <button
                   type="submit"
                   className="btn btn-primary"
-                  disabled={isSubmitting || !newProjectName.trim()}
+                  disabled={isSubmitting || !newProjectName.trim() || !newProjectType}
                 >
                   {isSubmitting ? (
                     <>
@@ -423,6 +461,8 @@ export default function ProjectsDashboardPage() {
               const isConfirmingDelete = deletingId === project.id;
               const projectRole = project.role || (project.owner_id === user?.id ? 'owner' : 'editor');
               const isOwner = projectRole === 'owner';
+              const typeConfig = getProjectTypeConfig(project.project_type);
+              const { Icon: TypeIcon } = typeConfig;
 
               return (
                 <div
@@ -433,8 +473,16 @@ export default function ProjectsDashboardPage() {
                   tabIndex={0}
                 >
                   <div className="project-card-top">
-                    <div className="project-card-icon">
-                      <FolderCode size={20} />
+                    <div
+                      className="project-card-icon"
+                      style={{
+                        color: typeConfig.color,
+                        borderColor: typeConfig.borderColor,
+                        backgroundColor: typeConfig.bgTint
+                      }}
+                      title={`Project Type: ${typeConfig.name}`}
+                    >
+                      <TypeIcon size={18} />
                     </div>
 
                     <div className="project-card-actions" onClick={(e) => e.stopPropagation()}>
@@ -535,18 +583,39 @@ export default function ProjectsDashboardPage() {
                         </button>
                       </div>
                     ) : (
-                      <h2
-                        className="project-card-title"
-                        onClick={() => navigate(`/projects/${project.room_id}`)}
-                        title={project.name}
-                      >
-                        {project.name}
-                      </h2>
+                      <div className="project-card-title-group">
+                        <h2
+                          className="project-card-title"
+                          onClick={() => navigate(`/projects/${project.room_id}`)}
+                          title={project.name}
+                        >
+                          {project.name}
+                        </h2>
+                        {project.description && (
+                          <p className="project-card-description" title={project.description}>
+                            {project.description}
+                          </p>
+                        )}
+                      </div>
                     )}
                   </div>
 
-                  {/* Room ID and metadata */}
+                  {/* Room ID, Type Badge, and metadata */}
                   <div className="project-card-meta">
+                    {/* Project Type Badge */}
+                    <div
+                      className="project-type-chip"
+                      style={{
+                        color: typeConfig.color,
+                        borderColor: typeConfig.borderColor,
+                        backgroundColor: typeConfig.bgTint
+                      }}
+                      title={`Project Type: ${typeConfig.name}`}
+                    >
+                      <TypeIcon size={11} />
+                      <span>{typeConfig.shortName || typeConfig.badgeText}</span>
+                    </div>
+
                     <div
                       className="room-pill-chip"
                       onClick={(e) => handleCopyRoom(e, project.room_id)}

@@ -125,8 +125,11 @@ export function AuthProvider({ children }) {
   };
 
   // Create project
-  const createProject = async (name, roomId) => {
-    const res = await api.createProject({ name, roomId });
+  const createProject = async (name, roomId, options = {}) => {
+    const payload = typeof options === 'string'
+      ? { name, roomId, projectType: options }
+      : { name, roomId, ...options };
+    const res = await api.createProject(payload);
     if (res?.project) {
       setProjects((prev) => [res.project, ...prev.filter((p) => p.id !== res.project.id)]);
       return res.project;

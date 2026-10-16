@@ -165,6 +165,8 @@ export async function initDatabase() {
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           room_id VARCHAR(64) NOT NULL,
           name VARCHAR(100) NOT NULL,
+          description TEXT,
+          project_type VARCHAR(30) NOT NULL DEFAULT 'html',
           owner_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
           requires_approval BOOLEAN NOT NULL DEFAULT FALSE,
           protected_files JSONB NOT NULL DEFAULT '[]'::jsonb,
@@ -172,10 +174,12 @@ export async function initDatabase() {
           updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
         );
 
-        -- Ensure owner_id, requires_approval, and protected_files columns exist if table was pre-existing
+        -- Ensure owner_id, requires_approval, protected_files, description, and project_type columns exist if table was pre-existing
         ALTER TABLE projects ADD COLUMN IF NOT EXISTS owner_id INTEGER REFERENCES users(id) ON DELETE CASCADE;
         ALTER TABLE projects ADD COLUMN IF NOT EXISTS requires_approval BOOLEAN NOT NULL DEFAULT FALSE;
         ALTER TABLE projects ADD COLUMN IF NOT EXISTS protected_files JSONB NOT NULL DEFAULT '[]'::jsonb;
+        ALTER TABLE projects ADD COLUMN IF NOT EXISTS description TEXT;
+        ALTER TABLE projects ADD COLUMN IF NOT EXISTS project_type VARCHAR(30) DEFAULT 'html';
 
         CREATE TABLE IF NOT EXISTS project_members (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

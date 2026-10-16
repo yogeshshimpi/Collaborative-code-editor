@@ -67,6 +67,17 @@ export async function saveWorkspaceFile({ roomId, fileName, content, userId, bas
   if (baseVersion !== null && baseVersion !== undefined) {
     const currentMeta = await getFileMetadata(roomId, cleanFile);
     if (currentMeta && typeof currentMeta.version === 'number' && currentMeta.version > Number(baseVersion)) {
+      const normalizeContent = (s) => (typeof s === 'string' ? s.replace(/\r\n/g, '\n') : '');
+      // If server content already matches what is being saved (e.g. from websocket sync), it's not a conflict
+      if (normalizeContent(currentMeta.content) === normalizeContent(content)) {
+        return {
+          fileName: cleanFile,
+          content,
+          updatedAt: currentMeta.updatedAt,
+          version: currentMeta.version
+        };
+      }
+
       const conflictErr = new ApiError(409, 'Conflict: File has been updated by another collaborator.');
       conflictErr.details = {
         serverVersion: currentMeta.version,

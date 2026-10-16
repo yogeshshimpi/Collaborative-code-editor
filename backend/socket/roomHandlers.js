@@ -65,7 +65,9 @@ export async function handleJoinRoom(io, socket, roomUsers, payload) {
       id: matchedProject.id,
       name: matchedProject.name,
       roomId: matchedProject.room_id,
-      role: userRole
+      role: userRole,
+      project_type: matchedProject.project_type || 'html',
+      description: matchedProject.description || ''
     });
     // Also join canonical room if rawRoomId was project name or UUID
     if (matchedProject.room_id && matchedProject.room_id !== roomId) {

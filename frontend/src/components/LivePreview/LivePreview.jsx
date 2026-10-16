@@ -29,9 +29,16 @@ import {
   Code2,
   MoreHorizontal,
   FileText,
-  History
+  History,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
-import { buildPreviewDocument } from '../../utils/previewCompiler';
+import {
+  buildPreviewDocument,
+  isReactWorkspace,
+  formatRouteForDisplay,
+  validatePreviewRoute
+} from '../../utils/previewCompiler';
 
 export default function LivePreview({
   isOpen,
@@ -88,6 +95,160 @@ export default function LivePreview({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [autoRunOnEdit, setAutoRunOnEdit] = useState(true);
   const [isCopied, setIsCopied] = useState(false);
+  const [previewHash, setPreviewHash] = useState('#/');
+  const previewHashRef = useRef('#/');
+  const isReact = useMemo(() => isReactWorkspace(files), [files]);
+  const isReactRef = useRef(isReact);
+  isReactRef.current = isReact;
+
+  // Available HTML files in the project
+  const htmlFiles = useMemo(() => {
+    return Object.keys(files).filter((name) => {
+      const lower = name.toLowerCase();
+      return lower.endsWith('.html') || lower.endsWith('.htm');
+    });
+  }, [files]);
+  const htmlFilesRef = useRef(htmlFiles);
+  htmlFilesRef.current = htmlFiles;
+
+  const filesRef = useRef(files);
+  filesRef.current = files;
+
+  const selectedHtmlFileRef = useRef(selectedHtmlFile);
+  selectedHtmlFileRef.current = selectedHtmlFile;
+
+  const [routeField, setRouteField] = useState(() => (isReact ? '/#/' : '/index.html'));
+
+  // Keep routeField in sync when switching files, entry HTML, or hash
+  useEffect(() => {
+    if (isReact) {
+      setRouteField(formatRouteForDisplay(previewHashRef.current || previewHash));
+    } else {
+      const base = selectedHtmlFile ? `/${selectedHtmlFile}` : '/index.html';
+      const hash = previewHash && previewHash !== '#/' && previewHash !== '#' ? previewHash : '';
+      setRouteField(`${base}${hash}`);
+    }
+  }, [isReact, selectedHtmlFile, previewHash]);
+
+  const handleNavBack = useCallback(() => {
+    try {
+      if (iframeRef.current && iframeRef.current.contentWindow) {
+        iframeRef.current.contentWindow.history.back();
+      }
+    } catch {}
+  }, []);
+
+  const handleNavForward = useCallback(() => {
+    try {
+      if (iframeRef.current && iframeRef.current.contentWindow) {
+        iframeRef.current.contentWindow.history.forward();
+      }
+    } catch {}
+  }, []);
+
+  const handleRouteKeyDown = useCallback(
+    (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const inputVal = (routeField || '').trim();
+
+        if (isReact) {
+          const validation = validatePreviewRoute(inputVal);
+          if (!validation.isValid) {
+            if (onShowToast) {
+              onShowToast(validation.error || 'Blocked invalid route');
+            }
+            console.warn('[CodeCollab Preview] Blocked route input:', routeField, validation.error);
+            setRouteField(formatRouteForDisplay(previewHashRef.current));
+            return;
+          }
+
+          const targetHash = validation.hash;
+          const displayRoute = formatRouteForDisplay(targetHash);
+          setRouteField(displayRoute);
+          setPreviewHash(targetHash);
+          previewHashRef.current = targetHash;
+
+          try {
+            if (iframeRef.current && iframeRef.current.contentWindow) {
+              iframeRef.current.contentWindow.postMessage(
+                {
+                  source: 'codecollab-parent',
+                  type: 'parent-hash-change',
+                  hash: targetHash
+                },
+                '*'
+              );
+            }
+          } catch {}
+        } else {
+          // HTML / CSS / JavaScript Preview Navigation
+          if (inputVal.startsWith('#') || inputVal.startsWith('/#')) {
+            const cleanHash = inputVal.startsWith('/#') ? inputVal.slice(1) : inputVal;
+            setPreviewHash(cleanHash);
+            previewHashRef.current = cleanHash;
+            const base = selectedHtmlFile ? `/${selectedHtmlFile}` : '/index.html';
+            setRouteField(`${base}${cleanHash}`);
+            try {
+              if (iframeRef.current && iframeRef.current.contentWindow) {
+                iframeRef.current.contentWindow.postMessage(
+                  {
+                    source: 'codecollab-parent',
+                    type: 'parent-hash-change',
+                    hash: cleanHash
+                  },
+                  '*'
+                );
+              }
+            } catch {}
+            return;
+          }
+
+          let rawPath = inputVal.replace(/^\/+/, '');
+          let targetFile = rawPath;
+          let targetHash = '';
+          if (rawPath.includes('#')) {
+            const parts = rawPath.split('#');
+            targetFile = parts[0];
+            targetHash = '#' + parts.slice(1).join('#');
+          }
+
+          if (!targetFile || targetFile === 'index' || targetFile === 'index.html') {
+            targetFile = 'index.html';
+          } else if (!targetFile.endsWith('.html') && !targetFile.endsWith('.htm')) {
+            if (files[`${targetFile}.html`]) {
+              targetFile = `${targetFile}.html`;
+            }
+          }
+
+          if (files[targetFile] || htmlFiles.includes(targetFile)) {
+            setSelectedHtmlFile(targetFile);
+            setPreviewHash(targetHash);
+            previewHashRef.current = targetHash;
+            setRouteField(`/${targetFile}${targetHash}`);
+            if (onShowToast) {
+              onShowToast(`Navigated to /${targetFile}`, 'info');
+            }
+          } else {
+            if (onShowToast) {
+              onShowToast(`File "${targetFile}" not found in workspace`, 'warning');
+            }
+            const base = selectedHtmlFile ? `/${selectedHtmlFile}` : '/index.html';
+            setRouteField(`${base}${previewHashRef.current || ''}`);
+          }
+        }
+      } else if (e.key === 'Escape') {
+        if (isReact) {
+          setRouteField(formatRouteForDisplay(previewHashRef.current));
+        } else {
+          const base = selectedHtmlFile ? `/${selectedHtmlFile}` : '/index.html';
+          setRouteField(`${base}${previewHashRef.current || ''}`);
+        }
+        e.currentTarget.blur();
+      }
+    },
+    [routeField, isReact, files, htmlFiles, selectedHtmlFile, onShowToast]
+  );
 
   const iframeRef = useRef(null);
   const headerRef = useRef(null);
@@ -142,11 +303,15 @@ export default function LivePreview({
   const syncToStorage = useCallback(() => {
     try {
       const cleanRoom = roomId ? String(roomId).replace(/[^a-zA-Z0-9_-]/g, '') : 'demo-room';
+      const currentHash = previewHashRef.current || previewHash || '#/';
+      const validated = validatePreviewRoute(currentHash);
+      const safeHash = validated.isValid ? validated.hash : '#/';
       const payload = {
         files,
         selectedHtmlFile,
         projectName,
         roomId: cleanRoom,
+        previewHash: safeHash,
         timestamp: Date.now()
       };
       localStorage.setItem(`codecollab_preview_${cleanRoom}`, JSON.stringify(payload));
@@ -162,7 +327,7 @@ export default function LivePreview({
     } catch (e) {
       console.warn('Could not sync preview to storage:', e);
     }
-  }, [files, selectedHtmlFile, projectName, roomId]);
+  }, [files, selectedHtmlFile, projectName, roomId, previewHash]);
 
   // Keep storage updated whenever files or selectedHtmlFile change while preview is open
   useEffect(() => {
@@ -174,11 +339,17 @@ export default function LivePreview({
   const getPreviewUrl = useCallback(() => {
     const cleanRoom = roomId ? String(roomId).replace(/[^a-zA-Z0-9_-]/g, '') : 'demo-room';
     const entryParam =
-      selectedHtmlFile && selectedHtmlFile !== 'index.html'
+      !isReact && selectedHtmlFile && selectedHtmlFile !== 'index.html'
         ? `?entry=${encodeURIComponent(selectedHtmlFile)}`
         : '';
-    return `${window.location.origin}/preview/${encodeURIComponent(cleanRoom)}${entryParam}`;
-  }, [roomId, selectedHtmlFile]);
+    const currentHash = previewHashRef.current || previewHash || '';
+    const validated = validatePreviewRoute(currentHash);
+    const safeHash = validated.isValid ? validated.hash : '#/';
+    const hash = isReact
+      ? (safeHash && safeHash !== '#' ? safeHash : '#/')
+      : (safeHash && safeHash !== '#/' && safeHash !== '#' ? safeHash : '');
+    return `${window.location.origin}/preview/${encodeURIComponent(cleanRoom)}${entryParam}${hash}`;
+  }, [roomId, selectedHtmlFile, previewHash, isReact]);
 
   const handleOpenNewTab = () => {
     syncToStorage();
@@ -225,13 +396,6 @@ export default function LivePreview({
     }
   };
 
-  // Available HTML files in the project
-  const htmlFiles = useMemo(() => {
-    return Object.keys(files).filter((name) => {
-      const lower = name.toLowerCase();
-      return lower.endsWith('.html') || lower.endsWith('.htm');
-    });
-  }, [files]);
 
   // Set default entry HTML file
   useEffect(() => {
@@ -267,6 +431,37 @@ export default function LivePreview({
     const handleMessage = (event) => {
       // Validate telemetry message from sandboxed preview
       if (event.data && event.data.source === 'codecollab-preview') {
+        if (event.data.type === 'preview-page-navigate') {
+          const targetPage = event.data.page;
+          const targetHash = event.data.hash || '';
+          if (targetPage && (filesRef.current[targetPage] || htmlFilesRef.current.includes(targetPage))) {
+            setSelectedHtmlFile(targetPage);
+            setPreviewHash(targetHash);
+            previewHashRef.current = targetHash;
+            setRouteField(`/${targetPage}${targetHash}`);
+          }
+          return;
+        }
+
+        if (event.data.type === 'preview-hash-change') {
+          const rawHash = event.data.hash || '#/';
+          const validation = validatePreviewRoute(rawHash);
+          if (!validation.isValid) {
+            console.warn('[CodeCollab Preview] Blocked invalid hash from preview:', rawHash);
+            return;
+          }
+          const h = validation.hash;
+          setPreviewHash(h);
+          previewHashRef.current = h;
+          if (isReactRef.current) {
+            setRouteField(formatRouteForDisplay(h));
+          } else {
+            const base = selectedHtmlFileRef.current ? `/${selectedHtmlFileRef.current}` : '/index.html';
+            setRouteField(`${base}${h && h !== '#/' && h !== '#' ? h : ''}`);
+          }
+          return;
+        }
+
         const { type, messages, meta, timestamp } = event.data;
         const newEntry = {
           id: `log-${timestamp}-${Math.random().toString(36).substring(2, 7)}`,
@@ -330,7 +525,7 @@ export default function LivePreview({
 
   // Compile the final HTML document to pass into srcDoc
   const compiledHtml = useMemo(() => {
-    return buildPreviewDocument(files, selectedHtmlFile, renderNonce);
+    return buildPreviewDocument(files, selectedHtmlFile, renderNonce, previewHashRef.current);
   }, [files, selectedHtmlFile, renderNonce]);
 
   if (!isOpen) return null;
@@ -349,8 +544,9 @@ export default function LivePreview({
     return true;
   });
 
-  const isWide = headerWidth >= 620;
-  const isMedium = headerWidth < 620 && headerWidth >= 440;
+  const isExtraWide = headerWidth >= 860 || isMaximized;
+  const isWide = headerWidth >= 580;
+  const isMedium = headerWidth < 580 && headerWidth >= 440;
   const isTight = headerWidth < 440;
 
   return (
@@ -563,24 +759,6 @@ export default function LivePreview({
                 </div>
               )}
 
-              {/* HTML Entry Selector (directly visible when wide & multiple files) */}
-              {isWide && htmlFiles.length > 1 && (
-                <div className="entry-html-selector-wrap" title="Select entry HTML file">
-                  <FileCode size={13} className="entry-icon" />
-                  <select
-                    className="entry-html-select"
-                    value={selectedHtmlFile || 'index.html'}
-                    onChange={(e) => setSelectedHtmlFile(e.target.value)}
-                    aria-label="Entry HTML File"
-                  >
-                    {htmlFiles.map((f) => (
-                      <option key={f} value={f}>
-                        {f}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
 
               {/* Refresh Button (always directly visible in preview mode) */}
               <button
@@ -598,19 +776,19 @@ export default function LivePreview({
                 <>
                   <button
                     type="button"
-                    className="preview-control-btn preview-btn-labeled btn-open-tab"
+                    className={`preview-control-btn btn-open-tab ${isExtraWide ? 'preview-btn-labeled' : ''}`}
                     onClick={handleOpenNewTab}
                     title="Open preview in a separate browser tab"
                     aria-label="Open in New Tab"
                   >
                     <ExternalLink size={13} />
-                    <span className="preview-btn-label">Open in New Tab</span>
+                    {isExtraWide && <span className="preview-btn-label">Open in New Tab</span>}
                   </button>
 
                   {/* Copy Preview Link Button */}
                   <button
                     type="button"
-                    className={`preview-control-btn preview-btn-labeled btn-copy-link ${
+                    className={`preview-control-btn btn-copy-link ${isExtraWide ? 'preview-btn-labeled' : ''} ${
                       isCopied ? 'copied' : ''
                     }`}
                     onClick={handleCopyLink}
@@ -618,7 +796,9 @@ export default function LivePreview({
                     aria-label="Copy Preview Link"
                   >
                     {isCopied ? <Check size={13} className="text-success" /> : <Link2 size={13} />}
-                    <span className="preview-btn-label">{isCopied ? 'Copied!' : 'Copy Preview Link'}</span>
+                    {isExtraWide && (
+                      <span className="preview-btn-label">{isCopied ? 'Copied!' : 'Copy Preview Link'}</span>
+                    )}
                   </button>
                 </>
               )}
@@ -857,16 +1037,69 @@ export default function LivePreview({
       {/* Main Content Body */}
       <div className="preview-body">
         {/* VIEW 1: Visual Sandbox Iframe */}
-        <div className={`preview-canvas-pane ${activeTab === 'preview' ? 'active' : 'hidden'}`}>
-          <div className={`preview-viewport-wrapper viewport-${viewportMode}`}>
-            <iframe
-              ref={iframeRef}
-              title={`CodeCollab Preview - ${projectName}`}
-              sandbox="allow-scripts allow-modals"
-              srcDoc={compiledHtml}
-              className="preview-sandboxed-iframe"
-              loading="lazy"
-            />
+        <div
+          className={`preview-canvas-pane ${activeTab === 'preview' ? 'active' : 'hidden'} is-browser-frame ${
+            isReact ? 'is-react-workspace' : ''
+          }`}
+        >
+          {/* Unified Browser-like toolbar above Live Preview for React AND HTML/CSS/JS */}
+          <div className="preview-browser-toolbar" role="toolbar" aria-label="Preview Navigation">
+            <div className="preview-toolbar-nav-group">
+              <button
+                type="button"
+                className="preview-toolbar-btn btn-nav-back"
+                onClick={handleNavBack}
+                title="Back"
+                aria-label="Back"
+              >
+                <ChevronLeft size={13} />
+              </button>
+              <button
+                type="button"
+                className="preview-toolbar-btn btn-nav-forward"
+                onClick={handleNavForward}
+                title="Forward"
+                aria-label="Forward"
+              >
+                <ChevronRight size={13} />
+              </button>
+              <button
+                type="button"
+                className="preview-toolbar-btn btn-nav-refresh"
+                onClick={handleManualRefresh}
+                title="Refresh"
+                aria-label="Refresh"
+              >
+                <RotateCw size={12} className={isRefreshing ? 'spinning' : ''} />
+              </button>
+            </div>
+
+            <div className="preview-route-field-wrapper">
+              <input
+                type="text"
+                className="preview-route-field-input"
+                value={routeField}
+                onChange={(e) => setRouteField(e.target.value)}
+                onKeyDown={handleRouteKeyDown}
+                placeholder={isReact ? '/#/' : (selectedHtmlFile ? `/${selectedHtmlFile}` : '/index.html')}
+                spellCheck={false}
+                autoComplete="off"
+                aria-label="Route Field"
+              />
+            </div>
+          </div>
+
+          <div className="preview-canvas-body">
+            <div className={`preview-viewport-wrapper viewport-${viewportMode}`}>
+              <iframe
+                ref={iframeRef}
+                title={`CodeCollab Preview - ${projectName}`}
+                sandbox="allow-scripts allow-modals"
+                srcDoc={compiledHtml}
+                className="preview-sandboxed-iframe"
+                loading="lazy"
+              />
+            </div>
           </div>
         </div>
 

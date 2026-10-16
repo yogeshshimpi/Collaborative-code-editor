@@ -24,10 +24,12 @@ import {
   Settings
 } from 'lucide-react';
 import NotificationBell from '../Notifications/NotificationBell';
+import { getProjectTypeConfig } from '../../constants/projectTypes';
 
 export default function Navbar({
   projectName = 'Untitled Project',
   roomId = 'demo-room',
+  projectType = 'html',
   activeFile = '',
   onRenameProject,
   connectionStatus = 'connecting',
@@ -257,6 +259,26 @@ export default function Navbar({
               <span className="role-tag-text">Editor</span>
             </span>
           )}
+
+          {/* Project Type Badge */}
+          {(() => {
+            const typeConfig = getProjectTypeConfig(projectType);
+            const { Icon: TypeIcon } = typeConfig;
+            return (
+              <span
+                className="navbar-project-type-tag"
+                style={{
+                  color: typeConfig.color,
+                  backgroundColor: typeConfig.bgTint,
+                  borderColor: typeConfig.borderColor
+                }}
+                title={`Project Type: ${typeConfig.name} (${typeConfig.tag})`}
+              >
+                <TypeIcon size={11} />
+                <span className="project-type-tag-text">{typeConfig.shortName || typeConfig.badgeText}</span>
+              </span>
+            );
+          })()}
         </div>
       </div>
 

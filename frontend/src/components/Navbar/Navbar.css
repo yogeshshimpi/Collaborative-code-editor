@@ -247,6 +247,25 @@
   border: 1px solid rgba(14, 165, 233, 0.3);
 }
 
+.navbar-project-type-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3.5px;
+  padding: 1.5px 6.5px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  user-select: none;
+  flex-shrink: 0;
+  border: 1px solid transparent;
+  transition: all 0.12s ease;
+}
+
+.project-type-tag-text {
+  line-height: 1.2;
+}
+
 /* --------------------------------------------------------------------------
    CENTER ZONE: Centered Breadcrumb (VS Code / Antigravity Aesthetic)
    -------------------------------------------------------------------------- */

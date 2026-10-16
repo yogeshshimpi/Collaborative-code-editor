@@ -149,12 +149,43 @@ export function useAutoSave({
         });
 
         if (err.status === 409 || err.statusCode === 409) {
+          const details = err.data?.details || err.details || null;
+          const serverContent = details?.serverContent;
+          const serverVersion = details?.serverVersion;
+          const serverUpdatedAt = details?.serverUpdatedAt;
+
+          const normalize = (str) => (typeof str === 'string' ? str.replace(/\r\n/g, '\n') : '');
+
+          // If the server content already matches what we tried to save,
+          // it's not a real conflict (was already saved e.g. via socket). Reconcile silently.
+          if (typeof serverContent === 'string' && normalize(serverContent) === normalize(contentToSave)) {
+            if (setFileMeta && serverVersion) {
+              setFileMeta((prev) => ({
+                ...prev,
+                [targetFile]: {
+                  updatedAt: serverUpdatedAt || new Date().toISOString(),
+                  version: serverVersion
+                }
+              }));
+            }
+            removeLocalDraft(userId, roomId, targetFile);
+            setDirtyFiles((prev) => {
+              const next = new Set(prev);
+              next.delete(targetFile);
+              return next;
+            });
+            delete pendingContentRef.current[targetFile];
+            setLastSavedAt(serverUpdatedAt || new Date().toISOString());
+            setSaveStatus('saved');
+            return;
+          }
+
           // Collaborator Conflict Detected
           if (onConflict) {
             onConflict({
               fileName: targetFile,
               localContent: contentToSave,
-              serverDetails: err.data?.details || err.details || null
+              serverDetails: details
             });
           }
           setSaveStatus('error');
@@ -253,7 +284,46 @@ export function useAutoSave({
     }
   }, [roomId, userId, performSave]);
 
-  // 6. Online / Socket Reconnection effect
+  // 6. External Save Notification (e.g. from WebSocket save-status event)
+  const markFileSaved = useCallback(
+    (fileName, version, savedAt) => {
+      if (!fileName) return;
+
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
+      }
+      delete pendingContentRef.current[fileName];
+
+      const savedTime = savedAt || new Date().toISOString();
+      const savedVersion = typeof version === 'number' ? version : 1;
+
+      if (setFileMeta && version) {
+        setFileMeta((prev) => ({
+          ...prev,
+          [fileName]: {
+            updatedAt: savedTime,
+            version: savedVersion
+          }
+        }));
+      }
+
+      removeLocalDraft(userId, roomId, fileName);
+
+      setDirtyFiles((prev) => {
+        if (!prev.has(fileName)) return prev;
+        const next = new Set(prev);
+        next.delete(fileName);
+        return next;
+      });
+
+      setLastSavedAt(savedTime);
+      setSaveStatus('saved');
+    },
+    [userId, roomId, setFileMeta]
+  );
+
+  // 7. Online / Socket Reconnection effect
   useEffect(() => {
     if (!isOnline) {
       setSaveStatus('offline');
@@ -287,6 +357,7 @@ export function useAutoSave({
     triggerChange,
     saveImmediately,
     flushPendingDrafts,
+    markFileSaved,
     isSaving: isSavingRef.current
   };
 }

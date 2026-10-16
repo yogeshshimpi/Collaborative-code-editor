@@ -20,8 +20,14 @@ export const getProjects = asyncHandler(async (req, res) => {
 });
 
 export const createProject = asyncHandler(async (req, res) => {
-  const { name, roomId } = req.body;
-  const project = await createNewProject({ name, roomId, userId: req.user.id });
+  const { name, roomId, description, projectType } = req.body || {};
+  const project = await createNewProject({
+    name,
+    roomId,
+    userId: req.user.id,
+    description,
+    projectType
+  });
   res.status(201).json({ project });
 });
 
